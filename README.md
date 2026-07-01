@@ -35,8 +35,12 @@ The code repository should eventually contain:
 
 ## Current Status
 
-The first implementation milestone is a CPU-only, testable query path. CUDA,
-cuDF, and Arrow baselines are added after the CPU result is correct.
+The implementation now includes the CPU path, three handwritten CUDA memory
+modes, Python/DuckDB/cuDF baseline scripts, benchmark automation, and report
+asset generation. GPU runtime validation passed on an RTX 4090 server on
+2026-07-01. Official TPC-H dbgen SF1 results still require a
+license-accepted dbgen output directory; no such data directory is committed to
+the repository.
 
 See [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md) for the latest implemented
 engines, verification commands, and next required work.
@@ -65,7 +69,8 @@ cmake --build build-cuda
 ```
 
 Override `CMAKE_CUDA_ARCHITECTURES` for the benchmark GPU when needed, for
-example `-DCMAKE_CUDA_ARCHITECTURES=80` for A100-class machines.
+example `-DCMAKE_CUDA_ARCHITECTURES=80` for A100-class machines or `89` for
+RTX 4090/L20-class Ada machines.
 
 Running `--engine gpu-copy`, `--engine gpu-managed`, or `--engine gpu-mapped`
 additionally requires a working NVIDIA driver.

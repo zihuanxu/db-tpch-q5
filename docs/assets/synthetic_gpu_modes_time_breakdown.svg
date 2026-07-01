@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="500" viewBox="0 0 920 500">
+<rect width="100%" height="100%" fill="white"/>
+<text x="460.0" y="28.0" font-size="18" font-family="Arial, sans-serif" text-anchor="middle">synthetic_gpu_modes</text>
+<text x="460.0" y="50.0" font-size="13" font-family="Arial, sans-serif" text-anchor="middle">Median execution-time breakdown</text>
+<line x1="80" y1="390" x2="890" y2="390" stroke="#333"/>
+<line x1="80" y1="68" x2="80" y2="390" stroke="#333"/>
+<line x1="75" y1="390.0" x2="890" y2="390.0" stroke="#e5e5e5"/>
+<text x="70.0" y="394.0" font-size="11" font-family="Arial, sans-serif" text-anchor="end">0.00</text>
+<line x1="75" y1="309.5" x2="890" y2="309.5" stroke="#e5e5e5"/>
+<text x="70.0" y="313.5" font-size="11" font-family="Arial, sans-serif" text-anchor="end">119.33</text>
+<line x1="75" y1="229.0" x2="890" y2="229.0" stroke="#e5e5e5"/>
+<text x="70.0" y="233.0" font-size="11" font-family="Arial, sans-serif" text-anchor="end">238.65</text>
+<line x1="75" y1="148.5" x2="890" y2="148.5" stroke="#e5e5e5"/>
+<text x="70.0" y="152.5" font-size="11" font-family="Arial, sans-serif" text-anchor="end">357.98</text>
+<line x1="75" y1="68.0" x2="890" y2="68.0" stroke="#e5e5e5"/>
+<text x="70.0" y="72.0" font-size="11" font-family="Arial, sans-serif" text-anchor="end">477.31</text>
+<rect x="80.0" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="80.0" y="386.4" width="36.4" height="2.4" fill="#72b7b2"/>
+<text x="98.2" y="381.4" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">5.28</text>
+<text x="98.2" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">cpu-t1</text>
+<rect x="128.4" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="128.4" y="387.4" width="36.4" height="1.5" fill="#72b7b2"/>
+<text x="146.5" y="382.4" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">3.91</text>
+<text x="146.5" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">cpu-t2</text>
+<rect x="176.7" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="176.7" y="387.9" width="36.4" height="0.9" fill="#72b7b2"/>
+<text x="194.9" y="382.9" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">3.08</text>
+<text x="194.9" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">cpu-t4</text>
+<rect x="225.1" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="225.1" y="388.0" width="36.4" height="0.8" fill="#72b7b2"/>
+<text x="243.2" y="383.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">2.97</text>
+<text x="243.2" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">cpu-t8</text>
+<rect x="273.4" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="273.4" y="388.6" width="36.4" height="0.3" fill="#f58518"/>
+<rect x="273.4" y="388.5" width="36.4" height="0.1" fill="#54a24b"/>
+<rect x="273.4" y="388.5" width="36.4" height="0.0" fill="#e45756"/>
+<text x="291.6" y="383.5" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">2.27</text>
+<text x="291.6" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-copy</text>
+<rect x="321.8" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="321.8" y="388.6" width="36.4" height="0.3" fill="#f58518"/>
+<rect x="321.8" y="388.5" width="36.4" height="0.1" fill="#54a24b"/>
+<rect x="321.8" y="388.5" width="36.4" height="0.0" fill="#e45756"/>
+<text x="339.9" y="383.5" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">2.28</text>
+<text x="339.9" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-copy</text>
+<rect x="370.1" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="370.1" y="388.6" width="36.4" height="0.3" fill="#f58518"/>
+<rect x="370.1" y="388.5" width="36.4" height="0.1" fill="#54a24b"/>
+<rect x="370.1" y="388.5" width="36.4" height="0.0" fill="#e45756"/>
+<text x="388.3" y="383.5" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">2.26</text>
+<text x="388.3" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-copy</text>
+<rect x="418.5" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="418.5" y="388.6" width="36.4" height="0.3" fill="#f58518"/>
+<rect x="418.5" y="388.5" width="36.4" height="0.1" fill="#54a24b"/>
+<rect x="418.5" y="388.5" width="36.4" height="0.0" fill="#e45756"/>
+<text x="436.6" y="383.5" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">2.27</text>
+<text x="436.6" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-copy</text>
+<rect x="466.8" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="466.8" y="388.3" width="36.4" height="0.5" fill="#f58518"/>
+<rect x="466.8" y="388.2" width="36.4" height="0.1" fill="#54a24b"/>
+<rect x="466.8" y="388.2" width="36.4" height="0.0" fill="#e45756"/>
+<text x="485.0" y="383.2" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">2.73</text>
+<text x="485.0" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-managed</text>
+<rect x="515.2" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="515.2" y="388.3" width="36.4" height="0.5" fill="#f58518"/>
+<rect x="515.2" y="388.2" width="36.4" height="0.1" fill="#54a24b"/>
+<rect x="515.2" y="388.1" width="36.4" height="0.0" fill="#e45756"/>
+<text x="533.4" y="383.1" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">2.75</text>
+<text x="533.4" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-managed</text>
+<rect x="563.5" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="563.5" y="388.3" width="36.4" height="0.6" fill="#f58518"/>
+<rect x="563.5" y="388.2" width="36.4" height="0.1" fill="#54a24b"/>
+<rect x="563.5" y="388.1" width="36.4" height="0.0" fill="#e45756"/>
+<text x="581.7" y="383.1" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">2.77</text>
+<text x="581.7" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-managed</text>
+<rect x="611.9" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="611.9" y="388.3" width="36.4" height="0.6" fill="#f58518"/>
+<rect x="611.9" y="388.2" width="36.4" height="0.1" fill="#54a24b"/>
+<rect x="611.9" y="388.1" width="36.4" height="0.0" fill="#e45756"/>
+<text x="630.1" y="383.1" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">2.78</text>
+<text x="630.1" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-managed</text>
+<rect x="660.2" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="660.2" y="388.8" width="36.4" height="0.0" fill="#f58518"/>
+<rect x="660.2" y="388.5" width="36.4" height="0.3" fill="#54a24b"/>
+<rect x="660.2" y="388.5" width="36.4" height="0.0" fill="#e45756"/>
+<text x="678.4" y="383.5" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">2.21</text>
+<text x="678.4" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-mapped</text>
+<rect x="708.6" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="708.6" y="388.8" width="36.4" height="0.0" fill="#f58518"/>
+<rect x="708.6" y="388.5" width="36.4" height="0.3" fill="#54a24b"/>
+<rect x="708.6" y="388.5" width="36.4" height="0.0" fill="#e45756"/>
+<text x="726.8" y="383.5" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">2.23</text>
+<text x="726.8" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-mapped</text>
+<rect x="756.9" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="756.9" y="388.8" width="36.4" height="0.0" fill="#f58518"/>
+<rect x="756.9" y="388.5" width="36.4" height="0.3" fill="#54a24b"/>
+<rect x="756.9" y="388.5" width="36.4" height="0.0" fill="#e45756"/>
+<text x="775.1" y="383.5" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">2.23</text>
+<text x="775.1" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-mapped</text>
+<rect x="805.3" y="388.8" width="36.4" height="1.2" fill="#4c78a8"/>
+<rect x="805.3" y="388.8" width="36.4" height="0.0" fill="#f58518"/>
+<rect x="805.3" y="388.5" width="36.4" height="0.3" fill="#54a24b"/>
+<rect x="805.3" y="388.5" width="36.4" height="0.0" fill="#e45756"/>
+<text x="823.5" y="383.5" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">2.25</text>
+<text x="823.5" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-mapped</text>
+<rect x="853.6" y="390.0" width="36.4" height="0.0" fill="#4c78a8"/>
+<rect x="853.6" y="68.0" width="36.4" height="322.0" fill="#72b7b2"/>
+<text x="871.8" y="63.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">477.31</text>
+<text x="871.8" y="410.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">python</text>
+<rect x="80" y="448" width="12" height="12" fill="#4c78a8"/>
+<text x="98.0" y="458.0" font-size="12" font-family="Arial, sans-serif" text-anchor="start">build</text>
+<rect x="175" y="448" width="12" height="12" fill="#72b7b2"/>
+<text x="193.0" y="458.0" font-size="12" font-family="Arial, sans-serif" text-anchor="start">scan</text>
+<rect x="270" y="448" width="12" height="12" fill="#f58518"/>
+<text x="288.0" y="458.0" font-size="12" font-family="Arial, sans-serif" text-anchor="start">h2d</text>
+<rect x="365" y="448" width="12" height="12" fill="#54a24b"/>
+<text x="383.0" y="458.0" font-size="12" font-family="Arial, sans-serif" text-anchor="start">kernel</text>
+<rect x="460" y="448" width="12" height="12" fill="#e45756"/>
+<text x="478.0" y="458.0" font-size="12" font-family="Arial, sans-serif" text-anchor="start">d2h</text>
+<text x="22.0" y="229.0" font-size="12" font-family="Arial, sans-serif" text-anchor="middle">ms</text>
+</svg>
