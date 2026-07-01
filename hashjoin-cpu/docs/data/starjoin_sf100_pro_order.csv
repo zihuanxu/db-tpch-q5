@@ -1,0 +1,3 @@
+mode,sf,nthreads,pro_order,status,time_ms,matches,aggregate_sum,input_bytes,aux_bytes,total_bytes,stdout_log,stderr_log
+pro,100,64,0,OK,17205.709,600000000,1800000000,6640000000,14463676416,21103676416,starjoin-sf100-pro-order.logs/pro_order0.stdout,starjoin-sf100-pro-order.logs/pro_order0.stderr
+pro,100,64,1,OK,17613.673,600000000,1800000000,6640000000,14463676416,21103676416,starjoin-sf100-pro-order.logs/pro_order1.stdout,starjoin-sf100-pro-order.logs/pro_order1.stderr

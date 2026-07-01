@@ -1,0 +1,11 @@
+mode,sf,nthreads,payload_width,prefetch_distance,basic_numa,status,time_ms,matches,aggregate_sum,input_bytes,aux_bytes,total_bytes,stdout_log,stderr_log,error
+npo,1,16,1,0,0,OK,109.737,6000000,18000000,66400000,75497472,141897472,"report-starjoin-prefetch-sf1.logs/npo_sf1_t16_pf0.stdout","report-starjoin-prefetch-sf1.logs/npo_sf1_t16_pf0.stderr",""
+npo,1,16,1,8,0,OK,103.338,6000000,18000000,66400000,75497472,141897472,"report-starjoin-prefetch-sf1.logs/npo_sf1_t16_pf8.stdout","report-starjoin-prefetch-sf1.logs/npo_sf1_t16_pf8.stderr",""
+npo,1,16,1,16,0,OK,103.426,6000000,18000000,66400000,75497472,141897472,"report-starjoin-prefetch-sf1.logs/npo_sf1_t16_pf16.stdout","report-starjoin-prefetch-sf1.logs/npo_sf1_t16_pf16.stderr",""
+npo,1,16,1,32,0,OK,102.971,6000000,18000000,66400000,75497472,141897472,"report-starjoin-prefetch-sf1.logs/npo_sf1_t16_pf32.stdout","report-starjoin-prefetch-sf1.logs/npo_sf1_t16_pf32.stderr",""
+npo,1,16,1,64,0,OK,105.902,6000000,18000000,66400000,75497472,141897472,"report-starjoin-prefetch-sf1.logs/npo_sf1_t16_pf64.stdout","report-starjoin-prefetch-sf1.logs/npo_sf1_t16_pf64.stderr",""
+vj,1,16,1,0,0,OK,22.031,6000000,18000000,66400000,4600004,71000004,"report-starjoin-prefetch-sf1.logs/vj_sf1_t16_pf0.stdout","report-starjoin-prefetch-sf1.logs/vj_sf1_t16_pf0.stderr",""
+vj,1,16,1,8,0,OK,21.200,6000000,18000000,66400000,4600004,71000004,"report-starjoin-prefetch-sf1.logs/vj_sf1_t16_pf8.stdout","report-starjoin-prefetch-sf1.logs/vj_sf1_t16_pf8.stderr",""
+vj,1,16,1,16,0,OK,21.746,6000000,18000000,66400000,4600004,71000004,"report-starjoin-prefetch-sf1.logs/vj_sf1_t16_pf16.stdout","report-starjoin-prefetch-sf1.logs/vj_sf1_t16_pf16.stderr",""
+vj,1,16,1,32,0,OK,23.257,6000000,18000000,66400000,4600004,71000004,"report-starjoin-prefetch-sf1.logs/vj_sf1_t16_pf32.stdout","report-starjoin-prefetch-sf1.logs/vj_sf1_t16_pf32.stderr",""
+vj,1,16,1,64,0,OK,25.997,6000000,18000000,66400000,4600004,71000004,"report-starjoin-prefetch-sf1.logs/vj_sf1_t16_pf64.stdout","report-starjoin-prefetch-sf1.logs/vj_sf1_t16_pf64.stderr",""

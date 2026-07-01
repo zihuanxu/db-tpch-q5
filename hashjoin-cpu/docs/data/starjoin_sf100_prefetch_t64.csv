@@ -1,0 +1,7 @@
+mode,sf,nthreads,payload_width,prefetch_distance,basic_numa,status,time_ms,matches,aggregate_sum,input_bytes,aux_bytes,total_bytes,stdout_log,stderr_log,error
+npo,100,64,1,0,0,OK,15623.447,600000000,1800000000,6640000000,9663676416,16303676416,"starjoin-sf100-prefetch-t64.logs/npo_sf100_t64_pf0.stdout","starjoin-sf100-prefetch-t64.logs/npo_sf100_t64_pf0.stderr",""
+npo,100,64,1,8,0,OK,15206.068,600000000,1800000000,6640000000,9663676416,16303676416,"starjoin-sf100-prefetch-t64.logs/npo_sf100_t64_pf8.stdout","starjoin-sf100-prefetch-t64.logs/npo_sf100_t64_pf8.stderr",""
+npo,100,64,1,32,0,OK,15187.158,600000000,1800000000,6640000000,9663676416,16303676416,"starjoin-sf100-prefetch-t64.logs/npo_sf100_t64_pf32.stdout","starjoin-sf100-prefetch-t64.logs/npo_sf100_t64_pf32.stderr",""
+vj,100,64,1,0,0,OK,3729.132,600000000,1800000000,6640000000,460000004,7100000004,"starjoin-sf100-prefetch-t64.logs/vj_sf100_t64_pf0.stdout","starjoin-sf100-prefetch-t64.logs/vj_sf100_t64_pf0.stderr",""
+vj,100,64,1,8,0,OK,3602.398,600000000,1800000000,6640000000,460000004,7100000004,"starjoin-sf100-prefetch-t64.logs/vj_sf100_t64_pf8.stdout","starjoin-sf100-prefetch-t64.logs/vj_sf100_t64_pf8.stderr",""
+vj,100,64,1,32,0,OK,3441.220,600000000,1800000000,6640000000,460000004,7100000004,"starjoin-sf100-prefetch-t64.logs/vj_sf100_t64_pf32.stdout","starjoin-sf100-prefetch-t64.logs/vj_sf100_t64_pf32.stderr",""

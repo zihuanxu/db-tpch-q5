@@ -1,0 +1,14 @@
+label,r_size,s_size,threads,payload_width,status,time_ms,throughput_mtps,vector_total_bytes,cache_level,cache_ratio,stdout_log,stderr_log
+L1_10,1638,1073741824,64,1,OK,137.894,7786.718958,3278,L1,0.10,vj-cache-sweep-s2e30.logs/L1_10.stdout,vj-cache-sweep-s2e30.logs/L1_10.stderr
+L1_50,8192,1073741824,64,1,OK,138.949,7727.596629,16386,L1,0.50,vj-cache-sweep-s2e30.logs/L1_50.stdout,vj-cache-sweep-s2e30.logs/L1_50.stderr
+L1_150,24576,1073741824,64,1,OK,143.636,7475.436687,49154,L1,1.50,vj-cache-sweep-s2e30.logs/L1_150.stdout,vj-cache-sweep-s2e30.logs/L1_150.stderr
+L2_10,52429,1073741824,64,1,OK,132.158,8124.682759,104860,L2,0.10,vj-cache-sweep-s2e30.logs/L2_10.stdout,vj-cache-sweep-s2e30.logs/L2_10.stderr
+L2_50,262144,1073741824,64,1,OK,131.454,8168.194380,524290,L2,0.50,vj-cache-sweep-s2e30.logs/L2_50.stdout,vj-cache-sweep-s2e30.logs/L2_50.stderr
+L2_150,786432,1073741824,64,1,OK,205.453,5226.216332,1572866,L2,1.50,vj-cache-sweep-s2e30.logs/L2_150.stdout,vj-cache-sweep-s2e30.logs/L2_150.stderr
+L3_10,2595226,1073741824,64,1,OK,286.720,3744.914286,5190454,L3,0.10,vj-cache-sweep-s2e30.logs/L3_10.stdout,vj-cache-sweep-s2e30.logs/L3_10.stderr
+L3_100,25952256,1073741824,64,1,OK,1861.238,576.896573,51904514,L3,1.00,vj-cache-sweep-s2e30.logs/L3_100.stdout,vj-cache-sweep-s2e30.logs/L3_100.stderr
+L3_150,38928384,1073741824,64,1,OK,2782.125,385.943056,77856770,L3,1.50,vj-cache-sweep-s2e30.logs/L3_150.stdout,vj-cache-sweep-s2e30.logs/L3_150.stderr
+L3_2x,51904512,1073741824,64,1,OK,3559.445,301.659900,103809026,L3,2.00,vj-cache-sweep-s2e30.logs/L3_2x.stdout,vj-cache-sweep-s2e30.logs/L3_2x.stderr
+L3_4x,103809024,1073741824,64,1,OK,5969.875,179.860018,207618050,L3,4.00,vj-cache-sweep-s2e30.logs/L3_4x.stdout,vj-cache-sweep-s2e30.logs/L3_4x.stderr
+L3_8x,207618048,1073741824,64,1,OK,10026.922,107.085886,415236098,L3,8.00,vj-cache-sweep-s2e30.logs/L3_8x.stdout,vj-cache-sweep-s2e30.logs/L3_8x.stderr
+L3_10x,259522560,1073741824,64,1,OK,12352.788,86.923035,519045122,L3,10.00,vj-cache-sweep-s2e30.logs/L3_10x.stdout,vj-cache-sweep-s2e30.logs/L3_10x.stderr

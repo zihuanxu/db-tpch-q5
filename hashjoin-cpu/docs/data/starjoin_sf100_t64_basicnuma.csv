@@ -1,0 +1,4 @@
+mode,sf,nthreads,payload_width,prefetch_distance,basic_numa,status,time_ms,matches,aggregate_sum,input_bytes,aux_bytes,total_bytes,stdout_log,stderr_log,error
+npo,100,64,1,0,1,OK,16666.803,600000000,1800000000,6640000000,9663676416,16303676416,"starjoin-sf100-t64-basicnuma.logs/npo_sf100_t64_pf0.stdout","starjoin-sf100-t64-basicnuma.logs/npo_sf100_t64_pf0.stderr",""
+pro,100,64,1,0,1,OK,18066.061,600000000,1800000000,6640000000,14463676416,21103676416,"starjoin-sf100-t64-basicnuma.logs/pro_sf100_t64_pf0.stdout","starjoin-sf100-t64-basicnuma.logs/pro_sf100_t64_pf0.stderr",""
+vj,100,64,1,0,1,OK,4354.036,600000000,1800000000,6640000000,460000004,7100000004,"starjoin-sf100-t64-basicnuma.logs/vj_sf100_t64_pf0.stdout","starjoin-sf100-t64-basicnuma.logs/vj_sf100_t64_pf0.stderr",""

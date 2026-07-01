@@ -1,0 +1,12 @@
+Intel(R) Memory Latency Checker - v3.12
+Command line parameters: --bandwidth_matrix -e 
+
+Using buffer size of 100.000MiB/thread for reads and an additional 100.000MiB/thread for writes
+Measuring Memory Bandwidths between nodes within system 
+Bandwidths are in MB/sec (1 MB/sec = 1,000,000 Bytes/sec)
+Using all the threads from each core if Hyper-threading is enabled
+Using Read-only traffic type
+		Numa node
+Numa node	       0	       1	
+       0	 74078.8	 34280.9	
+       1	 34360.1	 74238.6	

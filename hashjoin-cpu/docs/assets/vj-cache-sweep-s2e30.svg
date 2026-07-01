@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="560" viewBox="0 0 960 560">
+<rect width="100%" height="100%" fill="white"/>
+<text x="480" y="28" text-anchor="middle" font-family="sans-serif" font-size="18">VJ-1B cache sweep, S=2^30</text>
+<line x1="90" y1="490" x2="930" y2="490" stroke="#e5e5e5"/>
+<text x="82" y="494.0" text-anchor="end" font-family="sans-serif" font-size="12">0</text>
+<line x1="90" y1="416.667" x2="930" y2="416.667" stroke="#e5e5e5"/>
+<text x="82" y="420.7" text-anchor="end" font-family="sans-serif" font-size="12">1470</text>
+<line x1="90" y1="343.333" x2="930" y2="343.333" stroke="#e5e5e5"/>
+<text x="82" y="347.3" text-anchor="end" font-family="sans-serif" font-size="12">2941</text>
+<line x1="90" y1="270" x2="930" y2="270" stroke="#e5e5e5"/>
+<text x="82" y="274.0" text-anchor="end" font-family="sans-serif" font-size="12">4411</text>
+<line x1="90" y1="196.667" x2="930" y2="196.667" stroke="#e5e5e5"/>
+<text x="82" y="200.7" text-anchor="end" font-family="sans-serif" font-size="12">5881</text>
+<line x1="90" y1="123.333" x2="930" y2="123.333" stroke="#e5e5e5"/>
+<text x="82" y="127.3" text-anchor="end" font-family="sans-serif" font-size="12">7351</text>
+<line x1="90" y1="50" x2="930" y2="50" stroke="#e5e5e5"/>
+<text x="82" y="54.0" text-anchor="end" font-family="sans-serif" font-size="12">8822</text>
+<line x1="56.9985" y1="50" x2="56.9985" y2="490" stroke="#eeeeee"/>
+<text x="56.9985" y="512" text-anchor="middle" font-family="sans-serif" font-size="12">11</text>
+<line x1="154.262" y1="50" x2="154.262" y2="490" stroke="#eeeeee"/>
+<text x="154.262" y="512" text-anchor="middle" font-family="sans-serif" font-size="12">13</text>
+<line x1="251.525" y1="50" x2="251.525" y2="490" stroke="#eeeeee"/>
+<text x="251.525" y="512" text-anchor="middle" font-family="sans-serif" font-size="12">15</text>
+<line x1="348.789" y1="50" x2="348.789" y2="490" stroke="#eeeeee"/>
+<text x="348.789" y="512" text-anchor="middle" font-family="sans-serif" font-size="12">17</text>
+<line x1="446.052" y1="50" x2="446.052" y2="490" stroke="#eeeeee"/>
+<text x="446.052" y="512" text-anchor="middle" font-family="sans-serif" font-size="12">19</text>
+<line x1="543.316" y1="50" x2="543.316" y2="490" stroke="#eeeeee"/>
+<text x="543.316" y="512" text-anchor="middle" font-family="sans-serif" font-size="12">21</text>
+<line x1="640.579" y1="50" x2="640.579" y2="490" stroke="#eeeeee"/>
+<text x="640.579" y="512" text-anchor="middle" font-family="sans-serif" font-size="12">23</text>
+<line x1="737.842" y1="50" x2="737.842" y2="490" stroke="#eeeeee"/>
+<text x="737.842" y="512" text-anchor="middle" font-family="sans-serif" font-size="12">25</text>
+<line x1="835.106" y1="50" x2="835.106" y2="490" stroke="#eeeeee"/>
+<text x="835.106" y="512" text-anchor="middle" font-family="sans-serif" font-size="12">27</text>
+<line x1="932.369" y1="50" x2="932.369" y2="490" stroke="#eeeeee"/>
+<text x="932.369" y="512" text-anchor="middle" font-family="sans-serif" font-size="12">29</text>
+<line x1="90" y1="50" x2="90" y2="490" stroke="#333"/>
+<line x1="90" y1="490" x2="930" y2="490" stroke="#333"/>
+<polyline fill="none" stroke="#1f77b4" stroke-width="2" points="90.0,101.6 202.9,104.6 280.0,117.1 333.1,84.8 446.1,82.6 523.1,229.3 606.9,303.2 768.4,461.2 796.9,470.8 817.1,475.0 865.7,481.0 914.3,484.7 930.0,485.7 "/>
+<circle cx="90" cy="101.62" r="3.5" fill="#1f77b4"><title>L1_10: 7786.718958 MT/s, vector=3278 bytes</title></circle>
+<text x="95" y="96.6196" font-family="sans-serif" font-size="10">L1_10</text>
+<circle cx="202.902" cy="104.568" r="3.5" fill="#1f77b4"><title>L1_50: 7727.596629 MT/s, vector=16386 bytes</title></circle>
+<text x="207.902" y="99.5684" font-family="sans-serif" font-size="10">L1_50</text>
+<circle cx="279.976" cy="117.145" r="3.5" fill="#1f77b4"><title>L1_150: 7475.436687 MT/s, vector=49154 bytes</title></circle>
+<text x="284.976" y="112.145" font-family="sans-serif" font-size="10">L1_150</text>
+<circle cx="333.134" cy="84.7628" r="3.5" fill="#1f77b4"><title>L2_10: 8124.682759 MT/s, vector=104860 bytes</title></circle>
+<text x="338.134" y="79.7628" font-family="sans-serif" font-size="10">L2_10</text>
+<circle cx="446.052" cy="82.5926" r="3.5" fill="#1f77b4"><title>L2_50: 8168.194380 MT/s, vector=524290 bytes</title></circle>
+<text x="451.052" y="77.5926" font-family="sans-serif" font-size="10">L2_50</text>
+<circle cx="523.132" cy="229.33" r="3.5" fill="#1f77b4"><title>L2_150: 5226.216332 MT/s, vector=1572866 bytes</title></circle>
+<text x="528.132" y="224.33" font-family="sans-serif" font-size="10">L2_150</text>
+<circle cx="606.898" cy="303.214" r="3.5" fill="#1f77b4"><title>L3_10: 3744.914286 MT/s, vector=5190454 bytes</title></circle>
+<text x="611.898" y="298.214" font-family="sans-serif" font-size="10">L3_10</text>
+<circle cx="768.449" cy="461.226" r="3.5" fill="#1f77b4"><title>L3_100: 576.896573 MT/s, vector=51904514 bytes</title></circle>
+<text x="773.449" y="456.226" font-family="sans-serif" font-size="10">L3_100</text>
+<circle cx="796.897" cy="470.75" r="3.5" fill="#1f77b4"><title>L3_150: 385.943056 MT/s, vector=77856770 bytes</title></circle>
+<text x="801.897" y="465.75" font-family="sans-serif" font-size="10">L3_150</text>
+<circle cx="817.081" cy="474.954" r="3.5" fill="#1f77b4"><title>L3_2x: 301.659900 MT/s, vector=103809026 bytes</title></circle>
+<text x="822.081" y="469.954" font-family="sans-serif" font-size="10">L3_2x</text>
+<circle cx="865.712" cy="481.029" r="3.5" fill="#1f77b4"><title>L3_4x: 179.860018 MT/s, vector=207618050 bytes</title></circle>
+<text x="870.712" y="476.029" font-family="sans-serif" font-size="10">L3_4x</text>
+<circle cx="914.344" cy="484.659" r="3.5" fill="#1f77b4"><title>L3_8x: 107.085886 MT/s, vector=415236098 bytes</title></circle>
+<text x="919.344" y="479.659" font-family="sans-serif" font-size="10">L3_8x</text>
+<circle cx="930" cy="485.665" r="3.5" fill="#1f77b4"><title>L3_10x: 86.923035 MT/s, vector=519045122 bytes</title></circle>
+<text x="935" y="480.665" font-family="sans-serif" font-size="10">L3_10x</text>
+<text x="510" y="540" text-anchor="middle" font-family="sans-serif" font-size="14">log2(vector_total_bytes)</text>
+<text x="20" y="270" transform="rotate(-90 20 270)" text-anchor="middle" font-family="sans-serif" font-size="14">Throughput (MTuples/s)</text>
+</svg>

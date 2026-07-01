@@ -1,0 +1,5 @@
+mode,r_size,s_size,threads,payload_width,vj_hugepage,time_ms,cache_miss_rate,dtlb_miss_rate,vector_total_bytes,status,source
+direct_default,16777216,16777216,16,1,0,425.170,,,33554434,OK,program timing
+direct_madvise,16777216,16777216,16,1,1,477.601,,,33554434,OK,program timing
+perf_default,16777216,16777216,16,1,0,721.908,0.5232,0.0757,33554434,OK,perf stat
+perf_madvise,16777216,16777216,16,1,1,428.165,0.5219,0.0757,33554434,OK,perf stat

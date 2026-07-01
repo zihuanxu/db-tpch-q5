@@ -1,5 +1,31 @@
 # Memory DB TPC-H Q5 Lab
 
+## Integrated Course Submission
+
+This repository is organized as a combined course submission:
+
+- `hashjoin-cpu/`: CPU-side hash join framework extended from the ETH Zurich
+  VLDB 2013 open-source hash join code. It contains NPO/PRO/sort-merge/VJ/PRVJ,
+  starjoin, full-sweep experiments, reports, raw CSV data, and figures.
+- repository root: TPC-H Q5 CPU/GPU project, including CPU execution, CUDA
+  execution modes, baselines, validation scripts, and GPU-server results.
+
+The integrated course report is:
+
+- `hashjoin-cpu/docs/COURSE_REPORT.docx`
+- `hashjoin-cpu/docs/COURSE_REPORT.md`
+
+Detailed reports are:
+
+- CPU hashjoin final report: `hashjoin-cpu/docs/EXPERIMENT_REPORT.docx`
+- Starjoin midterm report: `hashjoin-cpu/docs/MIDTERM_REPORT.docx`
+- TPC-H Q5/GPU report: `docs/FINAL_REPORT.md`
+
+The CPU hashjoin code remains buildable inside `hashjoin-cpu/`, while the
+TPC-H Q5/GPU code remains buildable from the repository root.
+
+## TPC-H Q5 Project
+
 This repository is planned as a deliverable course project for an in-memory
 database assignment. The target is a small but complete heterogeneous columnar
 query engine for TPC-H Q5, with CPU execution, handwritten CUDA execution,
