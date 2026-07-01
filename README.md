@@ -1,132 +1,110 @@
-# Memory DB TPC-H Q5 Lab
+# 内存数据库课程大作业整合仓库
 
-## Integrated Course Submission
+本仓库是课程最终提交版本，将两个实验方向整合到同一个 GitHub 项目中：
 
-This repository is organized as a combined course submission:
+| 目录 | 内容 |
+|---|---|
+| `hashjoin-cpu/` | 基于 ETH Zurich VLDB 2013 main-memory hash join 开源代码扩展的 CPU 端连接算法框架 |
+| 仓库根目录 | TPC-H Q5 CPU/GPU 查询引擎，包含 CPU 执行、手写 CUDA、不同 GPU 内存模式和 cuDF 对照 |
+| `docs/` | TPC-H Q5/GPU 项目文档、图表和最终报告 |
+| `hashjoin-cpu/docs/` | CPU hashjoin 统一课程报告、期中报告、期末报告、原始数据和图表 |
 
-- `hashjoin-cpu/`: CPU-side hash join framework extended from the ETH Zurich
-  VLDB 2013 open-source hash join code. It contains NPO/PRO/sort-merge/VJ/PRVJ,
-  starjoin, full-sweep experiments, reports, raw CSV data, and figures.
-- repository root: TPC-H Q5 CPU/GPU project, including CPU execution, CUDA
-  execution modes, baselines, validation scripts, and GPU-server results.
+## 提交入口
 
-The integrated course report is:
+建议老师首先阅读以下文档：
 
-- `hashjoin-cpu/docs/COURSE_REPORT.docx`
+| 文档 | 路径 |
+|---|---|
+| 课程大作业整合说明 | `docs/INTEGRATED_SUBMISSION.docx` / `docs/INTEGRATED_SUBMISSION.md` |
+| CPU hashjoin 统一课程报告 | `hashjoin-cpu/docs/COURSE_REPORT.docx` / `hashjoin-cpu/docs/COURSE_REPORT.md` |
+| CPU hashjoin 期中 starjoin 报告 | `hashjoin-cpu/docs/MIDTERM_REPORT.docx` / `hashjoin-cpu/docs/MIDTERM_REPORT.md` |
+| CPU hashjoin 期末 full sweep 报告 | `hashjoin-cpu/docs/EXPERIMENT_REPORT.docx` / `hashjoin-cpu/docs/EXPERIMENT_REPORT.md` |
+| TPC-H Q5/GPU 最终报告 | `docs/FINAL_REPORT.docx` / `docs/FINAL_REPORT.md` |
+
+## 完成情况
+
+CPU hashjoin 部分已经完成：
+
+- 将 NPO、PRO、sort-merge、VJ、PRVJ 和三表 starjoin 整合进原 hashjoin 框架。
+- 支持通过算法开关参数执行不同算法和实验配置。
+- 完成 NUMA、MLC、starjoin、full sweep、VJ cache/TLB、PRVJ 分区调参等实验。
+- 保留原始 CSV、图表、报告和自检脚本。
+
+TPC-H Q5/GPU 部分已经完成：
+
+- 实现 TPC-H Q5 所需列式内存布局、加载器和 CPU 执行路径。
+- 实现 `gpu-copy`、`gpu-managed`、`gpu-mapped` 三种手写 CUDA 执行模式。
+- 实现 Python、DuckDB、RAPIDS cuDF 对照脚本。
+- 在 RTX 4090 服务器上完成 CUDA 构建、CTest、tiny、synthetic、官方 TPC-H SF1 和 cuDF 对照实验。
+- 所有成功运行的 CPU、GPU、Python、cuDF 路径在同一数据集上输出一致 result hash。
+
+## CPU Hashjoin 复现
+
+进入 CPU hashjoin 子目录：
+
+```bash
+cd hashjoin-cpu
+scripts/self_check_assignment.sh
+```
+
+主要实验脚本：
+
+```bash
+scripts/run_extended_algo_comparison.sh
+scripts/run_starjoin_comparison.sh
+scripts/run_prvj_tuning.sh
+```
+
+关键结果位置：
+
+- `hashjoin-cpu/docs/data/`
+- `hashjoin-cpu/docs/assets/`
 - `hashjoin-cpu/docs/COURSE_REPORT.md`
+- `hashjoin-cpu/docs/EXPERIMENT_REPORT.md`
+- `hashjoin-cpu/docs/MIDTERM_REPORT.md`
 
-Detailed reports are:
+## TPC-H Q5/GPU 复现
 
-- CPU hashjoin final report: `hashjoin-cpu/docs/EXPERIMENT_REPORT.docx`
-- Starjoin midterm report: `hashjoin-cpu/docs/MIDTERM_REPORT.docx`
-- TPC-H Q5/GPU report: `docs/FINAL_REPORT.md`
-
-The CPU hashjoin code remains buildable inside `hashjoin-cpu/`, while the
-TPC-H Q5/GPU code remains buildable from the repository root.
-
-## TPC-H Q5 Project
-
-This repository is planned as a deliverable course project for an in-memory
-database assignment. The target is a small but complete heterogeneous columnar
-query engine for TPC-H Q5, with CPU execution, handwritten CUDA execution,
-explicit PCIe transfer, UVA/unified-memory experiments, and comparisons against
-NVIDIA RAPIDS cuDF. Apache Arrow remains a layout reference and optional CPU
-baseline, not the central deliverable.
-
-The project starts from course notes and teacher-discussion transcripts. The
-reconstructed requirements and final implementation plan are in:
-
-- `docs/RECONSTRUCTED_REQUIREMENTS.md`
-- `docs/FINAL_IMPLEMENTATION_PLAN.md`
-- `docs/IMPLEMENTATION_CHECKLIST.md`
-- `docs/BENCHMARK_PROTOCOL.md`
-- `docs/TECHNICAL_DECISIONS.md`
-
-## Final Deliverable Shape
-
-The code repository should eventually contain:
-
-- An Arrow-compatible fixed-width column store for the TPC-H Q5 columns.
-- A CPU vectorized/parallel implementation of Q5.
-- CUDA implementations of Q5 using explicit host-device copies and UVA-style
-  mapped/managed memory modes.
-- Bitmap/array filter propagation for region, nation, customer, supplier, and
-  orders before probing lineitem.
-- Benchmark scripts for CPU, GPU, transfer modes, Apache Arrow/Acero, RAPIDS
-  cuDF, and optionally DuckDB validation.
-- Unit tests on small deterministic fixtures and validation against a SQL
-  baseline on TPC-H dbgen data.
-- A final report with correctness, throughput, transfer-cost, memory-footprint,
-  and hardware-analysis results.
-
-## Current Status
-
-The implementation now includes the CPU path, three handwritten CUDA memory
-modes, Python/DuckDB/cuDF baseline scripts, benchmark automation, and report
-asset generation. GPU runtime validation passed on an RTX 4090 server on
-2026-07-01. Official TPC-H dbgen SF1 data was generated and benchmarked on the
-same server, including the RAPIDS/cuDF baseline in a separate `memq5-cudf`
-environment. The generated TPC-H tools, `.tbl` data, and raw results are not
-committed to the repository.
-
-See [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md) for the latest implemented
-engines, verification commands, and next required work.
-
-Useful delivery documents:
-
-- Final report: [docs/FINAL_REPORT.md](docs/FINAL_REPORT.md)
-- [docs/GPU_SERVER_RUNBOOK.md](docs/GPU_SERVER_RUNBOOK.md)
-- [docs/FINAL_REPORT_DRAFT.md](docs/FINAL_REPORT_DRAFT.md)
-- [docs/COMPLETION_AUDIT.md](docs/COMPLETION_AUDIT.md)
-
-## Build And Run
+CPU 构建与测试：
 
 ```bash
 cmake -S . -B build -DMEMQ5_ENABLE_CUDA=OFF -DMEMQ5_ENABLE_TESTS=ON
 cmake --build build
 ctest --test-dir build --output-on-failure
+python3 scripts/self_check.py
+```
+
+tiny fixture 示例：
+
+```bash
 ./build/memq5 --engine cpu --data-dir tests/fixtures/tpch_q5_tiny \
   --region ASIA --date 1994-01-01 --format rows
 ```
 
-CUDA compile-only check, on a machine with `nvcc`:
+CUDA 构建需要带 `nvcc` 和 NVIDIA 驱动的服务器。RTX 4090 / L20 这类 Ada 架构 GPU 使用 `89`：
 
 ```bash
-cmake -S . -B build-cuda -DMEMQ5_ENABLE_CUDA=ON -DMEMQ5_ENABLE_TESTS=ON
+cmake -S . -B build-cuda \
+  -DMEMQ5_ENABLE_CUDA=ON \
+  -DMEMQ5_ENABLE_TESTS=ON \
+  -DCMAKE_CUDA_ARCHITECTURES=89
 cmake --build build-cuda
+CUDA_VISIBLE_DEVICES=0 ctest --test-dir build-cuda --output-on-failure
 ```
 
-Override `CMAKE_CUDA_ARCHITECTURES` for the benchmark GPU when needed, for
-example `-DCMAKE_CUDA_ARCHITECTURES=80` for A100-class machines or `89` for
-RTX 4090/L20-class Ada machines.
-
-Running `--engine gpu-copy`, `--engine gpu-managed`, or `--engine gpu-mapped`
-additionally requires a working NVIDIA driver.
-
-Optional baselines:
+GPU 实验流水线示例：
 
 ```bash
-python3 baselines/python_q5.py --data-dir tests/fixtures/tpch_q5_tiny \
-  --region ASIA --date 1994-01-01 --format rows
-python3 baselines/duckdb_q5.py --data-dir tests/fixtures/tpch_q5_tiny \
-  --region ASIA --date 1994-01-01 --format rows
-python3 baselines/cudf_q5.py --data-dir tests/fixtures/tpch_q5_tiny \
-  --region ASIA --date 1994-01-01 --format rows
+CUDA_VISIBLE_DEVICES=0 python3 scripts/run_experiment_pipeline.py \
+  --name tiny_gpu_modes \
+  --memq5 build-cuda/memq5 \
+  --data-dir tests/fixtures/tpch_q5_tiny \
+  --engines cpu,gpu-copy,gpu-managed,gpu-mapped,python \
+  --repeat 5 \
+  --force
 ```
 
-`python_q5.py` is dependency-free and intended for correctness checks only.
-`duckdb_q5.py` requires the DuckDB Python package. `cudf_q5.py` requires a
-RAPIDS environment with cuDF and a working NVIDIA GPU stack.
-
-Batch benchmark runner:
-
-```bash
-python3 scripts/validate_tpch_q5_data.py --data-dir tests/fixtures/tpch_q5_tiny
-python3 scripts/run_benchmarks.py --engines cpu,python --repeat 3 \
-  --output results/tiny_cpu_python.csv
-```
-
-Prepare an existing official TPC-H dbgen output directory:
+官方 TPC-H SF1 数据需要先通过 TPC 官方工具生成，不随仓库提交：
 
 ```bash
 python3 scripts/prepare_tpch_q5_data.py \
@@ -136,62 +114,13 @@ python3 scripts/prepare_tpch_q5_data.py \
   --mode copy
 ```
 
-CPU thread sweep:
+## 版本控制说明
 
-```bash
-python3 scripts/generate_synthetic_tpch_q5.py --output data/synthetic_dev \
-  --customers 1000 --orders 5000 --lineitems 20000 --suppliers 500 --asia-heavy
-python3 scripts/run_benchmarks.py --engines cpu,python --thread-list 1,2,4,8 \
-  --data-dir data/synthetic_dev --repeat 5 --output results/thread_sweep.csv
-python3 scripts/summarize_benchmarks.py results/thread_sweep.csv
-```
+仓库提交源码、脚本、报告、图表和必要 CSV。以下内容不提交到 Git：
 
-On a GPU server, point `--memq5` at the CUDA build and include GPU engines:
+- CMake/autotools 构建目录。
+- TPC-H 官方工具和生成的 `.tbl` 数据。
+- 大规模实验原始中间结果。
+- 本地打包产物。
 
-```bash
-python3 scripts/run_benchmarks.py --memq5 build-cuda/memq5 \
-  --engines cpu,gpu-copy,gpu-managed,gpu-mapped,cudf --repeat 5 \
-  --output results/gpu_server.csv
-```
-
-Check successful benchmark rows agree on correctness:
-
-```bash
-python3 scripts/verify_benchmark_hashes.py results/gpu_server.csv
-```
-
-Generate report-ready tables and SVG figures:
-
-```bash
-python3 scripts/make_report_assets.py results/gpu_server.csv \
-  --output-dir results/report_assets --title "TPC-H Q5 GPU Server"
-```
-
-Capture machine metadata for the report:
-
-```bash
-python3 scripts/capture_environment.py --output results/environment.json
-```
-
-One-command experiment pipeline:
-
-```bash
-python3 scripts/run_experiment_pipeline.py \
-  --name tiny_cpu_python \
-  --data-dir tests/fixtures/tpch_q5_tiny \
-  --engines cpu,python \
-  --repeat 3 \
-  --force
-```
-
-Local self-check:
-
-```bash
-python3 scripts/self_check.py
-```
-
-Create a source submission archive:
-
-```bash
-python3 scripts/package_submission.py --output dist/memq5_submission.tar.gz
-```
+这些内容可按报告中的复现步骤重新生成。

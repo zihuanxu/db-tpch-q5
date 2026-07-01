@@ -1,45 +1,45 @@
-# Integrated Course Submission
+# 课程大作业整合说明
 
-This repository combines two deliverable parts of the course project.
+本仓库将本课程两个交付部分整合到同一个 GitHub 项目中：
 
-## Repository Layout
-
-| Path | Purpose |
+| 目录 | 内容 |
 |---|---|
-| `hashjoin-cpu/` | CPU hash join framework based on ETH Zurich VLDB 2013 hashjoin |
-| repository root | TPC-H Q5 CPU/GPU query engine |
-| `docs/` | TPC-H Q5/GPU documentation |
-| `hashjoin-cpu/docs/` | CPU hashjoin reports, figures, and raw experiment data |
+| `hashjoin-cpu/` | 基于 ETH Zurich VLDB 2013 hashjoin 开源代码扩展的 CPU 哈希连接框架 |
+| 仓库根目录 | TPC-H Q5 CPU/GPU 查询引擎 |
+| `docs/` | TPC-H Q5/GPU 项目文档 |
+| `hashjoin-cpu/docs/` | CPU hashjoin 报告、图表和原始实验数据 |
 
-## Main Documents
+## 主要报告
 
-| Document | Path |
+| 文档 | 路径 |
 |---|---|
-| Integrated CPU hashjoin course report | `hashjoin-cpu/docs/COURSE_REPORT.docx` |
-| CPU hashjoin final report | `hashjoin-cpu/docs/EXPERIMENT_REPORT.docx` |
-| Starjoin midterm report | `hashjoin-cpu/docs/MIDTERM_REPORT.docx` |
-| CPU hashjoin delivery index | `hashjoin-cpu/docs/FINAL_REPORT.md` |
-| TPC-H Q5/GPU final report | `docs/FINAL_REPORT.md` |
+| 统一课程报告 | `hashjoin-cpu/docs/COURSE_REPORT.docx` |
+| CPU hashjoin 期末报告 | `hashjoin-cpu/docs/EXPERIMENT_REPORT.docx` |
+| Starjoin 期中报告 | `hashjoin-cpu/docs/MIDTERM_REPORT.docx` |
+| CPU hashjoin 交付索引 | `hashjoin-cpu/docs/FINAL_REPORT.md` |
+| TPC-H Q5/GPU 最终报告 | `docs/FINAL_REPORT.md` |
 
-## CPU Hashjoin Reproduction
+## CPU Hashjoin 复现方式
 
 ```bash
 cd hashjoin-cpu
 scripts/self_check_assignment.sh
 ```
 
-Representative full-sweep and starjoin scripts are in:
+主要实验脚本：
 
 - `hashjoin-cpu/scripts/run_extended_algo_comparison.sh`
 - `hashjoin-cpu/scripts/run_starjoin_comparison.sh`
 - `hashjoin-cpu/scripts/run_prvj_tuning.sh`
 
-Final CPU hashjoin data and figures are in:
+最终 CPU hashjoin 数据和图表：
 
 - `hashjoin-cpu/docs/data/`
 - `hashjoin-cpu/docs/assets/`
 
-## TPC-H Q5/GPU Reproduction
+## TPC-H Q5/GPU 复现方式
+
+CPU 构建与测试：
 
 ```bash
 cmake -S . -B build -DMEMQ5_ENABLE_CUDA=OFF -DMEMQ5_ENABLE_TESTS=ON
@@ -48,7 +48,7 @@ ctest --test-dir build --output-on-failure
 python3 scripts/self_check.py
 ```
 
-CUDA builds require a machine with `nvcc` and a working NVIDIA driver:
+CUDA 构建需要带 `nvcc` 和 NVIDIA 驱动的服务器：
 
 ```bash
 cmake -S . -B build-cuda -DMEMQ5_ENABLE_CUDA=ON -DMEMQ5_ENABLE_TESTS=ON \
@@ -57,8 +57,6 @@ cmake --build build-cuda
 ctest --test-dir build-cuda --output-on-failure
 ```
 
-## Notes
+## 说明
 
-The CPU hashjoin framework is integrated as a subdirectory so that its autotools
-build, scripts, reports, and raw data remain self-contained. The TPC-H Q5/GPU
-code remains at the repository root because it uses a separate CMake build.
+CPU hashjoin 框架放在 `hashjoin-cpu/` 子目录中，保留其 autotools 构建方式、实验脚本、报告和原始数据。TPC-H Q5/GPU 项目保留在仓库根目录，使用独立的 CMake 构建方式。这样一个 GitHub 仓库即可同时覆盖老师要求的 CPU 端 hashjoin 扩展研究和 GPU 端 TPC-H Q5 实验。

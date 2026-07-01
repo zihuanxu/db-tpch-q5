@@ -2,21 +2,15 @@
 
 ## 1. 项目信息
 
-本课程项目以 ETH Zurich VLDB 2013 main-memory hash join 开源代码为基础，将本学期练习、期中报告和期末报告统一整合到同一个 hashjoin 框架中。CPU 端实验通过命令行开关选择不同算法；GPU 端实验可作为独立扩展项目提交。
+本课程项目以 ETH Zurich VLDB 2013 main-memory hash join 开源代码为基础，将本学期练习、期中报告和期末报告统一整合到同一个 hashjoin 框架中。CPU 端实验通过命令行开关选择不同算法；GPU 端 TPC-H Q5 实验作为同一课程仓库中的独立扩展项目提交。
 
-开源项目链接建议使用个人 fork：
-
-```text
-https://github.com/zihuanxu/vldb13-eth-hashjoin
-```
-
-当前本地远端仍是原始上游：
+开源项目链接：
 
 ```text
-https://github.com/mars-research/vldb13-eth-hashjoin.git
+https://github.com/zihuanxu/db-tpch-q5
 ```
 
-提交前需要把远端改为个人仓库或 fork，并推送本项目分支。
+其中 CPU hashjoin 代码、实验脚本和报告位于 `hashjoin-cpu/` 子目录；TPC-H Q5/GPU 代码、实验脚本和报告位于仓库根目录及 `docs/` 目录。
 
 ## 2. 作业要求对照
 
@@ -309,7 +303,7 @@ scripts/run_starjoin_comparison.sh --run \
 1. `R=2^5` 在 64 线程下触发原始生成器的极小 R 边界问题，因此该点用 32 线程补跑。
 2. PRO 当前未输出统一 extra-space 字段，空间表只比较已实现统计的算法。
 3. 当前环境没有预留 hugetlb 大页；THP `madvise` 路径已实现并测试，但没有稳定收益。
-4. GPU 端实验不在本仓库内，若课程最终要求一起提交，应作为单独 GPU 项目链接或附件补充。
+4. GPU 端实验位于同一整合仓库根目录，最终报告为 `docs/FINAL_REPORT.md/.docx`。
 
 ## 12. 结论
 
