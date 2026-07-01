@@ -162,4 +162,4 @@ scripts/self_check_assignment.sh
 
 ## 5. 交付口径
 
-代码、实验脚本、CSV、SVG 图和 docx 报告已经在项目内整理完毕。正式提交时建议以 `docs/COURSE_REPORT.docx` 作为统一课程报告，以 `docs/EXPERIMENT_REPORT.docx` 和 `docs/MIDTERM_REPORT.docx` 作为可展开的期末/期中细节报告，同时保留 `docs/data/` 和 `docs/assets/` 作为可复核材料。
+代码、实验脚本、CSV、SVG 图和 docx 报告已经在项目内整理完毕。正式提交时建议以 `docs/COURSE_REPORT.docx` 作为统一课程报告，以 `docs/EXPERIMENT_REPORT.docx` 作为前期/扩展算法细节报告，以 `docs/MIDTERM_REPORT.docx` 作为期中 Star Join 细节报告，同时保留 `docs/data/` 和 `docs/assets/` 作为可复核材料。期末 TPC-H Q5/GPU 报告位于仓库根目录 `docs/FINAL_REPORT.docx`。

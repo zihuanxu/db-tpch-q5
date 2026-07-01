@@ -14,10 +14,10 @@
 | 文档 | 路径 |
 |---|---|
 | 统一课程完整报告 | `hashjoin-cpu/docs/COURSE_REPORT.docx` |
-| CPU hashjoin 期末报告 | `hashjoin-cpu/docs/EXPERIMENT_REPORT.docx` |
+| CPU hashjoin 前期/扩展算法报告 | `hashjoin-cpu/docs/EXPERIMENT_REPORT.docx` |
 | Starjoin 期中报告 | `hashjoin-cpu/docs/MIDTERM_REPORT.docx` |
 | CPU hashjoin 交付索引 | `hashjoin-cpu/docs/FINAL_REPORT.md` |
-| TPC-H Q5/GPU 最终报告 | `docs/FINAL_REPORT.md` |
+| 期末 TPC-H Q5/GPU 报告 | `docs/FINAL_REPORT.md` |
 
 ## CPU Hashjoin 复现方式
 
@@ -59,6 +59,6 @@ ctest --test-dir build-cuda --output-on-failure
 
 ## 说明
 
-CPU hashjoin 框架放在 `hashjoin-cpu/` 子目录中，保留其 autotools 构建方式、实验脚本、报告和原始数据。统一课程完整报告 `hashjoin-cpu/docs/COURSE_REPORT.docx` 以前期《内存连接算法报告》的写法为基础，对前期硬件与连接算法实验进行修订，并在后续章节续写期中 Star Join 和期末 VJ/PRVJ 扩展算法实验，作为老师阅读课程主线的入口。
+CPU hashjoin 框架放在 `hashjoin-cpu/` 子目录中，保留其 autotools 构建方式、实验脚本、报告和原始数据。统一课程完整报告 `hashjoin-cpu/docs/COURSE_REPORT.docx` 按 `/home/xuzihuan/内存连接算法探索.pdf` 的阶段要求组织：第 1 到第 5 项作为前期硬件、连接算法、VJ/PRVJ 扩展实验，第 6 项作为期中 Star Join 实验；期末报告则是仓库根目录的 TPC-H Q5/GPU 项目。
 
-TPC-H Q5/GPU 项目保留在仓库根目录，使用独立的 CMake 构建方式，作为 GPU 端扩展实验单独报告。这样一个 GitHub 仓库即可同时覆盖老师要求的 CPU 端 hashjoin 扩展研究和 GPU 端 TPC-H Q5 实验。
+TPC-H Q5/GPU 项目保留在仓库根目录，使用独立的 CMake 构建方式，作为本课程期末项目单独报告。这样一个 GitHub 仓库即可同时覆盖老师要求的前期 CPU hashjoin 实验、期中 Star Join 实验和期末 TPC-H Q5/GPU 实验。

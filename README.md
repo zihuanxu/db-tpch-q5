@@ -7,7 +7,7 @@
 | `hashjoin-cpu/` | 基于 ETH Zurich VLDB 2013 main-memory hash join 开源代码扩展的 CPU 端连接算法框架 |
 | 仓库根目录 | TPC-H Q5 CPU/GPU 查询引擎，包含 CPU 执行、手写 CUDA、不同 GPU 内存模式和 cuDF 对照 |
 | `docs/` | TPC-H Q5/GPU 项目文档、图表和最终报告 |
-| `hashjoin-cpu/docs/` | CPU hashjoin 统一课程报告、期中报告、期末报告、原始数据和图表 |
+| `hashjoin-cpu/docs/` | CPU hashjoin 前期/扩展算法报告、期中报告、原始数据和图表 |
 
 ## 提交入口
 
@@ -18,8 +18,8 @@
 | 课程大作业整合说明 | `docs/INTEGRATED_SUBMISSION.docx` / `docs/INTEGRATED_SUBMISSION.md` |
 | CPU hashjoin 统一课程报告 | `hashjoin-cpu/docs/COURSE_REPORT.docx` / `hashjoin-cpu/docs/COURSE_REPORT.md` |
 | CPU hashjoin 期中 starjoin 报告 | `hashjoin-cpu/docs/MIDTERM_REPORT.docx` / `hashjoin-cpu/docs/MIDTERM_REPORT.md` |
-| CPU hashjoin 期末 full sweep 报告 | `hashjoin-cpu/docs/EXPERIMENT_REPORT.docx` / `hashjoin-cpu/docs/EXPERIMENT_REPORT.md` |
-| TPC-H Q5/GPU 最终报告 | `docs/FINAL_REPORT.docx` / `docs/FINAL_REPORT.md` |
+| CPU hashjoin 前期/扩展算法报告 | `hashjoin-cpu/docs/EXPERIMENT_REPORT.docx` / `hashjoin-cpu/docs/EXPERIMENT_REPORT.md` |
+| 期末 TPC-H Q5/GPU 报告 | `docs/FINAL_REPORT.docx` / `docs/FINAL_REPORT.md` |
 
 ## 完成情况
 
@@ -27,7 +27,7 @@ CPU hashjoin 部分已经完成：
 
 - 将 NPO、PRO、sort-merge、VJ、PRVJ 和三表 starjoin 整合进原 hashjoin 框架。
 - 支持通过算法开关参数执行不同算法和实验配置。
-- 完成 NUMA、MLC、starjoin、full sweep、VJ cache/TLB、PRVJ 分区调参等实验。
+- 完成 NUMA、MLC、full sweep、VJ cache/TLB、PRVJ 分区调参和期中 starjoin 等实验。
 - 保留原始 CSV、图表、报告和自检脚本。
 
 TPC-H Q5/GPU 部分已经完成：
