@@ -7,9 +7,8 @@ explicit PCIe transfer, UVA/unified-memory experiments, and comparisons against
 NVIDIA RAPIDS cuDF. Apache Arrow remains a layout reference and optional CPU
 baseline, not the central deliverable.
 
-The project starts from the fragmented notes in
-`/home/xuzihuan/内存数据库大作业要求.md`. The reconstructed requirements and final
-implementation plan are in:
+The project starts from course notes and teacher-discussion transcripts. The
+reconstructed requirements and final implementation plan are in:
 
 - `docs/RECONSTRUCTED_REQUIREMENTS.md`
 - `docs/FINAL_IMPLEMENTATION_PLAN.md`

@@ -1,6 +1,7 @@
 # Reconstructed Requirements
 
-Source note: `/home/xuzihuan/内存数据库大作业要求.md`
+Source note: reconstructed from local course notes and teacher-discussion
+transcripts.
 
 The original note is fragmentary and partly based on memory. This file separates
 hard requirements, likely teacher intent, and engineering assumptions.
