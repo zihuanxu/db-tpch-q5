@@ -474,14 +474,15 @@ Use CMake with optional components:
 - `MEMQ5_ENABLE_TESTS=ON/OFF`
 
 CPU-only build must work without CUDA driver access. CUDA build requires `nvcc`.
-GPU runtime tests require a working NVIDIA driver.
+GPU runtime tests were completed on an RTX 4090 server on 2026-07-01.
 
-Current machine check:
+Validation machine check:
 
-- `nvcc` exists at `/usr/local/cuda-12.8/bin/nvcc`.
-- `nvidia-smi` cannot communicate with the driver in the current environment, so
-  implementation should support compile-only CUDA checks here and runtime GPU
-  benchmarks on a machine with a working driver.
+- `nvidia-smi` reported RTX 4090 and L20 GPUs.
+- The validation run used `CUDA_VISIBLE_DEVICES=0` on an RTX 4090.
+- CUDA was built with `CMAKE_CUDA_ARCHITECTURES=89`.
+- `test_q5_cuda`, `tiny_gpu_modes`, and `synthetic_gpu_modes` completed with
+  matching CPU/GPU/Python hashes.
 
 ## 12. Implementation Milestones
 

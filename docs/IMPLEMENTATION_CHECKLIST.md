@@ -155,7 +155,8 @@ Tasks:
 Exit criterion:
 
 - `gpu-copy` compiles with `nvcc`.
-- On a machine with a working NVIDIA driver, `gpu-copy` matches CPU on fixture.
+- `gpu-copy` matches CPU on the fixture; this was validated on an RTX 4090 on
+  2026-07-01.
 - If no driver exists, runtime test is skipped with a clear message.
 
 ## 7. GPU Mapped And Managed Memory Modes

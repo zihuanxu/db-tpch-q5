@@ -1,10 +1,21 @@
 # GPU Server Runbook
 
-This runbook is the required next step after local development. The current
-machine can compile CUDA code with `nvcc`, but cannot run GPU kernels because
-`nvidia-smi` cannot communicate with the NVIDIA driver.
+This runbook records the GPU validation procedure used for the 2026-07-01
+RTX 4090 run and remains the reproducibility checklist for future official
+TPC-H scale-factor experiments.
 
-## 1. Check The Server
+Completed validation snapshot:
+
+- GPU runtime host: NVIDIA GeForce RTX 4090, compute capability 8.9.
+- CMake CUDA architecture: `89`.
+- `ctest --test-dir build-cuda --output-on-failure`: passed, including
+  `test_q5_cuda`.
+- Tiny CPU/GPU/Python hash: `1e07d78fa8eededb`.
+- Synthetic CPU/GPU/Python hash: `d5ffe393223a207e`.
+- Official TPC-H SF1 and cuDF baseline: still open because official dbgen data
+  and RAPIDS/cuDF were not available in the active environment.
+
+## 1. Check The Runtime Host
 
 Run:
 
@@ -38,6 +49,7 @@ Common values:
 | Turing T4 | `75` |
 | Ampere A100 | `80` |
 | Ampere RTX 30xx / A10 | `86` |
+| Ada RTX 4090 / L20 | `89` |
 | Hopper H100 | `90` |
 
 If uncertain, use the lowest compatible architecture for the server GPU or ask
@@ -60,8 +72,9 @@ cmake --build build-cuda
 ctest --test-dir build-cuda --output-on-failure
 ```
 
-On a working GPU server, `test_q5_cuda` should actually run `gpu-copy`,
-`gpu-managed`, and `gpu-mapped`, then verify all result hashes match CPU.
+On a correctly configured GPU runtime, `test_q5_cuda` should actually run
+`gpu-copy`, `gpu-managed`, and `gpu-mapped`, then verify all result hashes match
+CPU.
 
 ## 5. Tiny Correctness Experiment
 

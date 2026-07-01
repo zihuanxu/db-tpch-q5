@@ -210,6 +210,13 @@ ok ASIA 1994-01-01 hash=1e07d78fa8eededb engines=cpu,gpu-copy,gpu-managed,gpu-ma
 
 Median timing table:
 
+The `threads` column is the `--threads` value passed by the benchmark driver to
+the C++ `memq5` executable. It controls CPU worker count for the `cpu` engine.
+For the current GPU engines, the CUDA kernel uses a fixed 256-thread block size
+and does not use this CLI value; GPU rows with different `threads` values in a
+thread-list sweep are retained only so the C++ benchmark matrix lines up with
+the CPU sweep.
+
 | engine | threads | runs | hash | total_ms_median | scan_ms_median | h2d_ms_median | kernel_ms_median | d2h_ms_median | elapsed_ms_median |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | cpu | 1 | 5 | `1e07d78fa8eededb` | 0.012799 | 0.001673 | 0.000000 | 0.000000 | 0.000000 | 2.917052 |
@@ -267,6 +274,13 @@ ok ASIA 1994-01-01 hash=d5ffe393223a207e engines=cpu,gpu-copy,gpu-managed,gpu-ma
 ```
 
 Median timing table:
+
+The `threads` column has the same meaning as in the tiny experiment: it is a
+C++ benchmark-driver parameter, not a CUDA launch-configuration field. Only the
+CPU engine uses it to change host worker count. The GPU implementations build
+the CPU-side Q5 filter maps once per process invocation and launch a fixed
+CUDA kernel configuration, so the GPU `threads=1,2,4,8` rows should be read as
+repeat measurements under the same GPU execution policy.
 
 | engine | threads | runs | hash | total_ms_median | scan_ms_median | h2d_ms_median | kernel_ms_median | d2h_ms_median | elapsed_ms_median |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |

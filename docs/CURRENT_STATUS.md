@@ -1,8 +1,9 @@
 # Current Status
 
-This project has a working CPU correctness path, CUDA compile-only paths for the
-three planned GPU memory modes, dependency-free correctness baselines, and
-benchmark automation.
+This project has a working CPU correctness path, runtime-validated CUDA paths
+for the three planned GPU memory modes, dependency-free correctness baselines,
+and benchmark automation. GPU runtime validation was completed on an NVIDIA
+GeForce RTX 4090 server on 2026-07-01.
 
 ## Implemented Engines
 
@@ -21,9 +22,9 @@ benchmark automation.
   - Uses `cudaHostAllocMapped`.
   - Lets the GPU read mapped pinned host input buffers through device pointers.
 
-The GPU engines compile on this machine, but runtime validation requires a
-working NVIDIA driver. Current local `nvidia-smi` cannot communicate with the
-driver.
+The GPU engines compile and run on the validated GPU server. The 2026-07-01 run
+used `CUDA_VISIBLE_DEVICES=0` on an RTX 4090 with compute capability 8.9 and
+`CMAKE_CUDA_ARCHITECTURES=89`.
 
 ## Implemented Baselines
 
@@ -73,7 +74,7 @@ driver.
   - Creates a source-only submission archive, excluding generated build, data,
     and result directories.
 
-## Local Verification
+## Verification
 
 CPU build:
 
@@ -88,6 +89,44 @@ CUDA compile-only build:
 cmake --build build-cuda
 ctest --test-dir build-cuda --output-on-failure
 ```
+
+GPU runtime validation:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 ctest --test-dir build-cuda --output-on-failure
+```
+
+Result: all six CTest tests passed, including `test_q5_cuda` on a real NVIDIA
+GPU.
+
+Tiny GPU correctness:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python3 scripts/run_experiment_pipeline.py \
+  --name tiny_gpu_modes \
+  --memq5 build-cuda/memq5 \
+  --data-dir tests/fixtures/tpch_q5_tiny \
+  --engines cpu,gpu-copy,gpu-managed,gpu-mapped,python \
+  --repeat 5 \
+  --force
+```
+
+Result hash: `1e07d78fa8eededb` for CPU, all three GPU modes, and Python.
+
+Synthetic GPU development run:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python3 scripts/run_experiment_pipeline.py \
+  --name synthetic_gpu_modes \
+  --memq5 build-cuda/memq5 \
+  --data-dir data/synthetic_gpu_dev \
+  --engines cpu,gpu-copy,gpu-managed,gpu-mapped,python \
+  --thread-list 1,2,4,8 \
+  --repeat 5 \
+  --force
+```
+
+Result hash: `d5ffe393223a207e` for CPU, all three GPU modes, and Python.
 
 Synthetic data check:
 
@@ -105,32 +144,13 @@ python3 scripts/verify_benchmark_hashes.py results/synthetic_thread_sweep.csv
 python3 scripts/summarize_benchmarks.py results/synthetic_thread_sweep.csv
 ```
 
-## Next Required Work
+## Remaining Work
 
-1. Move to a GPU server with a working NVIDIA driver.
-2. Build with CUDA enabled, using the server's architecture:
-
-   ```bash
-   cmake -S . -B build-cuda -DMEMQ5_ENABLE_CUDA=ON \
-     -DMEMQ5_ENABLE_TESTS=ON -DCMAKE_CUDA_ARCHITECTURES=<arch>
-   cmake --build build-cuda
-   ctest --test-dir build-cuda --output-on-failure
-   ```
-
-3. Run GPU engine correctness and benchmark matrix:
-
-   ```bash
-   python3 scripts/run_benchmarks.py --memq5 build-cuda/memq5 \
-     --engines cpu,gpu-copy,gpu-managed,gpu-mapped,python \
-     --data-dir tests/fixtures/tpch_q5_tiny --repeat 5 \
-     --output results/tiny_gpu_modes.csv
-
-   python3 scripts/verify_benchmark_hashes.py results/tiny_gpu_modes.csv
-   python3 scripts/summarize_benchmarks.py results/tiny_gpu_modes.csv
-   ```
-
-4. Add RAPIDS cuDF to the GPU server environment and include `cudf` in the
-   benchmark matrix.
-5. Prepare official TPC-H dbgen data for final experiments.
-6. Run scale sweeps and thread sweeps.
-7. Analyze bottlenecks and write the final report.
+1. Provide a license-accepted official TPC-H dbgen output directory.
+2. Prepare `data/tpch_sf1` with `scripts/prepare_tpch_q5_data.py`.
+3. Run the official SF1 benchmark matrix with CPU thread sweeps and the three
+   GPU memory modes.
+4. Add RAPIDS cuDF to the environment and include `cudf` in the benchmark
+   matrix if RAPIDS is available.
+5. Replace the official-data placeholder in `docs/FINAL_REPORT_DRAFT.md` with
+   measured SF1 tables and figures.
