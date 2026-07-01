@@ -3,21 +3,19 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import tarfile
 from pathlib import Path
 
 
-INCLUDE_DIRS = ["baselines", "docs", "scripts", "src", "tests"]
-INCLUDE_FILES = [".gitignore", "CMakeLists.txt", "README.md"]
-
-
-def add_path(tar: tarfile.TarFile, path: Path, arc_root: str) -> None:
-    if path.is_dir():
-        for child in sorted(path.rglob("*")):
-            if child.is_file() and "__pycache__" not in child.parts:
-                tar.add(child, arcname=str(Path(arc_root) / child))
-    elif path.is_file():
-        tar.add(path, arcname=str(Path(arc_root) / path))
+def tracked_files() -> list[Path]:
+    result = subprocess.run(
+        ["git", "ls-files"],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    )
+    return [Path(line) for line in result.stdout.splitlines() if line]
 
 
 def main() -> int:
@@ -27,13 +25,13 @@ def main() -> int:
     args = parser.parse_args()
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    files = tracked_files()
     with tarfile.open(args.output, "w:gz") as tar:
-        for file_name in INCLUDE_FILES:
-            add_path(tar, Path(file_name), args.root_name)
-        for dir_name in INCLUDE_DIRS:
-            add_path(tar, Path(dir_name), args.root_name)
+        for path in files:
+            if path.is_file():
+                tar.add(path, arcname=str(Path(args.root_name) / path))
 
-    print(f"wrote {args.output}")
+    print(f"wrote {args.output} ({len(files)} tracked files)")
     return 0
 
 
