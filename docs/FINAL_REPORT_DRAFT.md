@@ -10,10 +10,10 @@ transfer, CUDA managed memory, mapped pinned host memory, and GPU operator
 library execution. The current implementation includes a CPU engine, three CUDA
 memory-mode engines, correctness baselines, validation scripts, benchmark
 automation, environment capture, and report asset generation. Local verification
-passes all CPU and CUDA compile-only tests. GPU runtime validation was completed
-on an NVIDIA GPU server on 2026-07-01. Official TPC-H scale-factor experiments
-still require an already downloaded, license-accepted TPC-H dbgen output
-directory.
+passes all CPU and CUDA compile-only tests. GPU runtime validation and official
+TPC-H SF1 experiments were completed on an NVIDIA GPU server on 2026-07-01.
+The only remaining optional experiment is the RAPIDS/cuDF baseline, because
+cuDF was not installed in the active Python environment.
 
 ## 1. Background
 
@@ -180,11 +180,11 @@ CUDA_VISIBLE_DEVICES=0 ctest --test-dir build-cuda --output-on-failure
 `ctest` passed all six tests. The CUDA test did not skip: `test_q5_cuda` ran and
 passed on the server GPU.
 
-The official TPC-H dbgen SF1 experiment was not run in this checkout because no
-official dbgen `.tbl` output, `dbgen` executable, or TPC-H tools zip was present
-under the checked local data locations. The official TPC tools download page
-requires registration and agreement to the license terms before use, so the
-tools were not downloaded automatically during this run.
+Official TPC-H SF1 data was generated from the downloaded `TPC-H V3.0.1` tools
+package. The local zip was `TPC-H-Tool.zip` with SHA256
+`97ccb34cd122d78c2e06e2419e50957f934256868b37c02d0b88aefd9d13a84a`.
+`dbgen` was built from `makefile.suite` with `CC=gcc`, `DATABASE=ORACLE`,
+`MACHINE=LINUX`, and `WORKLOAD=TPCH`, then run at scale factor 1.
 
 ## 9. Measured Results
 
@@ -308,29 +308,99 @@ Figures:
 
 ![Synthetic GPU time breakdown](assets/synthetic_gpu_modes_time_breakdown.svg)
 
-### 9.3 Official TPC-H SF1 Status
+### 9.3 Official TPC-H SF1 Experiment
 
-Formal SF1 results are not available in this run. The repository expects an
-existing official dbgen output directory and then runs:
+Official SF1 data was generated with `dbgen -vf -s 1` and prepared with:
 
 ```bash
 python3 scripts/prepare_tpch_q5_data.py \
-  --source-dir /path/to/dbgen-output \
+  --source-dir data/tpch_sf1_raw \
   --output-dir data/tpch_sf1 \
   --scale-factor 1 \
   --mode copy \
   --force
 ```
 
-No such directory was available on the server, and no RAPIDS/cuDF package was
-installed. Therefore the cuDF baseline was also not run.
+Prepared Q5 data size:
+
+- `region.tbl`: 5 rows
+- `nation.tbl`: 25 rows
+- `supplier.tbl`: 10,000 rows
+- `customer.tbl`: 150,000 rows
+- `orders.tbl`: 1,500,000 rows
+- `lineitem.tbl`: 6,001,215 rows
+- orders in the `1994-01-01` to `1995-01-01` date window: 227,597
+
+Command:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python3 scripts/run_experiment_pipeline.py \
+  --name tpch_sf1_gpu_modes \
+  --memq5 build-cuda/memq5 \
+  --data-dir data/tpch_sf1 \
+  --engines cpu,gpu-copy,gpu-managed,gpu-mapped \
+  --thread-list 1,2,4,8 \
+  --repeat 5 \
+  --force
+```
+
+Hash check:
+
+```text
+ok ASIA 1994-01-01 hash=9f1f5f7578dd816e engines=cpu,gpu-copy,gpu-managed,gpu-mapped
+```
+
+Result rows from the CPU 8-thread run:
+
+| nation | revenue |
+| --- | ---: |
+| INDONESIA | 55502035.06 |
+| VIETNAM | 55295080.65 |
+| CHINA | 53724488.13 |
+| INDIA | 52035506.17 |
+| JAPAN | 45410170.55 |
+
+Median timing table:
+
+The `threads` column is the same benchmark-driver field described above. The
+CPU rows use it as worker count. GPU rows keep the same field for matrix
+alignment; the CUDA launch uses a fixed kernel configuration.
+
+| engine | threads | runs | hash | total_ms_median | scan_ms_median | h2d_ms_median | kernel_ms_median | d2h_ms_median | elapsed_ms_median |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| cpu | 1 | 5 | `9f1f5f7578dd816e` | 157.107000 | 93.948400 | 0.000000 | 0.000000 | 0.000000 | 16063.048854 |
+| cpu | 2 | 5 | `9f1f5f7578dd816e` | 109.855000 | 46.949500 | 0.000000 | 0.000000 | 0.000000 | 16060.163192 |
+| cpu | 4 | 5 | `9f1f5f7578dd816e` | 87.155600 | 23.972400 | 0.000000 | 0.000000 | 0.000000 | 16020.153216 |
+| cpu | 8 | 5 | `9f1f5f7578dd816e` | 76.211900 | 12.671300 | 0.000000 | 0.000000 | 0.000000 | 16031.832139 |
+| gpu-copy | 1 | 5 | `9f1f5f7578dd816e` | 274.314000 | 6.752930 | 6.529280 | 0.197632 | 0.025888 | 16269.571092 |
+| gpu-copy | 2 | 5 | `9f1f5f7578dd816e` | 275.848000 | 6.731900 | 6.495970 | 0.208896 | 0.026208 | 16251.653590 |
+| gpu-copy | 4 | 5 | `9f1f5f7578dd816e` | 265.649000 | 6.786180 | 6.525950 | 0.232448 | 0.027776 | 16226.326749 |
+| gpu-copy | 8 | 5 | `9f1f5f7578dd816e` | 267.698000 | 6.710850 | 6.478750 | 0.202752 | 0.027168 | 16253.359118 |
+| gpu-managed | 1 | 5 | `9f1f5f7578dd816e` | 306.651000 | 6.659070 | 6.326080 | 0.202752 | 0.093184 | 16302.204770 |
+| gpu-managed | 2 | 5 | `9f1f5f7578dd816e` | 307.321000 | 6.566020 | 6.248580 | 0.191488 | 0.111616 | 16289.880895 |
+| gpu-managed | 4 | 5 | `9f1f5f7578dd816e` | 307.536000 | 6.593860 | 6.290590 | 0.193408 | 0.065536 | 16354.956034 |
+| gpu-managed | 8 | 5 | `9f1f5f7578dd816e` | 307.993000 | 6.576260 | 6.283390 | 0.193312 | 0.102400 | 16353.421533 |
+| gpu-mapped | 1 | 5 | `9f1f5f7578dd816e` | 354.555000 | 2.722850 | 0.012288 | 2.673540 | 0.035904 | 16421.531540 |
+| gpu-mapped | 2 | 5 | `9f1f5f7578dd816e` | 343.415000 | 2.737820 | 0.013632 | 2.685730 | 0.033536 | 16418.682619 |
+| gpu-mapped | 4 | 5 | `9f1f5f7578dd816e` | 347.973000 | 2.727140 | 0.012256 | 2.673660 | 0.037152 | 16361.069568 |
+| gpu-mapped | 8 | 5 | `9f1f5f7578dd816e` | 358.833000 | 2.731390 | 0.013280 | 2.681860 | 0.036032 | 16401.672345 |
+
+Figures:
+
+![TPC-H SF1 GPU total time](assets/tpch_sf1_gpu_modes_total_time.svg)
+
+![TPC-H SF1 GPU time breakdown](assets/tpch_sf1_gpu_modes_time_breakdown.svg)
+
+RAPIDS/cuDF was still not run because `import cudf` failed with
+`ModuleNotFoundError` in the active Python environment.
 
 ## 10. Analysis
 
-The GPU server work closes the main runtime-correctness gap. `test_q5_cuda`,
-the tiny fixture experiment, and the synthetic development experiment all ran
-on a real NVIDIA GPU. All successful CPU, GPU, and Python rows produced the
-same result hash within each experiment.
+The GPU server work closes the main runtime-correctness and official-data gaps.
+`test_q5_cuda`, the tiny fixture experiment, the synthetic development
+experiment, and the official TPC-H SF1 experiment all ran on a real NVIDIA GPU.
+All successful CPU, GPU, and Python rows produced the same result hash within
+each experiment.
 
 The tiny fixture confirms the expected behavior for very small data. CPU is
 much faster because GPU launch, context, and transfer overheads dominate the
@@ -343,23 +413,34 @@ The synthetic development experiment shows the same fixed-overhead issue at
 eight threads. The Python baseline is much slower at `477.31 ms`, which is
 expected for a dependency-free row-processing reference. The handwritten CUDA
 kernel and transfer components are small, but the total GPU query time remains
-around `186 ms` to `195 ms`. This means the current GPU path is functionally
-correct but not yet optimized as a full end-to-end query engine.
+around `186 ms` to `195 ms`.
+
+The official SF1 experiment confirms the larger-data behavior. CPU scales from
+`157.11 ms` at one thread to `76.21 ms` at eight threads. The GPU kernel itself
+is fast: `gpu-copy` kernel time is about `0.20 ms`, while explicit H2D transfer
+is about `6.5 ms`. However, the full handwritten GPU path still reports
+`265.65 ms` to `275.85 ms` total time for `gpu-copy`, so the optimized CPU path
+is faster end to end for this implementation and SF1 setup. The likely cause is
+that the current GPU implementation still builds the Q5 filter-propagation maps
+on the CPU and pays CUDA setup/allocation/synchronization overhead on every
+process-level query invocation.
 
 The memory modes behave as expected at the component level:
 
-- `gpu-copy` has explicit host-to-device copies around `0.37 ms` and kernels
-  around `0.13 ms` on the synthetic data.
-- `gpu-managed` is simpler to program but costs more in the measured migration
-  or prefetch component, around `0.8 ms`.
+- `gpu-copy` has explicit host-to-device copies around `6.5 ms` and kernels
+  around `0.20 ms` on SF1.
+- `gpu-managed` is simpler to program but is slower overall, around `307 ms`
+  total on SF1.
 - `gpu-mapped` nearly eliminates explicit copy time, but the kernel is slower,
-  around `0.44 ms`, because the GPU reads mapped host memory through the host
-  interconnect.
+  around `2.68 ms` on SF1, because the GPU reads mapped host memory through the
+  host interconnect.
 
-The remaining performance question is scale. These results validate the CUDA
-implementation and show the overhead structure, but they do not prove the final
-large-data crossover point. That requires official TPC-H dbgen SF1 or larger
-data generated from the licensed TPC tools.
+The final conclusion is therefore correctness-positive but performance-mixed:
+the CUDA implementation is valid and exposes the intended memory-mode tradeoffs,
+but the current CPU-prepared, per-invocation GPU path does not beat the
+multi-threaded CPU engine at SF1. The next optimization target would be to keep
+data resident across queries, reuse CUDA allocations, and move more
+filter-propagation work onto the GPU.
 
 ## 11. Completion Checklist
 
@@ -387,15 +468,13 @@ Completed:
 - Tiny CPU/GPU/Python correctness experiment with matching result hashes.
 - Synthetic GPU development experiment with matching CPU/GPU/Python result
   hashes.
+- Official TPC-H SF1 data generation, validation, CPU/GPU benchmark matrix, and
+  matching result hash `9f1f5f7578dd816e`.
 
 Still required for final submission:
 
-- Provide a license-accepted official TPC-H dbgen output directory and run the
-  final SF1 experiment.
 - Install RAPIDS/cuDF, or document that the target environment does not include
   RAPIDS, before making the handwritten CUDA vs cuDF comparison.
-- Replace the formal SF1 placeholder above with measured official-data tables
-  and figures.
 
 ## References
 

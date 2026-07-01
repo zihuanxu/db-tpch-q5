@@ -9,10 +9,10 @@ This document checks the project against the current deliverable goal:
 
 ## Audit Summary
 
-Local deliverables are complete, and GPU runtime validation has been completed
-on an NVIDIA GeForce RTX 4090 server. The remaining work is not a code gap:
-formal official TPC-H dbgen SF1 experiments require license-accepted dbgen
-output, and the cuDF baseline requires a RAPIDS environment.
+Local deliverables are complete. GPU runtime validation and official TPC-H
+dbgen SF1 experiments have been completed on an NVIDIA GeForce RTX 4090 server.
+The remaining optional work is not a code gap: the cuDF baseline requires a
+RAPIDS environment.
 
 ## Requirement Status
 
@@ -81,11 +81,14 @@ The GPU validation run completed:
 - `CUDA_VISIBLE_DEVICES=0 ctest --test-dir build-cuda --output-on-failure`
 - `tiny_gpu_modes` with `cpu,gpu-copy,gpu-managed,gpu-mapped,python`
 - `synthetic_gpu_modes` with `cpu,gpu-copy,gpu-managed,gpu-mapped,python`
+- official TPC-H SF1 `tpch_sf1_gpu_modes` with
+  `cpu,gpu-copy,gpu-managed,gpu-mapped`
 
 GPU validation hashes:
 
 - tiny fixture: `1e07d78fa8eededb`
 - synthetic development data: `d5ffe393223a207e`
+- official TPC-H SF1: `9f1f5f7578dd816e`
 
 The machine-readable report is:
 
@@ -109,15 +112,11 @@ Archive inspection confirms it includes source, docs, scripts, tests, baselines,
 and the tiny fixture, and does not include generated `build/`, `build-cuda/`,
 `data/`, or `results/` directories.
 
-## Remaining External Inputs For Formal SF1 Results
+## Remaining Optional External Input
 
-1. Prepare official TPC-H dbgen data with
-   `scripts/prepare_tpch_q5_data.py`.
-2. Run official scale-factor experiments with CPU thread sweeps and all GPU
-   memory modes.
-3. Add `cudf` to the benchmark matrix if RAPIDS is available.
-4. Replace the official-data placeholder in `docs/FINAL_REPORT_DRAFT.md` with
-   measured SF1 results.
+Install RAPIDS/cuDF and add `cudf` to the benchmark matrix if the high-level GPU
+operator-library baseline is required by the final evaluator. The active Python
+environment used for this audit did not provide `cudf`.
 
 ## Packaging Rule
 

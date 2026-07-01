@@ -12,8 +12,9 @@ Completed validation snapshot:
   `test_q5_cuda`.
 - Tiny CPU/GPU/Python hash: `1e07d78fa8eededb`.
 - Synthetic CPU/GPU/Python hash: `d5ffe393223a207e`.
-- Official TPC-H SF1 and cuDF baseline: still open because official dbgen data
-  and RAPIDS/cuDF were not available in the active environment.
+- Official TPC-H SF1 CPU/GPU hash: `9f1f5f7578dd816e`.
+- cuDF baseline: still open because RAPIDS/cuDF was not available in the active
+  environment.
 
 ## 1. Check The Runtime Host
 
@@ -132,7 +133,8 @@ for final TPC-H dbgen results.
 
 ## 7. Official TPC-H Data
 
-After obtaining official TPC-H dbgen `.tbl` files, prepare the Q5 subset:
+After obtaining or generating official TPC-H dbgen `.tbl` files, prepare the Q5
+subset:
 
 ```bash
 python3 scripts/prepare_tpch_q5_data.py \

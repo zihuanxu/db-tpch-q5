@@ -38,9 +38,9 @@ The code repository should eventually contain:
 The implementation now includes the CPU path, three handwritten CUDA memory
 modes, Python/DuckDB/cuDF baseline scripts, benchmark automation, and report
 asset generation. GPU runtime validation passed on an RTX 4090 server on
-2026-07-01. Official TPC-H dbgen SF1 results still require a
-license-accepted dbgen output directory; no such data directory is committed to
-the repository.
+2026-07-01. Official TPC-H dbgen SF1 data was generated and benchmarked on the
+same server. The generated TPC-H tools, `.tbl` data, and raw results are not
+committed to the repository.
 
 See [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md) for the latest implemented
 engines, verification commands, and next required work.

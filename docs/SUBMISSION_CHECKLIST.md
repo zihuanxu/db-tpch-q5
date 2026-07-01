@@ -3,8 +3,9 @@
 Use this checklist before handing in the project.
 
 Current status: GPU runtime validation has already passed on an RTX 4090 server
-on 2026-07-01. Official TPC-H SF1 data and RAPIDS/cuDF were not available in
-the active environment, so those items remain open.
+on 2026-07-01. Official TPC-H SF1 data was generated and benchmarked. RAPIDS
+cuDF was not available in the active environment, so that optional baseline
+remains open.
 
 ## Code And Tests
 
@@ -22,24 +23,24 @@ the active environment, so those items remain open.
 
 ## Data
 
-- [ ] Prepare official TPC-H dbgen data:
+- [x] Prepare official TPC-H dbgen data:
 
   ```bash
   python3 scripts/prepare_tpch_q5_data.py \
-    --source-dir /path/to/dbgen-output \
+    --source-dir data/tpch_sf1_raw \
     --output-dir data/tpch_sf1 \
     --scale-factor 1 \
     --mode copy \
     --force
   ```
 
-- [ ] Keep `memq5_manifest.json` for the final report appendix.
-- [ ] Do not submit large generated `.tbl` files unless explicitly required.
+- [x] Keep `memq5_manifest.json` for audit evidence.
+- [x] Do not submit large generated `.tbl` files unless explicitly required.
 
 ## Experiments
 
 - [x] Run tiny GPU correctness experiment.
-- [ ] Run at least one official TPC-H scale-factor experiment.
+- [x] Run at least one official TPC-H scale-factor experiment.
 - [x] Run CPU thread sweep on synthetic development data.
 - [x] Run `gpu-copy`, `gpu-managed`, and `gpu-mapped`.
 - [ ] Run cuDF baseline if RAPIDS is available.
@@ -56,8 +57,8 @@ the active environment, so those items remain open.
 - [x] Include `assets/total_time.svg`.
 - [x] Include `assets/time_breakdown.svg`.
 - [x] Include environment metadata from `environment.json`.
-- [x] Mention limitations honestly if cuDF or official dbgen data could not be
-      run in the available environment.
+- [x] Mention limitations honestly if cuDF could not be run in the available
+      environment.
 
 ## Package
 

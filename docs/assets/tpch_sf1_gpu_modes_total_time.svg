@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="460" viewBox="0 0 920 460">
+<rect width="100%" height="100%" fill="white"/>
+<text x="460.0" y="28.0" font-size="18" font-family="Arial, sans-serif" text-anchor="middle">tpch_sf1_gpu_modes</text>
+<text x="460.0" y="49.0" font-size="13" font-family="Arial, sans-serif" text-anchor="middle">Median total runtime by engine</text>
+<line x1="80" y1="370" x2="890" y2="370" stroke="#333"/>
+<line x1="80" y1="58" x2="80" y2="370" stroke="#333"/>
+<line x1="75" y1="370.0" x2="890" y2="370.0" stroke="#e5e5e5"/>
+<text x="70.0" y="374.0" font-size="11" font-family="Arial, sans-serif" text-anchor="end">0.00</text>
+<line x1="75" y1="292.0" x2="890" y2="292.0" stroke="#e5e5e5"/>
+<text x="70.0" y="296.0" font-size="11" font-family="Arial, sans-serif" text-anchor="end">89.71</text>
+<line x1="75" y1="214.0" x2="890" y2="214.0" stroke="#e5e5e5"/>
+<text x="70.0" y="218.0" font-size="11" font-family="Arial, sans-serif" text-anchor="end">179.42</text>
+<line x1="75" y1="136.0" x2="890" y2="136.0" stroke="#e5e5e5"/>
+<text x="70.0" y="140.0" font-size="11" font-family="Arial, sans-serif" text-anchor="end">269.12</text>
+<line x1="75" y1="58.0" x2="890" y2="58.0" stroke="#e5e5e5"/>
+<text x="70.0" y="62.0" font-size="11" font-family="Arial, sans-serif" text-anchor="end">358.83</text>
+<rect x="80.0" y="233.4" width="39.4" height="136.6" fill="#4c78a8"/>
+<text x="99.7" y="228.4" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">157.11</text>
+<text x="99.7" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">cpu-t1</text>
+<rect x="131.4" y="274.5" width="39.4" height="95.5" fill="#4c78a8"/>
+<text x="151.1" y="269.5" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">109.86</text>
+<text x="151.1" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">cpu-t2</text>
+<rect x="182.8" y="294.2" width="39.4" height="75.8" fill="#4c78a8"/>
+<text x="202.4" y="289.2" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">87.16</text>
+<text x="202.4" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">cpu-t4</text>
+<rect x="234.1" y="303.7" width="39.4" height="66.3" fill="#4c78a8"/>
+<text x="253.8" y="298.7" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">76.21</text>
+<text x="253.8" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">cpu-t8</text>
+<rect x="285.5" y="131.5" width="39.4" height="238.5" fill="#4c78a8"/>
+<text x="305.2" y="126.5" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">274.31</text>
+<text x="305.2" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-copy</text>
+<rect x="336.9" y="130.2" width="39.4" height="239.8" fill="#4c78a8"/>
+<text x="356.6" y="125.2" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">275.85</text>
+<text x="356.6" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-copy</text>
+<rect x="388.2" y="139.0" width="39.4" height="231.0" fill="#4c78a8"/>
+<text x="407.9" y="134.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">265.65</text>
+<text x="407.9" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-copy</text>
+<rect x="439.6" y="137.2" width="39.4" height="232.8" fill="#4c78a8"/>
+<text x="459.3" y="132.2" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">267.70</text>
+<text x="459.3" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-copy</text>
+<rect x="491.0" y="103.4" width="39.4" height="266.6" fill="#4c78a8"/>
+<text x="510.7" y="98.4" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">306.65</text>
+<text x="510.7" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-managed</text>
+<rect x="542.4" y="102.8" width="39.4" height="267.2" fill="#4c78a8"/>
+<text x="562.1" y="97.8" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">307.32</text>
+<text x="562.1" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-managed</text>
+<rect x="593.8" y="102.6" width="39.4" height="267.4" fill="#4c78a8"/>
+<text x="613.4" y="97.6" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">307.54</text>
+<text x="613.4" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-managed</text>
+<rect x="645.1" y="102.2" width="39.4" height="267.8" fill="#4c78a8"/>
+<text x="664.8" y="97.2" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">307.99</text>
+<text x="664.8" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-managed</text>
+<rect x="696.5" y="61.7" width="39.4" height="308.3" fill="#4c78a8"/>
+<text x="716.2" y="56.7" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">354.56</text>
+<text x="716.2" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-mapped</text>
+<rect x="747.9" y="71.4" width="39.4" height="298.6" fill="#4c78a8"/>
+<text x="767.6" y="66.4" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">343.42</text>
+<text x="767.6" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-mapped</text>
+<rect x="799.2" y="67.4" width="39.4" height="302.6" fill="#4c78a8"/>
+<text x="818.9" y="62.4" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">347.97</text>
+<text x="818.9" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-mapped</text>
+<rect x="850.6" y="58.0" width="39.4" height="312.0" fill="#4c78a8"/>
+<text x="870.3" y="53.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">358.83</text>
+<text x="870.3" y="390.0" font-size="11" font-family="Arial, sans-serif" text-anchor="middle">gpu-mapped</text>
+<text x="22.0" y="214.0" font-size="12" font-family="Arial, sans-serif" text-anchor="middle">ms</text>
+</svg>
