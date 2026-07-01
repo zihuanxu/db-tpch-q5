@@ -10,10 +10,10 @@ transfer, CUDA managed memory, mapped pinned host memory, and GPU operator
 library execution. The current implementation includes a CPU engine, three CUDA
 memory-mode engines, correctness baselines, validation scripts, benchmark
 automation, environment capture, and report asset generation. Local verification
-passes all CPU and CUDA compile-only tests. GPU runtime validation and official
-TPC-H SF1 experiments were completed on an NVIDIA GPU server on 2026-07-01.
-The only remaining optional experiment is the RAPIDS/cuDF baseline, because
-cuDF was not installed in the active Python environment.
+passes all CPU and CUDA compile-only tests. GPU runtime validation, official
+TPC-H SF1 experiments, and the RAPIDS/cuDF SF1 baseline were completed on an
+NVIDIA GPU server on 2026-07-01. The main remaining limitation is scope: this
+report uses SF1 and does not include larger TPC-H scale factors.
 
 ## 1. Background
 
@@ -164,7 +164,8 @@ Environment summary:
 - CMake CUDA compiler selected by configure: `/usr/bin/nvcc`, CUDA `12.0.140`.
 - CMake: `4.3.0`.
 - Python: `3.11.15`.
-- RAPIDS cuDF: not installed in the active Python environment.
+- RAPIDS cuDF: `26.06.00` in the `memq5-cudf` conda environment
+  (`/home/xuzihuan/miniconda3/envs/memq5-cudf/bin/python`).
 
 The CUDA build used:
 
@@ -391,16 +392,79 @@ Figures:
 
 ![TPC-H SF1 GPU time breakdown](assets/tpch_sf1_gpu_modes_time_breakdown.svg)
 
-RAPIDS/cuDF was still not run because `import cudf` failed with
-`ModuleNotFoundError` in the active Python environment.
+### 9.4 Official TPC-H SF1 With cuDF Baseline
+
+After installing RAPIDS cuDF into a separate `memq5-cudf` conda environment,
+the official SF1 experiment was rerun with the `cudf` baseline included:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 conda run -n memq5-cudf python \
+  scripts/run_experiment_pipeline.py \
+  --name tpch_sf1_with_cudf \
+  --memq5 build-cuda/memq5 \
+  --data-dir data/tpch_sf1 \
+  --engines cpu,gpu-copy,gpu-managed,gpu-mapped,cudf \
+  --thread-list 1,2,4,8 \
+  --repeat 5 \
+  --allow-benchmark-errors \
+  --force
+```
+
+The cuDF baseline was first checked on the tiny fixture and produced the same
+hash as the CPU, handwritten CUDA, and Python paths:
+
+```text
+result_hash,1e07d78fa8eededb
+```
+
+Official SF1 hash check:
+
+```text
+ok ASIA 1994-01-01 hash=9f1f5f7578dd816e engines=cpu,gpu-copy,gpu-managed,gpu-mapped,cudf
+```
+
+The cuDF run produced 85 successful benchmark rows and 0 error rows. All CPU,
+handwritten CUDA, and cuDF rows produced the same result hash.
+
+For the `cudf` row, `threads=1` is a placeholder written by the shared benchmark
+CSV schema. The Python cuDF baseline does not accept the C++ `--threads`
+parameter; RAPIDS/cuDF schedules its own GPU work internally. The cuDF
+`total_ms` and `scan_ms` values time the Python baseline from `.tbl` file reads
+through cuDF joins, aggregation, and result transfer back to pandas.
+
+| engine | threads | runs | hash | total_ms_median | scan_ms_median | h2d_ms_median | kernel_ms_median | d2h_ms_median | elapsed_ms_median |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| cpu | 1 | 5 | `9f1f5f7578dd816e` | 157.144000 | 93.583000 | 0.000000 | 0.000000 | 0.000000 | 16056.151655 |
+| cpu | 2 | 5 | `9f1f5f7578dd816e` | 110.819000 | 47.178000 | 0.000000 | 0.000000 | 0.000000 | 16034.960780 |
+| cpu | 4 | 5 | `9f1f5f7578dd816e` | 87.009400 | 24.017400 | 0.000000 | 0.000000 | 0.000000 | 16026.021682 |
+| cpu | 8 | 5 | `9f1f5f7578dd816e` | 75.372400 | 12.585000 | 0.000000 | 0.000000 | 0.000000 | 15999.272560 |
+| cudf | 1 | 5 | `9f1f5f7578dd816e` | 4962.784182 | 4962.784182 | 0.000000 | 0.000000 | 0.000000 | 5300.214547 |
+| gpu-copy | 1 | 5 | `9f1f5f7578dd816e` | 269.304000 | 6.776510 | 6.548260 | 0.205824 | 0.027616 | 16256.919453 |
+| gpu-copy | 2 | 5 | `9f1f5f7578dd816e` | 271.727000 | 6.773020 | 6.554400 | 0.192512 | 0.026336 | 16261.547336 |
+| gpu-copy | 4 | 5 | `9f1f5f7578dd816e` | 270.956000 | 6.804770 | 6.560900 | 0.199872 | 0.026048 | 16235.037803 |
+| gpu-copy | 8 | 5 | `9f1f5f7578dd816e` | 268.804000 | 6.769600 | 6.515580 | 0.204800 | 0.026976 | 16251.493718 |
+| gpu-managed | 1 | 5 | `9f1f5f7578dd816e` | 305.776000 | 6.770690 | 6.481920 | 0.226304 | 0.074752 | 16295.075762 |
+| gpu-managed | 2 | 5 | `9f1f5f7578dd816e` | 306.659000 | 6.600580 | 6.292320 | 0.206848 | 0.102176 | 16271.879726 |
+| gpu-managed | 4 | 5 | `9f1f5f7578dd816e` | 305.346000 | 6.666240 | 6.407170 | 0.184320 | 0.083968 | 16272.234307 |
+| gpu-managed | 8 | 5 | `9f1f5f7578dd816e` | 309.007000 | 6.618240 | 6.295740 | 0.219104 | 0.103392 | 16300.024327 |
+| gpu-mapped | 1 | 5 | `9f1f5f7578dd816e` | 355.525000 | 2.762080 | 0.016192 | 2.708480 | 0.037984 | 16336.318997 |
+| gpu-mapped | 2 | 5 | `9f1f5f7578dd816e` | 351.787000 | 2.758500 | 0.015104 | 2.706430 | 0.036768 | 16370.204375 |
+| gpu-mapped | 4 | 5 | `9f1f5f7578dd816e` | 347.931000 | 2.730050 | 0.012288 | 2.678780 | 0.038976 | 16381.404284 |
+| gpu-mapped | 8 | 5 | `9f1f5f7578dd816e` | 352.668000 | 2.725440 | 0.015392 | 2.678500 | 0.035360 | 16311.244053 |
+
+Figures:
+
+![TPC-H SF1 with cuDF total time](assets/tpch_sf1_with_cudf_total_time.svg)
+
+![TPC-H SF1 with cuDF time breakdown](assets/tpch_sf1_with_cudf_time_breakdown.svg)
 
 ## 10. Analysis
 
 The GPU server work closes the main runtime-correctness and official-data gaps.
 `test_q5_cuda`, the tiny fixture experiment, the synthetic development
-experiment, and the official TPC-H SF1 experiment all ran on a real NVIDIA GPU.
-All successful CPU, GPU, and Python rows produced the same result hash within
-each experiment.
+experiment, the official TPC-H SF1 experiment, and the cuDF SF1 baseline all
+ran on a real NVIDIA GPU. All successful CPU, GPU, Python, and cuDF rows
+produced the same result hash within each experiment.
 
 The tiny fixture confirms the expected behavior for very small data. CPU is
 much faster because GPU launch, context, and transfer overheads dominate the
@@ -424,6 +488,16 @@ is faster end to end for this implementation and SF1 setup. The likely cause is
 that the current GPU implementation still builds the Q5 filter-propagation maps
 on the CPU and pays CUDA setup/allocation/synchronization overhead on every
 process-level query invocation.
+
+The cuDF SF1 baseline also returns the same result hash, which completes the
+high-level GPU operator-library comparison. In this benchmark harness, cuDF is
+slower than both the optimized CPU path and the handwritten CUDA query path:
+its median `total_ms` is about `4962.78 ms`. This should be read as a baseline
+for a generic RAPIDS DataFrame implementation, not as a general limit of cuDF.
+The cuDF script starts from text `.tbl` files each run, builds DataFrames, runs
+the full sequence of joins and groupby aggregation, and then converts the small
+final result back to pandas. It does not reuse preloaded GPU-resident columns or
+a specialized Q5 physical plan.
 
 The memory modes behave as expected at the component level:
 
@@ -470,11 +544,13 @@ Completed:
   hashes.
 - Official TPC-H SF1 data generation, validation, CPU/GPU benchmark matrix, and
   matching result hash `9f1f5f7578dd816e`.
+- RAPIDS/cuDF SF1 baseline with matching result hash `9f1f5f7578dd816e`.
 
-Still required for final submission:
+Remaining limitations:
 
-- Install RAPIDS/cuDF, or document that the target environment does not include
-  RAPIDS, before making the handwritten CUDA vs cuDF comparison.
+- No larger official TPC-H scale factors were run.
+- Generated build, TPC-H data, raw result, and submission archive directories
+  remain excluded from version control.
 
 ## References
 

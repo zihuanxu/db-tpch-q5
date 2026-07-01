@@ -9,10 +9,9 @@ This document checks the project against the current deliverable goal:
 
 ## Audit Summary
 
-Local deliverables are complete. GPU runtime validation and official TPC-H
-dbgen SF1 experiments have been completed on an NVIDIA GeForce RTX 4090 server.
-The remaining optional work is not a code gap: the cuDF baseline requires a
-RAPIDS environment.
+Local deliverables are complete. GPU runtime validation, official TPC-H dbgen
+SF1 experiments, and the RAPIDS/cuDF SF1 baseline have been completed on an
+NVIDIA GeForce RTX 4090 server.
 
 ## Requirement Status
 
@@ -28,7 +27,7 @@ RAPIDS environment.
 | GPU mapped pinned-memory mode | Complete, runtime validated on RTX 4090 | `gpu-mapped` in `src/cuda/q5_cuda.cu`, `test_q5_cuda`, `tiny_gpu_modes` |
 | Python correctness baseline | Complete | `baselines/python_q5.py` |
 | DuckDB SQL baseline | Complete, optional dependency | `baselines/duckdb_q5.py` |
-| RAPIDS cuDF baseline | Complete, requires RAPIDS/GPU | `baselines/cudf_q5.py` |
+| RAPIDS cuDF baseline | Complete, runtime validated on RTX 4090 with cuDF 26.06.00 | `baselines/cudf_q5.py`, `tpch_sf1_with_cudf` |
 | Data validation | Complete | `scripts/validate_tpch_q5_data.py` |
 | Official data preparation wrapper | Complete | `scripts/prepare_tpch_q5_data.py` |
 | Benchmark automation | Complete | `scripts/run_benchmarks.py` |
@@ -83,12 +82,15 @@ The GPU validation run completed:
 - `synthetic_gpu_modes` with `cpu,gpu-copy,gpu-managed,gpu-mapped,python`
 - official TPC-H SF1 `tpch_sf1_gpu_modes` with
   `cpu,gpu-copy,gpu-managed,gpu-mapped`
+- official TPC-H SF1 `tpch_sf1_with_cudf` with
+  `cpu,gpu-copy,gpu-managed,gpu-mapped,cudf`
 
 GPU validation hashes:
 
 - tiny fixture: `1e07d78fa8eededb`
 - synthetic development data: `d5ffe393223a207e`
 - official TPC-H SF1: `9f1f5f7578dd816e`
+- official TPC-H SF1 with cuDF: `9f1f5f7578dd816e`
 
 The machine-readable report is:
 
@@ -112,11 +114,10 @@ Archive inspection confirms it includes source, docs, scripts, tests, baselines,
 and the tiny fixture, and does not include generated `build/`, `build-cuda/`,
 `data/`, or `results/` directories.
 
-## Remaining Optional External Input
+## Remaining Limitations
 
-Install RAPIDS/cuDF and add `cudf` to the benchmark matrix if the high-level GPU
-operator-library baseline is required by the final evaluator. The active Python
-environment used for this audit did not provide `cudf`.
+No larger official TPC-H scale factors were run. The delivered evidence covers
+the tiny fixture, deterministic synthetic data, and official TPC-H SF1.
 
 ## Packaging Rule
 

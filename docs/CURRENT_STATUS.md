@@ -2,9 +2,9 @@
 
 This project has a working CPU correctness path, runtime-validated CUDA paths
 for the three planned GPU memory modes, dependency-free correctness baselines,
-benchmark automation, and official TPC-H SF1 results. GPU runtime validation
-and the SF1 experiment were completed on an NVIDIA GeForce RTX 4090 server on
-2026-07-01.
+RAPIDS/cuDF baseline results, benchmark automation, and official TPC-H SF1
+results. GPU runtime validation, the SF1 CPU/CUDA experiment, and the SF1 cuDF
+baseline were completed on an NVIDIA GeForce RTX 4090 server on 2026-07-01.
 
 ## Implemented Engines
 
@@ -151,6 +151,24 @@ CUDA_VISIBLE_DEVICES=0 python3 scripts/run_experiment_pipeline.py \
 
 Result hash: `9f1f5f7578dd816e` for CPU and all three GPU modes.
 
+Official TPC-H SF1 run with cuDF:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 conda run -n memq5-cudf python \
+  scripts/run_experiment_pipeline.py \
+  --name tpch_sf1_with_cudf \
+  --memq5 build-cuda/memq5 \
+  --data-dir data/tpch_sf1 \
+  --engines cpu,gpu-copy,gpu-managed,gpu-mapped,cudf \
+  --thread-list 1,2,4,8 \
+  --repeat 5 \
+  --allow-benchmark-errors \
+  --force
+```
+
+Result: 85 successful rows, 0 errors, and result hash
+`9f1f5f7578dd816e` for CPU, all three GPU modes, and cuDF.
+
 Synthetic data check:
 
 ```bash
@@ -169,7 +187,7 @@ python3 scripts/summarize_benchmarks.py results/synthetic_thread_sweep.csv
 
 ## Remaining Work
 
-1. Add RAPIDS cuDF to the environment and include `cudf` in the benchmark
-   matrix if RAPIDS is available.
-2. Keep generated TPC-H tools, `.tbl` data, raw `results/`, and build
+1. Keep generated TPC-H tools, `.tbl` data, raw `results/`, and build
    directories out of version control.
+2. Optional future work: run larger official TPC-H scale factors and optimize
+   the GPU path to reuse device-resident data and allocations across queries.

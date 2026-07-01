@@ -4,8 +4,8 @@ Use this checklist before handing in the project.
 
 Current status: GPU runtime validation has already passed on an RTX 4090 server
 on 2026-07-01. Official TPC-H SF1 data was generated and benchmarked. RAPIDS
-cuDF was not available in the active environment, so that optional baseline
-remains open.
+cuDF was installed in a separate `memq5-cudf` environment and benchmarked on
+the same SF1 data.
 
 ## Code And Tests
 
@@ -43,7 +43,7 @@ remains open.
 - [x] Run at least one official TPC-H scale-factor experiment.
 - [x] Run CPU thread sweep on synthetic development data.
 - [x] Run `gpu-copy`, `gpu-managed`, and `gpu-mapped`.
-- [ ] Run cuDF baseline if RAPIDS is available.
+- [x] Run cuDF baseline if RAPIDS is available.
 - [x] Verify all successful result hashes match:
 
   ```bash
@@ -57,8 +57,8 @@ remains open.
 - [x] Include `assets/total_time.svg`.
 - [x] Include `assets/time_breakdown.svg`.
 - [x] Include environment metadata from `environment.json`.
-- [x] Mention limitations honestly if cuDF could not be run in the available
-      environment.
+- [x] Mention limitations honestly: this report covers official SF1 and does
+      not include larger TPC-H scale factors.
 
 ## Package
 

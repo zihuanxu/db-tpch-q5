@@ -13,8 +13,9 @@ Completed validation snapshot:
 - Tiny CPU/GPU/Python hash: `1e07d78fa8eededb`.
 - Synthetic CPU/GPU/Python hash: `d5ffe393223a207e`.
 - Official TPC-H SF1 CPU/GPU hash: `9f1f5f7578dd816e`.
-- cuDF baseline: still open because RAPIDS/cuDF was not available in the active
-  environment.
+- Official TPC-H SF1 CPU/GPU/cuDF hash: `9f1f5f7578dd816e`.
+- cuDF baseline: completed with RAPIDS cuDF `26.06.00` in the `memq5-cudf`
+  conda environment.
 
 ## 1. Check The Runtime Host
 
@@ -164,10 +165,11 @@ python3 scripts/run_experiment_pipeline.py \
   --force
 ```
 
-If RAPIDS cuDF is installed:
+If RAPIDS cuDF is installed, run the CPU/CUDA/cuDF comparison:
 
 ```bash
-python3 scripts/run_experiment_pipeline.py \
+CUDA_VISIBLE_DEVICES=0 conda run -n memq5-cudf python \
+  scripts/run_experiment_pipeline.py \
   --name tpch_sf1_with_cudf \
   --memq5 build-cuda/memq5 \
   --data-dir data/tpch_sf1 \
