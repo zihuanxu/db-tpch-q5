@@ -48,6 +48,7 @@ engines, verification commands, and next required work.
 
 Useful delivery documents:
 
+- Final report: [docs/FINAL_REPORT.md](docs/FINAL_REPORT.md)
 - [docs/GPU_SERVER_RUNBOOK.md](docs/GPU_SERVER_RUNBOOK.md)
 - [docs/FINAL_REPORT_DRAFT.md](docs/FINAL_REPORT_DRAFT.md)
 - [docs/COMPLETION_AUDIT.md](docs/COMPLETION_AUDIT.md)
