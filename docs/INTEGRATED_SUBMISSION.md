@@ -13,7 +13,7 @@
 
 | 文档 | 路径 |
 |---|---|
-| 统一课程报告 | `hashjoin-cpu/docs/COURSE_REPORT.docx` |
+| 统一课程完整报告 | `hashjoin-cpu/docs/COURSE_REPORT.docx` |
 | CPU hashjoin 期末报告 | `hashjoin-cpu/docs/EXPERIMENT_REPORT.docx` |
 | Starjoin 期中报告 | `hashjoin-cpu/docs/MIDTERM_REPORT.docx` |
 | CPU hashjoin 交付索引 | `hashjoin-cpu/docs/FINAL_REPORT.md` |
@@ -59,4 +59,6 @@ ctest --test-dir build-cuda --output-on-failure
 
 ## 说明
 
-CPU hashjoin 框架放在 `hashjoin-cpu/` 子目录中，保留其 autotools 构建方式、实验脚本、报告和原始数据。TPC-H Q5/GPU 项目保留在仓库根目录，使用独立的 CMake 构建方式。这样一个 GitHub 仓库即可同时覆盖老师要求的 CPU 端 hashjoin 扩展研究和 GPU 端 TPC-H Q5 实验。
+CPU hashjoin 框架放在 `hashjoin-cpu/` 子目录中，保留其 autotools 构建方式、实验脚本、报告和原始数据。统一课程完整报告 `hashjoin-cpu/docs/COURSE_REPORT.docx` 按“平常实验 -> 期中 Star Join -> 期末 Full Sweep/VJ/PRVJ”的顺序组织，作为老师阅读课程主线的入口。
+
+TPC-H Q5/GPU 项目保留在仓库根目录，使用独立的 CMake 构建方式，作为 GPU 端扩展实验单独报告。这样一个 GitHub 仓库即可同时覆盖老师要求的 CPU 端 hashjoin 扩展研究和 GPU 端 TPC-H Q5 实验。
