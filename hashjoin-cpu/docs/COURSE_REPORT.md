@@ -2,7 +2,7 @@
 
 ## 报告说明
 
-本报告按照 `/home/xuzihuan/内存连接算法探索.pdf` 的课程要求重新整理。该要求文档中第 1 到第 5 项对应前期实验与扩展算法探索，第 6 项对应期中 Star Join 多表连接实验；本课程的期末报告则是另一个独立项目：`db-tpch-q5`，即 TPC-H Q5 CPU/GPU 异构执行实验。
+本报告按照课程 PDF《内存连接算法探索》的要求重新整理。该要求文档中第 1 到第 5 项对应前期实验与扩展算法探索，第 6 项对应期中 Star Join 多表连接实验；本课程的期末报告则是另一个独立项目：`db-tpch-q5`，即 TPC-H Q5 CPU/GPU 异构执行实验。
 
 因此，本报告的组织方式如下：
 
@@ -380,7 +380,7 @@ PRO 两种物化顺序都正确，order 0 略快：
 
 ## 6 期末课程报告：TPC-H Q5 CPU/GPU 查询引擎
 
-期末报告不是 CPU hashjoin 的 VJ/PRVJ 部分，而是仓库根目录的 `db-tpch-q5` 项目。该项目面向 TPC-H Q5，实现一个小型内存列式查询引擎，并比较 CPU、手写 CUDA、不同 GPU 内存模式和 cuDF baseline。
+期末报告不是 CPU hashjoin 的 VJ/PRVJ 部分，而是仓库根目录的 `db-tpch-q5` 项目。该项目面向 TPC-H Q5，实现一个小型内存列式查询引擎，并比较 CPU、PyArrow、手写 CUDA、不同 GPU 内存模式和 cuDF baseline。
 
 详细报告位于：
 
@@ -407,8 +407,8 @@ TPC-H Q5 是一个多表分析查询，需要连接 `region`、`nation`、`suppl
 | `gpu-copy` | 显式 `cudaMemcpy` H2D，执行 CUDA kernel，再 D2H 拷回结果 |
 | `gpu-managed` | 使用 `cudaMallocManaged` 和 `cudaMemPrefetchAsync` |
 | `gpu-mapped` | 使用 mapped pinned host memory |
-| baseline | Python、DuckDB、RAPIDS cuDF |
-| 校验 | result hash 验证 CPU/GPU/Python/cuDF 输出一致 |
+| baseline | Python、PyArrow、DuckDB、RAPIDS cuDF |
+| 校验 | result hash 验证 CPU/GPU/Python/PyArrow/cuDF 输出一致 |
 
 主要代码位于仓库根目录：
 
@@ -416,6 +416,7 @@ TPC-H Q5 是一个多表分析查询，需要连接 `region`、`nation`、`suppl
 - `src/cpu/q5_cpu.cpp`
 - `src/cuda/q5_cuda.cu`
 - `src/io/tpch_loader.cpp`
+- `baselines/arrow_q5.py`
 - `baselines/cudf_q5.py`
 - `scripts/run_experiment_pipeline.py`
 
@@ -446,11 +447,13 @@ CUDA_VISIBLE_DEVICES=0 ctest --test-dir build-cuda --output-on-failure
 | `lineitem.tbl` | 6,001,215 |
 | 1994 日期窗口订单 | 227,597 |
 
-官方 SF1 hash 校验：
+2026-07-08 又在 GPU 服务器上补跑了官方 SF1 的完整同场矩阵，包含 CPU、PyArrow、三种 GPU 模式和 cuDF。官方 SF1 full matrix hash 校验：
 
 ```text
-ok ASIA 1994-01-01 hash=9f1f5f7578dd816e engines=cpu,gpu-copy,gpu-managed,gpu-mapped,cudf
+ok ASIA 1994-01-01 hash=9f1f5f7578dd816e engines=cpu,cpu,cpu,cpu,arrow,gpu-copy,gpu-copy,gpu-copy,gpu-copy,gpu-managed,gpu-managed,gpu-managed,gpu-managed,gpu-mapped,gpu-mapped,gpu-mapped,gpu-mapped,cudf,...
 ```
+
+该 full matrix 共有 90 条 benchmark 行，0 条错误行，所有成功 engine 都得到同一个 hash。
 
 CPU 8 线程输出结果：
 
@@ -466,15 +469,16 @@ CPU 8 线程输出结果：
 
 | engine | threads | total_ms | scan_ms | h2d_ms | kernel_ms | hash |
 |---|---:|---:|---:|---:|---:|---|
-| cpu | 8 | 75.372400 | 12.585000 | 0.000000 | 0.000000 | `9f1f5f7578dd816e` |
-| gpu-copy | 8 | 268.804000 | 6.769600 | 6.515580 | 0.204800 | `9f1f5f7578dd816e` |
-| gpu-managed | 8 | 309.007000 | 6.618240 | 6.295740 | 0.219104 | `9f1f5f7578dd816e` |
-| gpu-mapped | 8 | 352.668000 | 2.725440 | 0.015392 | 2.678500 | `9f1f5f7578dd816e` |
-| cudf | 1 | 4962.784182 | 4962.784182 | 0.000000 | 0.000000 | `9f1f5f7578dd816e` |
+| cpu | 8 | 75.762500 | 12.515900 | 0.000000 | 0.000000 | `9f1f5f7578dd816e` |
+| arrow | 1 | 835.129574 | 835.129574 | 0.000000 | 0.000000 | `9f1f5f7578dd816e` |
+| gpu-copy | 8 | 269.412000 | 6.854180 | 6.592420 | 0.233792 | `9f1f5f7578dd816e` |
+| gpu-managed | 8 | 312.880000 | 6.596830 | 6.282430 | 0.217792 | `9f1f5f7578dd816e` |
+| gpu-mapped | 8 | 349.269000 | 2.773020 | 0.015360 | 2.710530 | `9f1f5f7578dd816e` |
+| cudf | 1 | 4988.085053 | 4988.085053 | 0.000000 | 0.000000 | `9f1f5f7578dd816e` |
 
 ### 6.4 期末小结
 
-期末 `db-tpch-q5` 项目完成了 CPU/GPU 双路径实现和官方 TPC-H SF1 实测。所有 CPU、手写 CUDA、Python 和 cuDF 路径在相同数据集上输出一致 hash，说明正确性闭合。
+期末 `db-tpch-q5` 项目完成了 CPU/GPU 双路径实现和官方 TPC-H SF1 实测。所有 CPU、手写 CUDA、Python、PyArrow 和 cuDF 路径在相同数据集上输出一致 hash，说明正确性闭合。
 
 性能结论是混合的：GPU kernel 本身很快，例如 SF1 上 `gpu-copy` kernel 约 0.20 ms，但完整 GPU 路径仍慢于 8 线程 CPU。原因是当前实现仍在 CPU 上构造 Q5 filter propagation map，并且每次进程级查询都承担 CUDA setup、allocation 和 synchronization 开销。这个结果符合课程讨论中的判断：GPU 不一定在所有规模上端到端胜出，只有当数据常驻、传输和初始化成本被摊薄后，GPU 才更可能体现优势。
 

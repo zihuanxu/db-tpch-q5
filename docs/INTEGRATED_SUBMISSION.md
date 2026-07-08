@@ -5,7 +5,7 @@
 | 目录 | 内容 |
 |---|---|
 | `hashjoin-cpu/` | 基于 ETH Zurich VLDB 2013 hashjoin 开源代码扩展的 CPU 哈希连接框架 |
-| 仓库根目录 | TPC-H Q5 CPU/GPU 查询引擎 |
+| 仓库根目录 | TPC-H Q5 CPU/PyArrow/GPU/cuDF 查询引擎 |
 | `docs/` | TPC-H Q5/GPU 项目文档 |
 | `hashjoin-cpu/docs/` | CPU hashjoin 报告、图表和原始实验数据 |
 
@@ -59,6 +59,6 @@ ctest --test-dir build-cuda --output-on-failure
 
 ## 说明
 
-CPU hashjoin 框架放在 `hashjoin-cpu/` 子目录中，保留其 autotools 构建方式、实验脚本、报告和原始数据。统一课程完整报告 `hashjoin-cpu/docs/COURSE_REPORT.docx` 按 `/home/xuzihuan/内存连接算法探索.pdf` 的阶段要求组织：第 1 到第 5 项作为前期硬件、连接算法、VJ/PRVJ 扩展实验，第 6 项作为期中 Star Join 实验；期末报告则是仓库根目录的 TPC-H Q5/GPU 项目。
+CPU hashjoin 框架放在 `hashjoin-cpu/` 子目录中，保留其 autotools 构建方式、实验脚本、报告和原始数据。统一课程完整报告 `hashjoin-cpu/docs/COURSE_REPORT.docx` 按课程 PDF《内存连接算法探索》的阶段要求组织：第 1 到第 5 项作为前期硬件、连接算法、VJ/PRVJ 扩展实验，第 6 项作为期中 Star Join 实验；期末报告则是仓库根目录的 TPC-H Q5/GPU 项目。
 
-TPC-H Q5/GPU 项目保留在仓库根目录，使用独立的 CMake 构建方式，作为本课程期末项目单独报告。这样一个 GitHub 仓库即可同时覆盖老师要求的前期 CPU hashjoin 实验、期中 Star Join 实验和期末 TPC-H Q5/GPU 实验。
+TPC-H Q5/GPU 项目保留在仓库根目录，使用独立的 CMake 构建方式，作为本课程期末项目单独报告。官方 TPC-H SF1 已补跑 CPU/PyArrow/GPU/cuDF full matrix，所有成功 engine 的 result hash 一致。这样一个 GitHub 仓库即可同时覆盖老师要求的前期 CPU hashjoin 实验、期中 Star Join 实验和期末 TPC-H Q5/GPU 实验。

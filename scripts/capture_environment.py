@@ -58,6 +58,7 @@ def capture() -> dict:
             "cmake": run_command(["cmake", "--version"]),
         },
         "python_packages": {
+            "pyarrow": import_version("pyarrow"),
             "duckdb": import_version("duckdb"),
             "cudf": import_version("cudf"),
         },

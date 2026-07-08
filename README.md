@@ -5,7 +5,7 @@
 | 目录 | 内容 |
 |---|---|
 | `hashjoin-cpu/` | 基于 ETH Zurich VLDB 2013 main-memory hash join 开源代码扩展的 CPU 端连接算法框架 |
-| 仓库根目录 | TPC-H Q5 CPU/GPU 查询引擎，包含 CPU 执行、手写 CUDA、不同 GPU 内存模式和 cuDF 对照 |
+| 仓库根目录 | TPC-H Q5 CPU/GPU 查询引擎，包含 CPU 执行、PyArrow 对照、手写 CUDA、不同 GPU 内存模式和 cuDF 对照 |
 | `docs/` | TPC-H Q5/GPU 项目文档、图表和最终报告 |
 | `hashjoin-cpu/docs/` | CPU hashjoin 前期/扩展算法报告、期中报告、原始数据和图表 |
 
@@ -34,9 +34,9 @@ TPC-H Q5/GPU 部分已经完成：
 
 - 实现 TPC-H Q5 所需列式内存布局、加载器和 CPU 执行路径。
 - 实现 `gpu-copy`、`gpu-managed`、`gpu-mapped` 三种手写 CUDA 执行模式。
-- 实现 Python、DuckDB、RAPIDS cuDF 对照脚本。
-- 在 RTX 4090 服务器上完成 CUDA 构建、CTest、tiny、synthetic、官方 TPC-H SF1 和 cuDF 对照实验。
-- 所有成功运行的 CPU、GPU、Python、cuDF 路径在同一数据集上输出一致 result hash。
+- 实现 Python、PyArrow、DuckDB、RAPIDS cuDF 对照脚本。
+- 在 RTX 4090 服务器上完成 CUDA 构建、CTest、tiny、synthetic、官方 TPC-H SF1、cuDF 对照和 CPU/PyArrow/GPU/cuDF full matrix 实验。
+- 所有成功运行的 CPU、GPU、Python、PyArrow、cuDF 路径在同一数据集上输出一致 result hash。
 
 ## CPU Hashjoin 复现
 

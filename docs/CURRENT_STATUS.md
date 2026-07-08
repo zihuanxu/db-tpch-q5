@@ -2,9 +2,11 @@
 
 This project has a working CPU correctness path, runtime-validated CUDA paths
 for the three planned GPU memory modes, dependency-free correctness baselines,
-RAPIDS/cuDF baseline results, benchmark automation, and official TPC-H SF1
+PyArrow/cuDF baseline results, benchmark automation, and official TPC-H SF1
 results. GPU runtime validation, the SF1 CPU/CUDA experiment, and the SF1 cuDF
 baseline were completed on an NVIDIA GeForce RTX 4090 server on 2026-07-01.
+The official SF1 CPU/PyArrow/GPU/cuDF full matrix was completed on the GPU
+server on 2026-07-08.
 
 ## Implemented Engines
 
@@ -31,6 +33,8 @@ used `CUDA_VISIBLE_DEVICES=0` on an RTX 4090 with compute capability 8.9 and
 
 - `baselines/python_q5.py`
   - Dependency-free correctness reference.
+- `baselines/arrow_q5.py`
+  - PyArrow columnar CPU operator-library baseline.
 - `baselines/duckdb_q5.py`
   - SQL correctness/performance baseline when the DuckDB Python package is
     installed.
@@ -62,8 +66,8 @@ used `CUDA_VISIBLE_DEVICES=0` on an RTX 4090 with compute capability 8.9 and
   - Produces report-ready `summary.md`, `total_time.svg`, and
     `time_breakdown.svg` from benchmark CSVs.
 - `scripts/capture_environment.py`
-  - Captures platform, CPU, CUDA, NVIDIA driver, CMake, DuckDB, and cuDF
-    metadata for the final report.
+  - Captures platform, CPU, CUDA, NVIDIA driver, CMake, PyArrow, DuckDB, and
+    cuDF metadata for the final report.
 - `scripts/run_experiment_pipeline.py`
   - One-command pipeline for data validation, environment capture, benchmark
     runs, hash verification, summary generation, and report asset generation.
@@ -168,6 +172,23 @@ CUDA_VISIBLE_DEVICES=0 conda run -n memq5-cudf python \
 
 Result: 85 successful rows, 0 errors, and result hash
 `9f1f5f7578dd816e` for CPU, all three GPU modes, and cuDF.
+
+Official TPC-H SF1 full matrix with PyArrow and cuDF:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 conda run -n memq5-cudf python \
+  scripts/run_experiment_pipeline.py \
+  --name tpch_sf1_full_matrix_arrow_cudf \
+  --memq5 build-cuda/memq5 \
+  --data-dir data/tpch_sf1 \
+  --engines cpu,arrow,gpu-copy,gpu-managed,gpu-mapped,cudf \
+  --thread-list 1,2,4,8 \
+  --repeat 5 \
+  --force
+```
+
+Result: 90 successful rows, 0 errors, and result hash
+`9f1f5f7578dd816e` for CPU, PyArrow, all three GPU modes, and cuDF.
 
 Synthetic data check:
 

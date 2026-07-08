@@ -14,6 +14,7 @@ from pathlib import Path
 CPP_ENGINES = {"cpu", "gpu-copy", "gpu-managed", "gpu-mapped"}
 PYTHON_BASELINES = {
     "python": "baselines/python_q5.py",
+    "arrow": "baselines/arrow_q5.py",
     "duckdb": "baselines/duckdb_q5.py",
     "cudf": "baselines/cudf_q5.py",
 }
@@ -155,7 +156,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--engines",
         default="cpu,python",
-        help="Comma-separated list: cpu,python,gpu-copy,gpu-managed,gpu-mapped,duckdb,cudf",
+        help="Comma-separated list: cpu,python,arrow,gpu-copy,gpu-managed,gpu-mapped,duckdb,cudf",
     )
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--output", type=Path, default=Path("results/benchmarks.csv"))

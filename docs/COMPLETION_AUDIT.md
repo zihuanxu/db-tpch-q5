@@ -10,8 +10,8 @@ This document checks the project against the current deliverable goal:
 ## Audit Summary
 
 Local deliverables are complete. GPU runtime validation, official TPC-H dbgen
-SF1 experiments, and the RAPIDS/cuDF SF1 baseline have been completed on an
-NVIDIA GeForce RTX 4090 server.
+SF1 experiments, the RAPIDS/cuDF SF1 baseline, and the CPU/PyArrow/GPU/cuDF
+full matrix have been completed on an NVIDIA GeForce RTX 4090 server.
 
 ## Requirement Status
 
@@ -26,6 +26,7 @@ NVIDIA GeForce RTX 4090 server.
 | GPU managed-memory mode | Complete, runtime validated on RTX 4090 | `gpu-managed` in `src/cuda/q5_cuda.cu`, `test_q5_cuda`, `tiny_gpu_modes` |
 | GPU mapped pinned-memory mode | Complete, runtime validated on RTX 4090 | `gpu-mapped` in `src/cuda/q5_cuda.cu`, `test_q5_cuda`, `tiny_gpu_modes` |
 | Python correctness baseline | Complete | `baselines/python_q5.py` |
+| PyArrow baseline | Complete, validated in SF1 full matrix | `baselines/arrow_q5.py`, `tpch_sf1_full_matrix_arrow_cudf` |
 | DuckDB SQL baseline | Complete, optional dependency | `baselines/duckdb_q5.py` |
 | RAPIDS cuDF baseline | Complete, runtime validated on RTX 4090 with cuDF 26.06.00 | `baselines/cudf_q5.py`, `tpch_sf1_with_cudf` |
 | Data validation | Complete | `scripts/validate_tpch_q5_data.py` |
@@ -84,6 +85,8 @@ The GPU validation run completed:
   `cpu,gpu-copy,gpu-managed,gpu-mapped`
 - official TPC-H SF1 `tpch_sf1_with_cudf` with
   `cpu,gpu-copy,gpu-managed,gpu-mapped,cudf`
+- official TPC-H SF1 `tpch_sf1_full_matrix_arrow_cudf` with
+  `cpu,arrow,gpu-copy,gpu-managed,gpu-mapped,cudf`
 
 GPU validation hashes:
 
@@ -91,6 +94,8 @@ GPU validation hashes:
 - synthetic development data: `d5ffe393223a207e`
 - official TPC-H SF1: `9f1f5f7578dd816e`
 - official TPC-H SF1 with cuDF: `9f1f5f7578dd816e`
+- official TPC-H SF1 full matrix with PyArrow and cuDF:
+  `9f1f5f7578dd816e`
 
 The machine-readable report is:
 
