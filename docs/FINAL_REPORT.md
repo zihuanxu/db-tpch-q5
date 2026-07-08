@@ -508,4 +508,4 @@ cuDF SF1 baseline 也返回相同 result hash，完成了高层 GPU 算子库对
 - CUDA Programming Guide。
 - RAPIDS cuDF documentation。
 - DuckDB vectorized execution documentation。
-- Crystal GPU query implementation reference: `https://github.com/anilshanbhag/crystal`
+- Crystal Opt GPU query implementation reference: `https://github.com/jiashenC/crystal-opt`
