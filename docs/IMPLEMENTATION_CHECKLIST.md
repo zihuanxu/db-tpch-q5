@@ -182,32 +182,37 @@ Exit criterion:
 - `gpu-mapped` and `gpu-managed` match CPU on fixture.
 - Benchmark CSV separates H2D, kernel, D2H, total time.
 
-## 8. Arrow/Acero Baseline
+## 8. PyArrow Baseline
 
-Files to create:
+Files:
 
-- `baselines/arrow_acero_q5.cpp`
-- `cmake/FindArrowOptional.cmake` if needed
+- `baselines/arrow_q5.py`
+- `scripts/run_benchmarks.py`
 
 Tasks:
 
-- Make Arrow optional.
-- Convert loaded columns to Arrow arrays or read data through Arrow CSV.
-- Run equivalent filters, joins, projection, groupby, and sort through Acero or
-  Arrow compute APIs.
-- Emit same result format and timing.
+- Keep PyArrow optional so the C++ core builds without Arrow.
+- Read required TPC-H `.tbl` columns through `pyarrow.csv`.
+- Store Q5 inputs as real PyArrow `Table` objects.
+- Execute equivalent filters, joins, projection, groupby, and sort through
+  PyArrow Table/compute APIs.
+- Emit the same rows, JSON, benchmark CSV, and result hash format as other
+  baselines.
+- Register `arrow` in the unified benchmark runner.
 
 Exit criterion:
 
-- Build succeeds without Arrow.
-- When Arrow is installed, Arrow baseline runs and validates on fixture.
+- Build succeeds without PyArrow.
+- `arrow` validates on the tiny fixture.
+- Official TPC-H SF1 full matrix validates
+  `cpu,arrow,gpu-copy,gpu-managed,gpu-mapped,cudf` with 90 benchmark rows,
+  0 errors, and hash `9f1f5f7578dd816e`.
 
 ## 9. RAPIDS cuDF Baseline
 
 Files to create:
 
 - `baselines/cudf_q5.py`
-- `environment-cudf.yml`
 
 Tasks:
 
@@ -223,6 +228,8 @@ Exit criterion:
 
 - Script runs in a RAPIDS environment.
 - Output matches CPU on fixture and generated data.
+- The validated GPU server used the existing `memq5-cudf` conda environment
+  with cuDF `26.06.00`.
 
 ## 10. Benchmark Runner
 

@@ -6,6 +6,9 @@ Current status: GPU runtime validation has already passed on an RTX 4090 server
 on 2026-07-01. Official TPC-H SF1 data was generated and benchmarked. RAPIDS
 cuDF was installed in a separate `memq5-cudf` environment and benchmarked on
 the same SF1 data.
+The final official SF1 full matrix with CPU, PyArrow, CUDA modes, and cuDF
+completed on the RTX 4090 server with 90 benchmark rows, 0 errors, and hash
+`9f1f5f7578dd816e`.
 
 ## Code And Tests
 
@@ -44,6 +47,8 @@ the same SF1 data.
 - [x] Run CPU thread sweep on synthetic development data.
 - [x] Run `gpu-copy`, `gpu-managed`, and `gpu-mapped`.
 - [x] Run cuDF baseline if RAPIDS is available.
+- [x] Run official TPC-H SF1 full matrix with
+      `cpu,arrow,gpu-copy,gpu-managed,gpu-mapped,cudf`.
 - [x] Verify all successful result hashes match:
 
   ```bash
@@ -65,7 +70,7 @@ the same SF1 data.
 Create a source-only archive:
 
 ```bash
-python3 scripts/package_submission.py --output dist/memq5_submission.tar.gz
+python3 scripts/package_submission.py --output dist/memory-db-tpch-q5-final.tar.gz
 ```
 
 The archive intentionally excludes generated `build/`, `data/`, and `results/`
