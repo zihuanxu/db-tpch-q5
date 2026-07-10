@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="650" viewBox="0 0 960 650">
+<rect width="100%" height="100%" fill="#FFFFFF"/>
+<text x="480.0" y="36" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="22" font-weight="bold" fill="#263746" style="">SF1 CUDA path: total time and scan details</text>
+<text x="480.0" y="60" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="13" font-weight="normal" fill="#5E6B75" style="">Upper panel shows end-to-end time; lower panel zooms into the scan phase</text>
+<text x="70" y="104" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="15" font-weight="bold" fill="#263746" style="">End-to-end</text>
+<line x1="220.0" y1="116" x2="220.0" y2="274" stroke="#D9E0E6" stroke-width="1"/>
+<text x="220.0" y="294" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">0</text>
+<line x1="403.33333333333337" y1="116" x2="403.33333333333337" y2="274" stroke="#D9E0E6" stroke-width="1"/>
+<text x="403.33333333333337" y="294" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">100</text>
+<line x1="586.6666666666667" y1="116" x2="586.6666666666667" y2="274" stroke="#D9E0E6" stroke-width="1"/>
+<text x="586.6666666666667" y="294" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">200</text>
+<line x1="770.0" y1="116" x2="770.0" y2="274" stroke="#D9E0E6" stroke-width="1"/>
+<text x="770.0" y="294" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">300</text>
+<text x="206" y="147" text-anchor="end" font-family="Arial, PingFang SC, sans-serif" font-size="14" font-weight="normal" fill="#263746" style="">gpu-copy</text>
+<rect x="220.00" y="126.00" width="481.36" height="29.00" rx="3" fill="#9AA9B5" opacity="1.0"/>
+<rect x="701.36" y="126.00" width="12.57" height="29.00" rx="0" fill="#76B7B2" opacity="1.0"/>
+<text x="721.9219999999999" y="146" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="bold" fill="#263746" style="">269.41 ms</text>
+<text x="206" y="199" text-anchor="end" font-family="Arial, PingFang SC, sans-serif" font-size="14" font-weight="normal" fill="#263746" style="">gpu-managed</text>
+<rect x="220.00" y="178.00" width="561.52" height="29.00" rx="3" fill="#9AA9B5" opacity="1.0"/>
+<rect x="781.52" y="178.00" width="12.09" height="29.00" rx="0" fill="#76B7B2" opacity="1.0"/>
+<text x="801.6133333333335" y="198" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="bold" fill="#263746" style="">312.88 ms</text>
+<text x="206" y="251" text-anchor="end" font-family="Arial, PingFang SC, sans-serif" font-size="14" font-weight="normal" fill="#263746" style="">gpu-mapped</text>
+<rect x="220.00" y="230.00" width="635.24" height="29.00" rx="3" fill="#9AA9B5" opacity="1.0"/>
+<rect x="855.24" y="230.00" width="5.08" height="29.00" rx="0" fill="#76B7B2" opacity="1.0"/>
+<text x="868.3265" y="250" text-anchor="end" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="bold" fill="#263746" style="">349.27 ms</text>
+<rect x="700.00" y="92.00" width="18.00" height="12.00" rx="1" fill="#9AA9B5" opacity="1.0"/>
+<text x="724" y="103" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">setup / other</text>
+<rect x="812.00" y="92.00" width="18.00" height="12.00" rx="1" fill="#76B7B2" opacity="1.0"/>
+<text x="836" y="103" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">scan</text>
+<text x="70" y="345" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="15" font-weight="bold" fill="#263746" style="">Scan phase (zoomed)</text>
+<line x1="220.0" y1="360" x2="220.0" y2="518" stroke="#D9E0E6" stroke-width="1"/>
+<text x="220.0" y="538" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">0</text>
+<line x1="314.2857142857143" y1="360" x2="314.2857142857143" y2="518" stroke="#D9E0E6" stroke-width="1"/>
+<text x="314.2857142857143" y="538" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">1</text>
+<line x1="408.57142857142856" y1="360" x2="408.57142857142856" y2="518" stroke="#D9E0E6" stroke-width="1"/>
+<text x="408.57142857142856" y="538" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">2</text>
+<line x1="502.85714285714283" y1="360" x2="502.85714285714283" y2="518" stroke="#D9E0E6" stroke-width="1"/>
+<text x="502.85714285714283" y="538" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">3</text>
+<line x1="597.1428571428571" y1="360" x2="597.1428571428571" y2="518" stroke="#D9E0E6" stroke-width="1"/>
+<text x="597.1428571428571" y="538" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">4</text>
+<line x1="691.4285714285714" y1="360" x2="691.4285714285714" y2="518" stroke="#D9E0E6" stroke-width="1"/>
+<text x="691.4285714285714" y="538" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">5</text>
+<line x1="785.7142857142857" y1="360" x2="785.7142857142857" y2="518" stroke="#D9E0E6" stroke-width="1"/>
+<text x="785.7142857142857" y="538" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">6</text>
+<line x1="880.0" y1="360" x2="880.0" y2="518" stroke="#D9E0E6" stroke-width="1"/>
+<text x="880.0" y="538" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">7</text>
+<text x="206" y="391" text-anchor="end" font-family="Arial, PingFang SC, sans-serif" font-size="14" font-weight="normal" fill="#263746" style="">gpu-copy</text>
+<rect x="220.00" y="370.00" width="621.57" height="29.00" rx="0" fill="#F28E2B" opacity="1.0"/>
+<rect x="841.57" y="370.00" width="22.04" height="29.00" rx="0" fill="#59A14F" opacity="1.0"/>
+<rect x="863.61" y="370.00" width="2.60" height="29.00" rx="0" fill="#E15759" opacity="1.0"/>
+<text x="874.2154285714284" y="390" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="bold" fill="#263746" style="">6.85 ms</text>
+<text x="206" y="443" text-anchor="end" font-family="Arial, PingFang SC, sans-serif" font-size="14" font-weight="normal" fill="#263746" style="">gpu-managed</text>
+<rect x="220.00" y="422.00" width="592.34" height="29.00" rx="0" fill="#F28E2B" opacity="1.0"/>
+<rect x="812.34" y="422.00" width="20.54" height="29.00" rx="0" fill="#59A14F" opacity="1.0"/>
+<rect x="832.88" y="422.00" width="9.75" height="29.00" rx="0" fill="#E15759" opacity="1.0"/>
+<text x="850.6251428571429" y="442" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="bold" fill="#263746" style="">6.60 ms</text>
+<text x="206" y="495" text-anchor="end" font-family="Arial, PingFang SC, sans-serif" font-size="14" font-weight="normal" fill="#263746" style="">gpu-mapped</text>
+<rect x="220.00" y="474.00" width="1.50" height="29.00" rx="0" fill="#F28E2B" opacity="1.0"/>
+<rect x="221.50" y="474.00" width="255.56" height="29.00" rx="0" fill="#59A14F" opacity="1.0"/>
+<rect x="477.06" y="474.00" width="3.62" height="29.00" rx="0" fill="#E15759" opacity="1.0"/>
+<text x="488.682" y="494" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="bold" fill="#263746" style="">2.77 ms</text>
+<rect x="650.00" y="336.00" width="18.00" height="12.00" rx="1" fill="#F28E2B" opacity="1.0"/>
+<text x="674" y="347" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">H2D</text>
+<rect x="728.00" y="336.00" width="18.00" height="12.00" rx="1" fill="#59A14F" opacity="1.0"/>
+<text x="752" y="347" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">kernel</text>
+<rect x="824.00" y="336.00" width="18.00" height="12.00" rx="1" fill="#E15759" opacity="1.0"/>
+<text x="848" y="347" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="11" font-weight="normal" fill="#5E6B75" style="">D2H</text>
+<text x="550.0" y="620" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="13" font-weight="normal" fill="#5E6B75" style="">time (ms)</text>
+</svg>

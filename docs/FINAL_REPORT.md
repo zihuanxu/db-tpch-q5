@@ -1,49 +1,39 @@
-# TPC-H Q5 异构内存列式执行实验报告
+# TPC-H Q5 CPU/GPU 查询执行实验报告
+
+> 数据库系统课程期末项目报告
+>
+> 报告时间：2026 年 7 月
 
 ## 摘要
 
-本项目实现了一个面向 TPC-H Q5 的小型内存分析查询引擎。项目目标不是实现完整 SQL 数据库，而是围绕课程讨论中的核心问题展开：同一个多表分析查询在 CPU、手写 CUDA、显式 PCIe 传输、CUDA managed memory、mapped pinned host memory 以及 GPU 算子库执行方式下有什么差异。
+本次课程项目围绕 TPC-H Q5 查询，实现并比较了 CPU、手写 CUDA 和通用算子库三类执行方式。我的目标不是从头实现一个完整数据库，而是把范围缩小到一条有代表性的分析查询，重点观察列式存储、过滤传播、多线程、PCIe 数据传输以及不同 GPU 内存模式对性能的影响。
 
-当前版本包含列式数据加载、CPU 执行、三种 CUDA 内存模式、Python/PyArrow/DuckDB/cuDF 对照脚本、结果 hash 校验、批量 benchmark、环境采集和报告图表生成。GPU 运行时验证、官方 TPC-H SF1 实验以及 RAPIDS/cuDF SF1 对照实验已于 2026-07-01 在 NVIDIA GPU 服务器上完成；2026-07-08 又在同一类 GPU 服务器上补跑了官方 SF1 的 CPU/PyArrow/GPU/cuDF 完整同场对照矩阵。主要局限是实验规模只覆盖到官方 TPC-H SF1，未继续运行更大 scale factor。
+项目实现了一个简单的列式数据加载器、一条专用的 Q5 物理执行计划、一个多线程 CPU 版本，以及 `gpu-copy`、`gpu-managed`、`gpu-mapped` 三种 CUDA 版本。为了检查结果是否可信，我还加入了 Python、PyArrow、DuckDB 和 cuDF 对照实现，并用 result hash 检查不同路径的输出是否一致。最终实验在 RTX 4090 服务器上完成，数据包括 tiny 测试集、20 万行 `lineitem` 的合成数据和官方 TPC-H SF1 数据。
 
-## 1. 背景
+实验结果和我最开始只看“GPU 算力”的直觉并不一样。在 SF1 上，8 线程 CPU 的中位执行时间为 `75.76 ms`，而三种手写 CUDA 路径的总时间约为 `269.41 ms`、`312.88 ms` 和 `349.27 ms`。不过，`gpu-copy` 的 kernel 本身只用了约 `0.23 ms`，说明 GPU 扫描很快，真正拖慢端到端时间的是数据准备、内存分配、传输和同步。这个结果让我认识到，数据库查询是否适合 GPU 不能只看 kernel 时间，还要看完整的数据路径以及数据能否常驻显存。
 
-分析型数据库查询通常包含大列扫描、选择过滤、多表连接和聚合，这类负载适合用来观察内存布局、CPU cache、NUMA、PCIe 传输、GPU 显存带宽和 kernel 执行效率。
+**关键词：** TPC-H Q5；列式存储；CUDA；GPU 内存；过滤传播；查询执行
 
-TPC-H Q5（Local Supplier Volume）是一个典型多表查询。它连接 `region`、`nation`、`supplier`、`customer`、`orders` 和 `lineitem`，并按国家聚合收入。该查询足够固定，可以直接实现物理执行计划；同时又足够真实，可以体现维表过滤向事实表扫描传播的过程。
+## 1. 选题背景与项目目标
 
-## 2. 需求复原
+这次大作业的主题是内存数据库和异构硬件查询执行。课程讨论中涉及 Apache Arrow 的列式布局、CPU/GPU 执行、PCIe 传输、UVA、bitmap 过滤以及“小数据用 CPU、大数据用 GPU”等问题。为了把这些点放到同一个可以运行的例子中，我选择了 TPC-H Q5（Local Supplier Volume）作为目标查询。
 
-根据和老师讨论后的方案，本项目需要覆盖以下点：
+Q5 会连接 `region`、`nation`、`supplier`、`customer`、`orders` 和 `lineitem` 六张表，包含日期过滤、多表连接、分组聚合和排序。它比单表扫描更接近真实分析查询，同时查询结构又是固定的，适合手写物理执行计划。
 
-- 实现 CPU 和 GPU 两条数据库查询执行路径。
-- 比较 CPU 与 GPU 的执行行为。
-- 比较手写 CUDA 与 NVIDIA/GPU 算子库风格的实现。
-- 比较显式 PCIe 数据传输与 unified memory / UVA 风格访问。
-- 以 TPC-H Q5 作为目标场景。
-- 使用整数日期、bitmap/filter propagation 等面向数据库执行的表示。
-- 说明小数据更适合 CPU、大数据可能更适合 GPU 的原因和边界。
+我把项目目标整理为四点：
 
-因此，本项目实现的是 TPC-H Q5 的完整物理执行计划，而不是通用 SQL parser、optimizer、事务系统或完整 DBMS。
+1. 用连续的列式数组保存 Q5 需要的数据，避免在执行阶段反复处理整行记录。
+2. 实现多线程 CPU 路径和三种 CUDA 内存路径，并保证它们返回相同结果。
+3. 加入 PyArrow、DuckDB 和 cuDF 等通用实现作为对照，避免只比较自己写的代码。
+4. 在真实 GPU 和官方 TPC-H 数据上做可复现实验，分析总时间，而不是只报告最短的 kernel 时间。
 
-## 3. 数据布局
+本报告只讨论仓库根目录的 TPC-H Q5/GPU 项目。仓库中的 `hashjoin-cpu/` 是课程前一阶段的 CPU hash join 实验，两部分在最终仓库中统一提交，但实现和实验数据是分开的。
 
-项目只加载 Q5 必需列：
+## 2. 查询与总体方案
 
-| 表 | 列 |
-|---|---|
-| `region` | `r_regionkey`, `r_name` |
-| `nation` | `n_nationkey`, `n_name`, `n_regionkey` |
-| `supplier` | `s_suppkey`, `s_nationkey` |
-| `customer` | `c_custkey`, `c_nationkey` |
-| `orders` | `o_orderkey`, `o_custkey`, `o_orderdate` |
-| `lineitem` | `l_orderkey`, `l_suppkey`, `l_extendedprice`, `l_discount` |
+### 2.1 TPC-H Q5
 
-自定义列式存储采用连续定长数组、64 字节对齐分配、非拥有型 column view、可选 bitmap、整数日期编码、低基数字符串字典编码和 fixed-point revenue。这个实现保留了 Arrow 风格列式布局的关键思想，但没有重新实现完整 Arrow metadata、IPC 或 compute engine。
-
-## 4. 查询计划
-
-逻辑 SQL 等价于 TPC-H Q5：
+Q5 的主要 SQL 逻辑如下。为了让实验参数可调整，代码中把区域和起始日期作为输入。
 
 ```sql
 select
@@ -58,87 +48,252 @@ where c_custkey = o_custkey
   and n_regionkey = r_regionkey
   and r_name = :region
   and o_orderdate >= :date
-  and o_orderdate < :date + 1 year
+  and o_orderdate < :date + interval '1' year
 group by n_name
 order by revenue desc;
 ```
 
-实际物理计划采用类似 star join 的 filter propagation：
+如果直接物化六表连接，中间结果会很大。我的实现没有照着 SQL 顺序逐表 join，而是先把小表上的条件变成几个可以直接按 key 查询的数组，再扫描最大的 `lineitem` 表。这个思路和 star join 中的过滤传播比较接近。
 
-1. 根据 region 名称找到 `region_key`。
-2. 构造 `nation_in_region`。
-3. 构造 `supplier_nation_by_key`。
-4. 构造 `customer_nation_by_key`。
-5. 对满足日期谓词的订单构造 `order_nation_by_key`。
-6. 扫描 `lineitem`，检查 order/supplier nation 是否一致，并按 nation 聚合 revenue。
+### 2.2 物理执行计划
 
-这样可以避免物化六表连接的大中间结果。
+实际执行顺序如下：
 
-## 5. CPU 实现
+1. 根据区域名称找到 `region_key`。
+2. 标记属于该区域的 nation。
+3. 构造 `supplier_nation_by_key` 和 `customer_nation_by_key`。
+4. 对满足日期范围的订单构造 `order_nation_by_key`。
+5. 扫描 `lineitem`，检查订单和供应商是否来自同一个目标 nation。
+6. 按 nation 累加 revenue，最后再把 nation key 转回名称并排序。
 
-CPU 路径负责构造 filter propagation map 并扫描 `lineitem`。程序支持 `--threads N` 参数，每个 worker 扫描一段 `lineitem` 并写入本地 revenue 数组，最后再归并为最终结果。这样 hot loop 中不需要原子更新。
+这样做的好处是，扫描 `lineitem` 时主要进行数组访问、整数比较和整数加法，不需要在热点循环中处理字符串，也不需要保存完整连接结果。
 
-主要文件：
+### 2.3 数据表示
+
+项目只读取 Q5 用到的列：
+
+| 表 | 实际加载的列 |
+|---|---|
+| `region` | `r_regionkey`, `r_name` |
+| `nation` | `n_nationkey`, `n_name`, `n_regionkey` |
+| `supplier` | `s_suppkey`, `s_nationkey` |
+| `customer` | `c_custkey`, `c_nationkey` |
+| `orders` | `o_orderkey`, `o_custkey`, `o_orderdate` |
+| `lineitem` | `l_orderkey`, `l_suppkey`, `l_extendedprice`, `l_discount` |
+
+列数据使用连续定长数组和 64 字节对齐分配。日期在加载时转为整数天数；`region` 和 `nation` 名称只在输入、输出边界保留，执行阶段使用整数 key；revenue 使用 fixed-point 整数计算。这个实现借用了 Arrow 的关键思想，但没有尝试重做完整的 Arrow metadata、IPC 或通用计算框架。
+
+## 3. CPU 与 GPU 实现
+
+### 3.1 CPU 路径
+
+CPU 版本先建立过滤传播数组，再把 `lineitem` 按区间分给多个 worker。每个线程使用自己的 revenue 数组，扫描结束后再统一归并。这样可以避免每条记录都进行原子加法。
+
+CPU 路径支持 `--threads N`，本次实验测试了 1、2、4、8 线程。主要实现位于：
 
 - `src/engine/q5_plan.cpp`
 - `src/cpu/q5_cpu.cpp`
-- `src/common/*`
 - `src/io/tpch_loader.cpp`
 
-## 6. GPU 实现
+### 3.2 三种 CUDA 路径
 
-项目实现了三种手写 CUDA 执行路径：
+三种 GPU 版本复用同一条 Q5 计划，但采用不同的数据访问方式：
 
-| 引擎 | 含义 |
-|---|---|
-| `gpu-copy` | 显式 `cudaMemcpy` H2D，执行 kernel，再 D2H 拷回结果 |
-| `gpu-managed` | 使用 `cudaMallocManaged`，并通过 `cudaMemPrefetchAsync` 预取 |
-| `gpu-mapped` | 使用 `cudaHostAllocMapped` 分配 pinned host memory，GPU 通过 device pointer 访问主机内存 |
+| 模式 | 实现方式 | 我希望观察的问题 |
+|---|---|---|
+| `gpu-copy` | 通过 `cudaMemcpy` 把输入复制到 device memory，kernel 完成后再复制结果 | 显式传输的代价有多大 |
+| `gpu-managed` | 使用 `cudaMallocManaged`，并在执行前后调用 prefetch | 统一内存是否能简化管理，以及是否有额外开销 |
+| `gpu-mapped` | 使用 `cudaHostAllocMapped` 分配 pinned host memory，GPU 直接读取主机内存 | 省掉显式拷贝后，远程访问速度是否划算 |
 
-三种路径当前复用 CPU 构造的 filter propagation map，并在 CUDA kernel 中执行 `lineitem` 聚合。这是一个正确的 GPU 里程碑；后续性能优化可以把更多 map 构造工作移动到 GPU，并减少聚合 kernel 中的 atomic 竞争。
+当前 CUDA 版本仍由 CPU 构造过滤传播数组，GPU 负责扫描 `lineitem` 并聚合。它已经可以比较三种内存模式，但还不是“所有步骤都在 GPU 上完成”的最终优化版本。
 
-主要文件：
+### 3.3 对照实现
 
-- `src/cuda/q5_cuda.cu`
-- `src/cuda/q5_cuda.hpp`
-- `tests/test_q5_cuda.cpp`
+为了分别检查正确性和通用框架开销，仓库中保留了四个 baseline：
 
-## 7. 对照实现
+- `python_q5.py`：没有第三方依赖，主要用于看结果是否一致。
+- `arrow_q5.py`：使用 PyArrow 的 CSV、Table join 和 group-by。
+- `duckdb_q5.py`：直接执行 SQL，作为数据库实现参考。
+- `cudf_q5.py`：使用 RAPIDS/cuDF 的 DataFrame join 和 group-by。
 
-项目包含四个对照脚本：
+手写 C++/CUDA 代码针对 Q5 做了专门优化，而 PyArrow 和 cuDF 使用的是通用算子，所以两者不能被理解为完全公平的“库性能排名”。它们更适合帮助我理解专用物理计划和通用执行框架之间的差别。
 
-- `python_q5.py`：无第三方依赖的正确性参考。
-- `arrow_q5.py`：基于 PyArrow CSV、Table join、group_by 和 compute 的 CPU 列式算子库对照。
-- `duckdb_q5.py`：安装 DuckDB 后可运行的 SQL 对照。
-- `cudf_q5.py`：安装 RAPIDS/cuDF 后可运行的 GPU DataFrame 对照。
+## 4. 实现过程中遇到的问题
 
-其中 cuDF 是高层 GPU 算子库对照；手写 CUDA 是低层专用物理算子对照。
+### 4.1 UVA、managed memory 和 mapped memory 容易混淆
 
-## 8. 实验环境
+刚开始整理方案时，UVA 和 unified memory 很容易被写成同一件事。查阅 CUDA 文档并实际实现后，我把实验拆成了三个明确模式：显式 device copy、managed memory，以及 mapped pinned host memory。这样每个模式的内存来源和访问路径都比较清楚，结果也更容易解释。
 
-环境信息通过以下脚本记录：
+### 4.2 本地环境不能完成 GPU 运行验证
 
-```bash
-python3 scripts/capture_environment.py --output results/environment.json
-```
+项目早期可以在本地完成 CPU 构建和 CUDA 编译检查，但没有可用的 NVIDIA 驱动，因此 CUDA runtime test 只能跳过。为了避免在上服务器之前才发现逻辑错误，我先做了 tiny fixture 和纯 Python 参考实现，并让所有引擎输出统一的 result hash。最后再到 GPU 服务器完成 CUDA CTest、合成数据和官方 SF1 实验。
 
-GPU 服务器验证在 2026-07-01 完成，使用 `CUDA_VISIBLE_DEVICES=0`，实际使用空闲的 RTX 4090，避免占用已经有任务的 L20。
+### 4.3 浮点误差会干扰多实现校验
+
+revenue 的计算包含价格和折扣。如果 CPU、CUDA、PyArrow 和 cuDF 都直接用浮点数累加，求和顺序不同可能带来末位误差。项目因此使用 fixed-point 整数保存和聚合金额。这样同一数据集上的结果可以直接生成 hash，不需要人为设置误差范围。
+
+### 4.4 实验脚本比单次运行更重要
+
+只运行一次程序很难保证结论可靠，所以我把数据检查、环境记录、重复 benchmark、hash 校验、汇总和绘图放进同一条 pipeline。每组实验重复 5 次，报告采用中位数。这个过程虽然比手动抄一组时间麻烦，但减少了漏记参数和选取偶然最优值的问题。
+
+## 5. 实验环境与方法
+
+GPU 实验在 2026 年 7 月完成，固定使用 `CUDA_VISIBLE_DEVICES=0` 的 RTX 4090。主要环境如下：
 
 | 项目 | 配置 |
 |---|---|
-| OS/kernel | Ubuntu Linux, kernel `6.17.0-29-generic` |
-| CPU | 2 sockets, AMD EPYC 9654, 384 logical CPUs |
-| GPU 列表 | 6 块 NVIDIA GeForce RTX 4090，2 块 NVIDIA L20 |
-| 测试 GPU | GPU 0, NVIDIA GeForce RTX 4090, compute capability 8.9, 24 GiB |
-| Driver / runtime | driver `595.71.05`, CUDA runtime `13.2` |
-| `nvcc --version` | CUDA `12.6`, `V12.6.85` |
-| CMake CUDA compiler | `/usr/bin/nvcc`, CUDA `12.0.140` |
-| CMake | `4.3.0` |
+| 操作系统 | Ubuntu Linux，kernel `6.17.0-29-generic` |
+| CPU | 2 路 AMD EPYC 9654，384 个逻辑 CPU |
+| 测试 GPU | NVIDIA GeForce RTX 4090，24 GiB，compute capability 8.9 |
+| NVIDIA driver / CUDA runtime | `595.71.05` / `13.2` |
+| CUDA 编译器 | `nvcc 12.6`；CMake 实际识别 CUDA `12.0.140` |
 | Python | `3.11.15` |
-| PyArrow | default Python `24.0.0`；full matrix 使用的 `memq5-cudf` 环境为 `23.0.1` |
-| RAPIDS cuDF | `26.06.00`, 位于 `memq5-cudf` conda 环境 |
+| PyArrow / cuDF | full matrix 环境为 PyArrow `23.0.1`、cuDF `26.06.00` |
 
-CUDA 构建命令：
+官方 SF1 数据由 TPC-H V3.0.1 的 `dbgen -vf -s 1` 生成。三组数据的作用不同：
+
+| 数据集 | `lineitem` 行数 | 用途 |
+|---|---:|---|
+| tiny fixture | 少量手工数据 | 快速检查结果和 CUDA 路径 |
+| synthetic | 200,000 | 开发阶段观察线程和 GPU 模式趋势 |
+| 官方 TPC-H SF1 | 6,001,215 | 最终对照实验 |
+
+正式实验统一使用 `ASIA` 和 `1994-01-01` 到 `1995-01-01` 的日期窗口。所有成功运行的实现必须输出相同 hash，否则该组结果不进入性能分析。需要注意，GPU 行中的 `threads` 只是 benchmark CSV 为了统一格式保留的字段，不会改变 CUDA kernel 固定的 256-thread block 配置。
+
+## 6. 实验结果
+
+### 6.1 tiny 正确性实验
+
+tiny 数据上，CPU、三种 CUDA 模式和 Python 都得到了相同 hash：
+
+```text
+1e07d78fa8eedb
+```
+
+| 引擎 | 中位 total_ms | 中位 kernel_ms | 观察 |
+|---|---:|---:|---|
+| CPU 1 线程 | 0.0128 | — | 数据太小，几乎没有调度成本 |
+| `gpu-copy` | 188.1510 | 0.1087 | kernel 很短，但初始化和调用开销明显 |
+| `gpu-managed` | 188.9220 | 0.1055 | 与 copy 模式接近 |
+| `gpu-mapped` | 187.5760 | 0.0980 | 仍然被固定开销主导 |
+| Python | 0.2307 | — | 作为正确性参考足够快 |
+
+![图 1：tiny 数据集各引擎总时间](assets/tiny_gpu_modes_total_time.svg)
+
+这个结果说明，小数据直接交给 GPU 并不划算。即使 kernel 只需要约 `0.1 ms`，一次完整 GPU 调用的固定成本仍然比实际计算大很多。
+
+### 6.2 合成数据实验
+
+合成数据包含 20 万行 `lineitem`。所有路径的 hash 都是 `d5ffe393223a207e`。关键结果如下：
+
+| 引擎 | 中位 total_ms | 相比 CPU 1 线程的情况 |
+|---|---:|---|
+| CPU 1 线程 | 5.2826 | 基准 |
+| CPU 8 线程 | 2.9703 | 有提升，但没有达到理想的 8 倍 |
+| `gpu-copy` | 186.3270 | 固定 GPU 开销仍然占主导 |
+| `gpu-managed` | 187.8300 | 与 copy 接近 |
+| `gpu-mapped` | 195.0000 | mapped 访问没有带来总时间优势 |
+| Python | 477.3059 | 行式解释执行明显较慢 |
+
+![图 2：合成数据集关键引擎总时间](assets/student_synthetic_total_time.svg)
+
+从这组实验可以看到，数据量从 tiny 增长到 20 万行后，CPU 多线程已经有明显作用，但 GPU 总时间仍然基本停留在约 190 ms。这说明此时计算量还不足以摊薄每次进程级 GPU 执行的固定成本。
+
+### 6.3 官方 TPC-H SF1 实验
+
+SF1 中日期窗口内共有 227,597 条订单，最终聚合结果为：
+
+| nation | revenue |
+|---|---:|
+| INDONESIA | 55,502,035.06 |
+| VIETNAM | 55,295,080.65 |
+| CHINA | 53,724,488.13 |
+| INDIA | 52,035,506.17 |
+| JAPAN | 45,410,170.55 |
+
+CPU、PyArrow、三种手写 CUDA 和 cuDF 的结果 hash 均为 `9f1f5f7578dd816e`。full matrix 的关键中位数如下：
+
+| 引擎 | 线程字段 | 中位 total_ms | 说明 |
+|---|---:|---:|---|
+| CPU | 1 | 156.5520 | 专用 C++ 物理计划 |
+| CPU | 2 | 110.4550 | 继续受益于并行扫描 |
+| CPU | 4 | 86.9688 | 加速开始变缓 |
+| CPU | 8 | 75.7625 | 本次实验中最快的端到端路径 |
+| PyArrow | 1 | 835.1296 | 文本读取 + 通用 joins/group-by |
+| `gpu-copy` | 8 | 269.4120 | 三种 CUDA 模式中总时间最短 |
+| `gpu-managed` | 8 | 312.8800 | 使用 managed memory 和 prefetch |
+| `gpu-mapped` | 8 | 349.2690 | 无大块显式 H2D，但远程访问较慢 |
+| cuDF | 1 | 4,988.0851 | 文本读取、建表、通用 joins/group-by、回传 pandas |
+
+![图 3：官方 TPC-H SF1 关键引擎总时间（横轴为对数尺度）](assets/student_sf1_total_time.svg)
+
+把三种 CUDA 路径拆开看，可以发现 kernel 和总时间之间差别很大：
+
+| 模式 | scan_ms | h2d_ms | kernel_ms | d2h_ms | total_ms |
+|---|---:|---:|---:|---:|---:|
+| `gpu-copy` | 6.8542 | 6.5924 | 0.2338 | 0.0276 | 269.4120 |
+| `gpu-managed` | 6.5968 | 6.2824 | 0.2178 | 0.1034 | 312.8800 |
+| `gpu-mapped` | 2.7730 | 0.0154 | 2.7105 | 0.0384 | 349.2690 |
+
+![图 4：官方 TPC-H SF1 CUDA 路径总时间与扫描阶段分解](assets/student_sf1_cuda_breakdown.svg)
+
+`gpu-copy` 的事实表 kernel 只有约 `0.23 ms`，显式 H2D 约 `6.59 ms`；`gpu-mapped` 几乎没有大块显式拷贝，但 kernel 增加到约 `2.71 ms`。这与 mapped host memory 需要通过主机互连读取数据的特点相符。
+
+## 7. 结果分析
+
+### 7.1 正确性比“最快时间”更先完成
+
+本项目有多种语言和执行框架，如果没有统一校验，很容易出现某个版本速度很快但语义不一致的问题。tiny、synthetic 和 SF1 三组数据上，不同实现都分别得到一致 hash，说明日期范围、nation 条件、连接关系和 fixed-point revenue 的处理是统一的。我认为这是后续性能比较成立的前提。
+
+### 7.2 当前规模下 CPU 更合适
+
+tiny、synthetic 和 SF1 三组实验都没有出现手写 CUDA 总时间超过多线程 CPU 的情况。SF1 上 CPU 从 1 线程的 `156.55 ms` 降到 8 线程的 `75.76 ms`，说明这条专用计划在 CPU 上已经能较好地利用并行扫描。同时，SF1 只有约 600 万行 `lineitem`，还不足以抵消每次 GPU 查询的初始化、分配和同步成本。
+
+### 7.3 GPU kernel 快不等于整条查询快
+
+如果只报告 `gpu-copy` 的 `0.23 ms` kernel 时间，会得到“GPU 比 CPU 快几百倍”的错误印象。实际上，当前 GPU 路径还需要 CPU 先建立过滤传播数组，随后为一次查询准备 CUDA 内存、传输数据并同步。最终 `total_ms` 是 `269.41 ms`，比 8 线程 CPU 慢约 3.6 倍。
+
+这也是本次实验最重要的结论：数据库算子是否适合 GPU，需要把数据准备、驻留位置和重复查询方式一起考虑。只有在数据已经在 GPU 上、allocation 可以复用，或者查询规模更大时，短 kernel 才可能真正转化为端到端优势。
+
+### 7.4 三种内存模式各有代价
+
+显式 copy 的代码稍复杂，但本次 SF1 上总时间最好。Managed memory 写起来更直接，不过迁移和同步并没有消失。Mapped memory 省掉了主要 H2D copy，却让 GPU 直接访问主机内存，kernel 变慢约一个数量级。因此，“少一次拷贝”不一定等于“总时间更短”。
+
+### 7.5 PyArrow 和 cuDF 结果需要谨慎解释
+
+PyArrow 和 cuDF 的 baseline 每次都从 `.tbl` 文本开始，构造通用表，再执行多个 join 和 group-by；手写 C++/CUDA 则只加载必需列，并使用针对 Q5 的过滤传播计划。cuDF 的 `4.99 s` 不能说明 cuDF 在所有场景都慢，只能说明当前脚本和当前数据路径的端到端成本较高。如果改成 Parquet、让数据长期保存在 GPU DataFrame 中，并重复执行多次查询，结果可能会明显不同。
+
+## 8. 项目不足与改进方向
+
+这次项目已经完成了可运行和可比较的目标，但仍有几个明显不足：
+
+1. 官方实验只做到 SF1，没有继续测试 SF10 或更大数据，因此还没有找到 GPU 可能反超 CPU 的规模拐点。
+2. 当前 GPU 路径仍由 CPU 建立过滤传播数组，没有把完整 Q5 计划放到 GPU 上。
+3. 每次查询都会重新进行 CUDA setup 和内存分配，没有模拟数据库中“数据常驻、连续执行多条查询”的情况。
+4. PyArrow 和 cuDF 从文本文件读取，I/O 与解析开销较大，与专用 C++ 路径并不完全对等。
+5. 实现只支持 Q5，能够说明物理计划和硬件行为，但不能代表一个通用 SQL 数据库。
+
+如果继续改进，我会优先做两件事：第一，把列数据和过滤数组常驻 GPU，并复用 allocation；第二，在 SF10 等更大数据上重复同一组实验。这样才能更准确地回答 GPU 在什么规模和什么使用方式下值得采用。
+
+## 9. 总结与个人收获
+
+通过这次项目，我完成了从列式数据加载、专用查询计划、多线程 CPU，到三种 CUDA 内存模式和通用框架 baseline 的一条完整实验链。最终结果没有简单证明“GPU 一定更快”，反而说明了一个更实际的问题：硬件峰值能力和数据库端到端性能之间还有数据布局、传输、初始化、同步和执行计划等很多环节。
+
+我对课程中几个概念的理解也更具体了。列式存储不只是换一种文件格式，而是让热点循环只读取需要的列；过滤传播不只是画在查询计划图上的箭头，而是可以落实为直接索引数组；UVA、managed memory 和 mapped memory 也不能混在一起讨论，必须看实际的数据访问路径。对我来说，这些认识比得到一个“GPU 比 CPU 快多少倍”的单一数字更有价值。
+
+## 10. 复现方法
+
+CPU 构建与测试：
+
+```bash
+cmake -S . -B build \
+  -DMEMQ5_ENABLE_CUDA=OFF \
+  -DMEMQ5_ENABLE_TESTS=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+RTX 4090 CUDA 构建与测试：
 
 ```bash
 cmake -S . -B build-cuda \
@@ -149,244 +304,7 @@ cmake --build build-cuda
 CUDA_VISIBLE_DEVICES=0 ctest --test-dir build-cuda --output-on-failure
 ```
 
-`ctest` 共 6 个测试全部通过，`test_q5_cuda` 没有 skip，而是在真实 NVIDIA GPU 上运行并通过。
-
-官方 TPC-H SF1 数据来自 `TPC-H V3.0.1` tools package。本地工具压缩包 `TPC-H-Tool.zip` 的 SHA256 为：
-
-```text
-97ccb34cd122d78c2e06e2419e50957f934256868b37c02d0b88aefd9d13a84a
-```
-
-`dbgen` 使用 `makefile.suite` 构建，参数为 `CC=gcc`、`DATABASE=ORACLE`、`MACHINE=LINUX`、`WORKLOAD=TPCH`，随后执行 `dbgen -vf -s 1` 生成 SF1 数据。
-
-## 9. 实验结果
-
-### 9.1 tiny 正确性实验
-
-命令：
-
-```bash
-CUDA_VISIBLE_DEVICES=0 python3 scripts/run_experiment_pipeline.py \
-  --name tiny_gpu_modes \
-  --memq5 build-cuda/memq5 \
-  --data-dir tests/fixtures/tpch_q5_tiny \
-  --engines cpu,gpu-copy,gpu-managed,gpu-mapped,python \
-  --repeat 5 \
-  --force
-```
-
-hash 校验：
-
-```text
-ok ASIA 1994-01-01 hash=1e07d78fa8eededb engines=cpu,gpu-copy,gpu-managed,gpu-mapped,python
-```
-
-中位数结果：
-
-| engine | threads | runs | hash | total_ms | scan_ms | h2d_ms | kernel_ms | d2h_ms | elapsed_ms |
-|---|---:|---:|---|---:|---:|---:|---:|---:|---:|
-| cpu | 1 | 5 | `1e07d78fa8eededb` | 0.012799 | 0.001673 | 0.000000 | 0.000000 | 0.000000 | 2.917052 |
-| gpu-copy | 1 | 5 | `1e07d78fa8eededb` | 188.151000 | 0.171040 | 0.043008 | 0.108672 | 0.017664 | 256.674921 |
-| gpu-managed | 1 | 5 | `1e07d78fa8eededb` | 188.922000 | 0.503456 | 0.117760 | 0.105472 | 0.266976 | 240.041216 |
-| gpu-mapped | 1 | 5 | `1e07d78fa8eededb` | 187.576000 | 0.125920 | 0.007040 | 0.097984 | 0.022624 | 255.451920 |
-| python | 1 | 5 | `1e07d78fa8eededb` | 0.230724 | 0.230724 | 0.000000 | 0.000000 | 0.000000 | 38.741158 |
-
-![tiny total time](assets/tiny_gpu_modes_total_time.svg)
-
-![tiny time breakdown](assets/tiny_gpu_modes_time_breakdown.svg)
-
-说明：`threads` 是 benchmark driver 传给 C++ `memq5` 的参数，只控制 CPU engine 的 worker 数。当前 GPU kernel 固定使用 256-thread block，该列在 GPU 行中仅用于和 CPU sweep 的表结构对齐。
-
-### 9.2 synthetic GPU 开发实验
-
-该实验使用确定性生成的 Q5 形状数据，不是官方 TPC-H dbgen 数据，用于检查 GPU 运行时和内存模式趋势。
-
-数据规模：
-
-| 文件 | 行数 |
-|---|---:|
-| `region.tbl` | 5 |
-| `nation.tbl` | 25 |
-| `supplier.tbl` | 5,000 |
-| `customer.tbl` | 10,000 |
-| `orders.tbl` | 50,000 |
-| `lineitem.tbl` | 200,000 |
-| 1994 日期窗口订单 | 34,286 |
-
-命令：
-
-```bash
-python3 scripts/generate_synthetic_tpch_q5.py \
-  --output data/synthetic_gpu_dev \
-  --customers 10000 \
-  --orders 50000 \
-  --lineitems 200000 \
-  --suppliers 5000 \
-  --asia-heavy
-
-CUDA_VISIBLE_DEVICES=0 python3 scripts/run_experiment_pipeline.py \
-  --name synthetic_gpu_modes \
-  --memq5 build-cuda/memq5 \
-  --data-dir data/synthetic_gpu_dev \
-  --engines cpu,gpu-copy,gpu-managed,gpu-mapped,python \
-  --thread-list 1,2,4,8 \
-  --repeat 5 \
-  --force
-```
-
-hash 校验：
-
-```text
-ok ASIA 1994-01-01 hash=d5ffe393223a207e engines=cpu,gpu-copy,gpu-managed,gpu-mapped,python
-```
-
-中位数摘要：
-
-| engine | threads | total_ms | scan_ms | h2d_ms | kernel_ms | d2h_ms | hash |
-|---|---:|---:|---:|---:|---:|---:|---|
-| cpu | 1 | 5.282640 | 3.517350 | 0.000000 | 0.000000 | 0.000000 | `d5ffe393223a207e` |
-| cpu | 2 | 3.919480 | 2.153160 | 0.000000 | 0.000000 | 0.000000 | `d5ffe393223a207e` |
-| cpu | 4 | 3.092000 | 1.349080 | 0.000000 | 0.000000 | 0.000000 | `d5ffe393223a207e` |
-| cpu | 8 | 2.970280 | 1.217070 | 0.000000 | 0.000000 | 0.000000 | `d5ffe393223a207e` |
-| gpu-copy | 8 | 186.327000 | 0.518624 | 0.372736 | 0.126976 | 0.015840 | `d5ffe393223a207e` |
-| gpu-managed | 8 | 187.830000 | 1.048380 | 0.833536 | 0.141216 | 0.063488 | `d5ffe393223a207e` |
-| gpu-mapped | 8 | 195.000000 | 0.497344 | 0.007904 | 0.463872 | 0.023872 | `d5ffe393223a207e` |
-| python | 1 | 477.305890 | 477.305890 | 0.000000 | 0.000000 | 0.000000 | `d5ffe393223a207e` |
-
-完整 CSV 保存在实验结果目录；上表保留关键行用于报告分析。GPU 行中不同 `threads` 值不改变 CUDA launch 配置，只表示 benchmark 矩阵中的重复测量点。
-
-![synthetic total time](assets/synthetic_gpu_modes_total_time.svg)
-
-![synthetic time breakdown](assets/synthetic_gpu_modes_time_breakdown.svg)
-
-### 9.3 官方 TPC-H SF1 实验
-
-官方 SF1 数据通过 `dbgen -vf -s 1` 生成，并使用以下脚本整理为本项目读取格式：
-
-```bash
-python3 scripts/prepare_tpch_q5_data.py \
-  --source-dir data/tpch_sf1_raw \
-  --output-dir data/tpch_sf1 \
-  --scale-factor 1 \
-  --mode copy \
-  --force
-```
-
-整理后的 Q5 数据规模：
-
-| 文件 | 行数 |
-|---|---:|
-| `region.tbl` | 5 |
-| `nation.tbl` | 25 |
-| `supplier.tbl` | 10,000 |
-| `customer.tbl` | 150,000 |
-| `orders.tbl` | 1,500,000 |
-| `lineitem.tbl` | 6,001,215 |
-| 1994 日期窗口订单 | 227,597 |
-
-命令：
-
-```bash
-CUDA_VISIBLE_DEVICES=0 python3 scripts/run_experiment_pipeline.py \
-  --name tpch_sf1_gpu_modes \
-  --memq5 build-cuda/memq5 \
-  --data-dir data/tpch_sf1 \
-  --engines cpu,gpu-copy,gpu-managed,gpu-mapped \
-  --thread-list 1,2,4,8 \
-  --repeat 5 \
-  --force
-```
-
-hash 校验：
-
-```text
-ok ASIA 1994-01-01 hash=9f1f5f7578dd816e engines=cpu,gpu-copy,gpu-managed,gpu-mapped
-```
-
-CPU 8 线程输出结果：
-
-| nation | revenue |
-|---|---:|
-| INDONESIA | 55502035.06 |
-| VIETNAM | 55295080.65 |
-| CHINA | 53724488.13 |
-| INDIA | 52035506.17 |
-| JAPAN | 45410170.55 |
-
-中位数结果：
-
-| engine | threads | total_ms | scan_ms | h2d_ms | kernel_ms | d2h_ms | hash |
-|---|---:|---:|---:|---:|---:|---:|---|
-| cpu | 1 | 157.107000 | 93.948400 | 0.000000 | 0.000000 | 0.000000 | `9f1f5f7578dd816e` |
-| cpu | 2 | 109.855000 | 46.949500 | 0.000000 | 0.000000 | 0.000000 | `9f1f5f7578dd816e` |
-| cpu | 4 | 87.155600 | 23.972400 | 0.000000 | 0.000000 | 0.000000 | `9f1f5f7578dd816e` |
-| cpu | 8 | 76.211900 | 12.671300 | 0.000000 | 0.000000 | 0.000000 | `9f1f5f7578dd816e` |
-| gpu-copy | 1 | 274.314000 | 6.752930 | 6.529280 | 0.197632 | 0.025888 | `9f1f5f7578dd816e` |
-| gpu-copy | 2 | 275.848000 | 6.731900 | 6.495970 | 0.208896 | 0.026208 | `9f1f5f7578dd816e` |
-| gpu-copy | 4 | 265.649000 | 6.786180 | 6.525950 | 0.232448 | 0.027776 | `9f1f5f7578dd816e` |
-| gpu-copy | 8 | 267.698000 | 6.710850 | 6.478750 | 0.202752 | 0.027168 | `9f1f5f7578dd816e` |
-| gpu-managed | 8 | 307.993000 | 6.576260 | 6.283390 | 0.193312 | 0.102400 | `9f1f5f7578dd816e` |
-| gpu-mapped | 8 | 358.833000 | 2.731390 | 0.013280 | 2.681860 | 0.036032 | `9f1f5f7578dd816e` |
-
-![TPC-H SF1 total time](assets/tpch_sf1_gpu_modes_total_time.svg)
-
-![TPC-H SF1 time breakdown](assets/tpch_sf1_gpu_modes_time_breakdown.svg)
-
-### 9.4 官方 TPC-H SF1 加 cuDF 对照
-
-安装 RAPIDS cuDF 到单独的 `memq5-cudf` conda 环境后，重新运行官方 SF1 实验并加入 `cudf` baseline：
-
-```bash
-CUDA_VISIBLE_DEVICES=0 conda run -n memq5-cudf python \
-  scripts/run_experiment_pipeline.py \
-  --name tpch_sf1_with_cudf \
-  --memq5 build-cuda/memq5 \
-  --data-dir data/tpch_sf1 \
-  --engines cpu,gpu-copy,gpu-managed,gpu-mapped,cudf \
-  --thread-list 1,2,4,8 \
-  --repeat 5 \
-  --allow-benchmark-errors \
-  --force
-```
-
-cuDF 先在 tiny fixture 上校验，输出 hash 与 CPU、手写 CUDA 和 Python 路径一致：
-
-```text
-result_hash,1e07d78fa8eededb
-```
-
-官方 SF1 hash 校验：
-
-```text
-ok ASIA 1994-01-01 hash=9f1f5f7578dd816e engines=cpu,gpu-copy,gpu-managed,gpu-mapped,cudf
-```
-
-cuDF 共生成 85 条成功 benchmark 行，错误行为 0。所有 CPU、手写 CUDA 和 cuDF 行都得到相同 result hash。
-
-| engine | threads | total_ms | scan_ms | h2d_ms | kernel_ms | d2h_ms | hash |
-|---|---:|---:|---:|---:|---:|---:|---|
-| cpu | 8 | 75.372400 | 12.585000 | 0.000000 | 0.000000 | 0.000000 | `9f1f5f7578dd816e` |
-| gpu-copy | 8 | 268.804000 | 6.769600 | 6.515580 | 0.204800 | 0.026976 | `9f1f5f7578dd816e` |
-| gpu-managed | 8 | 309.007000 | 6.618240 | 6.295740 | 0.219104 | 0.103392 | `9f1f5f7578dd816e` |
-| gpu-mapped | 8 | 352.668000 | 2.725440 | 0.015392 | 2.678500 | 0.035360 | `9f1f5f7578dd816e` |
-| cudf | 1 | 4962.784182 | 4962.784182 | 0.000000 | 0.000000 | 0.000000 | `9f1f5f7578dd816e` |
-
-对于 `cudf` 行，`threads=1` 只是共享 benchmark CSV schema 中的占位值。Python cuDF baseline 不接受 C++ 的 `--threads` 参数，RAPIDS/cuDF 内部自行调度 GPU 工作。这里的 `total_ms` 和 `scan_ms` 统计从读取 `.tbl` 文本、构造 cuDF DataFrame、执行 joins/groupby，到把最终小结果转回 pandas 的整体时间。
-
-![TPC-H SF1 with cuDF total time](assets/tpch_sf1_with_cudf_total_time.svg)
-
-![TPC-H SF1 with cuDF time breakdown](assets/tpch_sf1_with_cudf_time_breakdown.svg)
-
-### 9.5 官方 TPC-H SF1 full matrix：CPU / PyArrow / GPU / cuDF 同场对照
-
-为避免分批实验带来的环境和负载差异，2026-07-08 在 GPU 服务器上补跑了官方 SF1 的完整同场矩阵。该矩阵在同一次 pipeline 中包含：
-
-- C++ `cpu`，线程数 `1,2,4,8`。
-- PyArrow baseline `arrow`。
-- 手写 CUDA `gpu-copy`、`gpu-managed`、`gpu-mapped`，线程字段保留为 `1,2,4,8` 以对齐 C++ benchmark schema。
-- RAPIDS/cuDF baseline `cudf`。
-
-默认 `python3` 环境可导入 PyArrow `24.0.0`，但没有安装 cuDF；因此正式 full matrix 使用同时包含 PyArrow `23.0.1` 和 cuDF `26.06.00` 的 `memq5-cudf` conda 环境运行：
+官方 SF1 full matrix：
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 conda run -n memq5-cudf python \
@@ -400,112 +318,11 @@ CUDA_VISIBLE_DEVICES=0 conda run -n memq5-cudf python \
   --force
 ```
 
-数据验证结果：
-
-```text
-data_dir: data/tpch_sf1
-region/date: ASIA 1994-01-01 to 1995-01-01
-orders_in_date_window: 227597
-ok: True
-```
-
-full matrix 共生成 90 条 benchmark 行，错误行为 0。所有成功 engine 的 result hash 一致：
-
-```text
-ok ASIA 1994-01-01 hash=9f1f5f7578dd816e engines=cpu,cpu,cpu,cpu,arrow,gpu-copy,gpu-copy,gpu-copy,gpu-copy,gpu-managed,gpu-managed,gpu-managed,gpu-managed,gpu-mapped,gpu-mapped,gpu-mapped,gpu-mapped,cudf,...
-```
-
-关键中位数如下：
-
-| engine | threads | runs | hash | total_ms | scan_ms | h2d_ms | kernel_ms | d2h_ms | elapsed_ms |
-|---|---:|---:|---|---:|---:|---:|---:|---:|---:|
-| arrow | 1 | 5 | `9f1f5f7578dd816e` | 835.129574 | 835.129574 | 0.000000 | 0.000000 | 0.000000 | 1063.757308 |
-| cpu | 1 | 5 | `9f1f5f7578dd816e` | 156.552000 | 93.833700 | 0.000000 | 0.000000 | 0.000000 | 16097.029193 |
-| cpu | 2 | 5 | `9f1f5f7578dd816e` | 110.455000 | 46.974500 | 0.000000 | 0.000000 | 0.000000 | 15998.008189 |
-| cpu | 4 | 5 | `9f1f5f7578dd816e` | 86.968800 | 24.193200 | 0.000000 | 0.000000 | 0.000000 | 15965.835117 |
-| cpu | 8 | 5 | `9f1f5f7578dd816e` | 75.762500 | 12.515900 | 0.000000 | 0.000000 | 0.000000 | 15951.053500 |
-| cudf | 1 | 5 | `9f1f5f7578dd816e` | 4988.085053 | 4988.085053 | 0.000000 | 0.000000 | 0.000000 | 5335.528074 |
-| gpu-copy | 1 | 5 | `9f1f5f7578dd816e` | 268.757000 | 6.804290 | 6.539390 | 0.222208 | 0.027424 | 16247.941719 |
-| gpu-copy | 2 | 5 | `9f1f5f7578dd816e` | 272.128000 | 6.789500 | 6.541540 | 0.232352 | 0.028544 | 16197.722001 |
-| gpu-copy | 4 | 5 | `9f1f5f7578dd816e` | 272.733000 | 6.889570 | 6.627330 | 0.226560 | 0.027680 | 16225.192578 |
-| gpu-copy | 8 | 5 | `9f1f5f7578dd816e` | 269.412000 | 6.854180 | 6.592420 | 0.233792 | 0.027584 | 16207.918594 |
-| gpu-managed | 1 | 5 | `9f1f5f7578dd816e` | 307.684000 | 6.644770 | 6.343680 | 0.218112 | 0.102400 | 16255.393120 |
-| gpu-managed | 2 | 5 | `9f1f5f7578dd816e` | 314.070000 | 6.612930 | 6.293700 | 0.218304 | 0.104192 | 16293.852519 |
-| gpu-managed | 4 | 5 | `9f1f5f7578dd816e` | 311.295000 | 6.630590 | 6.315200 | 0.210944 | 0.102400 | 16377.836137 |
-| gpu-managed | 8 | 5 | `9f1f5f7578dd816e` | 312.880000 | 6.596830 | 6.282430 | 0.217792 | 0.103424 | 16182.359227 |
-| gpu-mapped | 1 | 5 | `9f1f5f7578dd816e` | 354.481000 | 2.773500 | 0.015392 | 2.711460 | 0.039392 | 16317.616274 |
-| gpu-mapped | 2 | 5 | `9f1f5f7578dd816e` | 348.338000 | 2.764610 | 0.015360 | 2.710530 | 0.038752 | 16327.387187 |
-| gpu-mapped | 4 | 5 | `9f1f5f7578dd816e` | 349.378000 | 2.764990 | 0.015520 | 2.711360 | 0.038240 | 16280.335783 |
-| gpu-mapped | 8 | 5 | `9f1f5f7578dd816e` | 349.269000 | 2.773020 | 0.015360 | 2.710530 | 0.038432 | 16289.070718 |
-
-![TPC-H SF1 full matrix total time](assets/tpch_sf1_full_matrix_arrow_cudf_total_time.svg)
-
-![TPC-H SF1 full matrix time breakdown](assets/tpch_sf1_full_matrix_arrow_cudf_time_breakdown.svg)
-
-## 10. 分析
-
-GPU 服务器实验补齐了运行时正确性和官方数据两项关键缺口。`test_q5_cuda`、tiny fixture、synthetic 开发数据、官方 TPC-H SF1、cuDF SF1 对照以及 2026-07-08 的 CPU/PyArrow/GPU/cuDF full matrix 都在真实 NVIDIA GPU 服务器上运行成功。同一实验内所有成功的 CPU、GPU、Python、PyArrow 和 cuDF 路径均输出相同 result hash。
-
-tiny 数据体现了小数据场景下 CPU 的优势。CPU 中位 `total_ms` 约 `0.013 ms`，而 GPU 总时间约 `188 ms`。即使 GPU kernel 自身约 `0.10 ms`，CUDA 上下文、启动和传输开销也已经远大于有效计算。
-
-synthetic 数据有 200,000 行 `lineitem`，仍然表现出固定开销主导的问题。CPU 从 1 线程 `5.28 ms` 提升到 8 线程 `2.97 ms`；Python 参考实现为 `477.31 ms`，符合行式解释型实现的预期。手写 CUDA 的 kernel 与传输分量很小，但端到端总时间仍约 `186 ms` 到 `195 ms`。
-
-官方 SF1 更能代表课程场景。CPU 从 1 线程 `157.11 ms` 提升到 8 线程 `76.21 ms`。`gpu-copy` 的 kernel 时间约 `0.20 ms`，显式 H2D 传输约 `6.5 ms`，说明 GPU 端事实表扫描本身很快。但是完整 `gpu-copy` 路径总时间仍为 `265.65 ms` 到 `275.85 ms`，在当前实现和 SF1 规模下没有超过多线程 CPU。主要原因是当前 GPU 路径仍在 CPU 上构造 Q5 filter propagation map，并且每次进程级查询都承担 CUDA setup、allocation 和 synchronization 开销。
-
-PyArrow full matrix baseline 返回相同 result hash，中位 `total_ms` 约 `835.13 ms`。它比 dependency-free Python reference 更接近列式算子库实现，但仍慢于本项目专用 C++ CPU 路径。原因是 PyArrow baseline 每次从 `.tbl` 文本读取并使用通用 `Table.join` 和 `group_by` 算子执行完整多表计划，没有复用已加载列，也没有使用本项目针对 Q5 的 filter propagation map。
-
-cuDF SF1 baseline 也返回相同 result hash，完成了高层 GPU 算子库对照。在当前 benchmark harness 中，cuDF 中位 `total_ms` 约 `4988.09 ms`，慢于优化后的 CPU 路径、PyArrow baseline 和手写 CUDA 路径。这个结果不应解释为 cuDF 的一般性能上限，而是说明本项目的 cuDF 脚本每次都从文本 `.tbl` 文件读取、构造 DataFrame、执行通用 joins/groupby，并把最终结果转回 pandas；它没有复用 GPU-resident 列，也没有专门针对 Q5 做物理计划优化。
-
-三种 GPU 内存模式的部件级表现符合预期：
-
-| 模式 | 观察 |
-|---|---|
-| `gpu-copy` | SF1 上显式 H2D 约 `6.5 ms`，kernel 约 `0.20 ms` |
-| `gpu-managed` | 编程简单，但 SF1 总时间约 `307 ms`，慢于 `gpu-copy` |
-| `gpu-mapped` | 几乎没有显式拷贝时间，但 kernel 约 `2.68 ms`，因为 GPU 通过主机互连访问 mapped host memory |
-
-最终结论是：正确性已经闭合，性能结论是混合的。CUDA 实现有效展示了不同 GPU 内存模式的代价差异，但当前 CPU-prepared、per-invocation 的 GPU 路径在 SF1 上没有超过多线程 CPU。后续优化方向应是让数据跨查询常驻 GPU、复用 CUDA allocation，并把更多 filter propagation 工作移动到 GPU。
-
-## 11. 完成清单
-
-已完成：
-
-- CPU engine。
-- 多线程 CPU scan。
-- TPC-H Q5 loader。
-- tiny deterministic fixture。
-- Python 正确性参考。
-- PyArrow、DuckDB 和 cuDF baseline 脚本。
-- CUDA `gpu-copy`、`gpu-managed`、`gpu-mapped` 编译和运行路径。
-- 无 GPU 环境下可 skip 的 CUDA runtime test。
-- 数据校验脚本。
-- 环境采集脚本。
-- benchmark runner。
-- result hash verifier。
-- summary 和 SVG 报告图表生成。
-- 一键实验 pipeline。
-- 本地 self-check。
-- GPU 服务器环境验证，包括 `nvidia-smi`、`nvcc`、CMake 和 Python。
-- RTX 4090-class architecture `89` 的 CUDA build。
-- 真实 NVIDIA GPU 上的 CTest runtime validation。
-- tiny CPU/GPU/Python hash 一致实验。
-- synthetic CPU/GPU/Python hash 一致实验。
-- 官方 TPC-H SF1 数据生成、数据校验、CPU/GPU benchmark matrix 和 hash `9f1f5f7578dd816e` 一致验证。
-- RAPIDS/cuDF SF1 baseline 和 hash `9f1f5f7578dd816e` 一致验证。
-- 官方 TPC-H SF1 CPU/PyArrow/GPU/cuDF full matrix，90 条 benchmark 行、0 个错误行，统一 hash `9f1f5f7578dd816e`。
-
-仍存在的边界：
-
-- 未运行大于 SF1 的官方 TPC-H scale factor。
-- 构建目录、TPC-H 生成数据、raw results 和本地打包产物不纳入版本控制，可通过脚本和报告命令重新生成。
-
 ## 参考资料
 
-- TPC-H specification。
-- TPC current specifications page: `https://www.tpc.org/tpc_documents_current_versions/current_specifications5.asp`
-- TPC-H tools download request page: `https://www.tpc.org/tpc_documents_current_versions/download_programs/tools-download-request5.asp?bm_type=TPC-H&bm_vers=3.0.1&mode=CURRENT-ONLY`
-- Apache Arrow columnar format documentation。
-- CUDA Programming Guide。
-- RAPIDS cuDF documentation。
-- DuckDB vectorized execution documentation。
-- Crystal Opt GPU query implementation reference: `https://github.com/jiashenC/crystal-opt`
+1. TPC, *TPC Benchmark H Standard Specification, Revision 3.0.1*，`https://www.tpc.org/tpch/`。
+2. Apache Arrow, *Columnar Format*，`https://arrow.apache.org/docs/format/Columnar.html`。
+3. NVIDIA, *CUDA C++ Programming Guide*，`https://docs.nvidia.com/cuda/cuda-programming-guide/`。
+4. RAPIDS, *cuDF Documentation*，`https://docs.rapids.ai/api/cudf/stable/`。
+5. DuckDB, *Execution Format*，`https://duckdb.org/docs/stable/internals/vector`。
+6. Crystal Opt GPU query implementation reference，`https://github.com/jiashenC/crystal-opt`。

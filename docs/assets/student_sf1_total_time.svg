@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+<rect width="100%" height="100%" fill="#FFFFFF"/>
+<text x="480.0" y="38" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="22" font-weight="bold" fill="#263746" style="">TPC-H SF1: selected end-to-end results</text>
+<text x="480.0" y="62" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="13" font-weight="normal" fill="#5E6B75" style="">Exact medians are shown beside each bar</text>
+<line x1="220.0" y1="88" x2="220.0" y2="452" stroke="#D9E0E6" stroke-width="1"/>
+<text x="220.0" y="478" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="normal" fill="#5E6B75" style="">50</text>
+<line x1="315.5567474052124" y1="88" x2="315.5567474052124" y2="452" stroke="#D9E0E6" stroke-width="1"/>
+<text x="315.5567474052124" y="478" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="normal" fill="#5E6B75" style="">100</text>
+<line x1="441.8758964562177" y1="88" x2="441.8758964562177" y2="452" stroke="#D9E0E6" stroke-width="1"/>
+<text x="441.8758964562177" y="478" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="normal" fill="#5E6B75" style="">250</text>
+<line x1="537.43264386143" y1="88" x2="537.43264386143" y2="452" stroke="#D9E0E6" stroke-width="1"/>
+<text x="537.43264386143" y="478" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="normal" fill="#5E6B75" style="">500</text>
+<line x1="632.9893912666424" y1="88" x2="632.9893912666424" y2="452" stroke="#D9E0E6" stroke-width="1"/>
+<text x="632.9893912666424" y="478" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="normal" fill="#5E6B75" style="">1,000</text>
+<line x1="759.3085403176477" y1="88" x2="759.3085403176477" y2="452" stroke="#D9E0E6" stroke-width="1"/>
+<text x="759.3085403176477" y="478" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="normal" fill="#5E6B75" style="">2,500</text>
+<line x1="854.8652877228601" y1="88" x2="854.8652877228601" y2="452" stroke="#D9E0E6" stroke-width="1"/>
+<text x="854.8652877228601" y="478" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="normal" fill="#5E6B75" style="">5,000</text>
+<text x="550.0" y="516" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="13" font-weight="normal" fill="#5E6B75" style="">total time (ms, logarithmic scale)</text>
+<text x="206" y="121" text-anchor="end" font-family="Arial, PingFang SC, sans-serif" font-size="14" font-weight="normal" fill="#263746" style="">CPU 8 threads</text>
+<rect x="220.00" y="100.00" width="57.29" height="29.00" rx="3" fill="#4E79A7" opacity="1.0"/>
+<text x="285.2916062015226" y="120" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="bold" fill="#263746" style="">75.76</text>
+<text x="206" y="170" text-anchor="end" font-family="Arial, PingFang SC, sans-serif" font-size="14" font-weight="normal" fill="#263746" style="">CPU 1 thread</text>
+<rect x="220.00" y="149.00" width="157.35" height="29.00" rx="3" fill="#4E79A7" opacity="1.0"/>
+<text x="385.34774787653885" y="169" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="bold" fill="#263746" style="">156.55</text>
+<text x="206" y="219" text-anchor="end" font-family="Arial, PingFang SC, sans-serif" font-size="14" font-weight="normal" fill="#263746" style="">gpu-copy</text>
+<rect x="220.00" y="198.00" width="232.19" height="29.00" rx="3" fill="#76B7B2" opacity="1.0"/>
+<text x="460.1851333376434" y="218" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="bold" fill="#263746" style="">269.41</text>
+<text x="206" y="268" text-anchor="end" font-family="Arial, PingFang SC, sans-serif" font-size="14" font-weight="normal" fill="#263746" style="">gpu-managed</text>
+<rect x="220.00" y="247.00" width="252.81" height="29.00" rx="3" fill="#76B7B2" opacity="1.0"/>
+<text x="480.8058331040164" y="267" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="bold" fill="#263746" style="">312.88</text>
+<text x="206" y="317" text-anchor="end" font-family="Arial, PingFang SC, sans-serif" font-size="14" font-weight="normal" fill="#263746" style="">gpu-mapped</text>
+<rect x="220.00" y="296.00" width="267.97" height="29.00" rx="3" fill="#76B7B2" opacity="1.0"/>
+<text x="495.97347518296743" y="316" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="bold" fill="#263746" style="">349.27</text>
+<text x="206" y="366" text-anchor="end" font-family="Arial, PingFang SC, sans-serif" font-size="14" font-weight="normal" fill="#263746" style="">PyArrow</text>
+<rect x="220.00" y="345.00" width="388.15" height="29.00" rx="3" fill="#F28E2B" opacity="1.0"/>
+<text x="616.1515175446766" y="365" text-anchor="start" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="bold" fill="#263746" style="">835.13</text>
+<text x="206" y="415" text-anchor="end" font-family="Arial, PingFang SC, sans-serif" font-size="14" font-weight="normal" fill="#263746" style="">cuDF</text>
+<rect x="220.00" y="394.00" width="634.54" height="29.00" rx="3" fill="#9AA9B5" opacity="1.0"/>
+<text x="846.5363798514985" y="414" text-anchor="end" font-family="Arial, PingFang SC, sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" style="">4,988.09</text>
+</svg>
