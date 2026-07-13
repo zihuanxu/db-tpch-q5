@@ -38,11 +38,11 @@ int main() {
 
   for (std::size_t i = 0; i < cpu.rows.size(); ++i) {
     assert(cpu.rows[i].nation_name == gpu.rows[i].nation_name);
-    assert(cpu.rows[i].revenue_cents == gpu.rows[i].revenue_cents);
+    assert(cpu.rows[i].revenue_1e4 == gpu.rows[i].revenue_1e4);
     assert(cpu.rows[i].nation_name == managed.rows[i].nation_name);
-    assert(cpu.rows[i].revenue_cents == managed.rows[i].revenue_cents);
+    assert(cpu.rows[i].revenue_1e4 == managed.rows[i].revenue_1e4);
     assert(cpu.rows[i].nation_name == mapped.rows[i].nation_name);
-    assert(cpu.rows[i].revenue_cents == mapped.rows[i].revenue_cents);
+    assert(cpu.rows[i].revenue_1e4 == mapped.rows[i].revenue_1e4);
   }
 
   return 0;

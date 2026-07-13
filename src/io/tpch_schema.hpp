@@ -85,7 +85,7 @@ struct LineitemTable {
   Column<int32_t> l_orderkey;
   Column<int32_t> l_suppkey;
   Column<int64_t> l_extendedprice_cents;
-  Column<int32_t> l_discount_bp;
+  Column<int32_t> l_discount_hundredths;
 
   int64_t size() const { return l_orderkey.size(); }
 };

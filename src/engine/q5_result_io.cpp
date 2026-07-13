@@ -67,7 +67,7 @@ std::string result_hash_hex(const Q5Result& result) {
   uint64_t hash = 14695981039346656037ull;
   for (const Q5ResultRow& row : result.rows) {
     hash = fnv1a_update(hash, row.nation_name);
-    hash = fnv1a_update(hash, row.revenue_cents);
+    hash = fnv1a_update(hash, row.revenue_1e4);
   }
 
   std::ostringstream out;
@@ -76,10 +76,10 @@ std::string result_hash_hex(const Q5Result& result) {
 }
 
 void write_rows_csv(std::ostream& out, const Q5Result& result) {
-  out << "nation,revenue_cents,revenue\n";
+  out << "nation,revenue_1e4,revenue\n";
   for (const auto& row : result.rows) {
-    out << row.nation_name << ',' << row.revenue_cents << ','
-        << format_cents(row.revenue_cents) << '\n';
+    out << row.nation_name << ',' << row.revenue_1e4 << ','
+        << format_revenue_1e4(row.revenue_1e4) << '\n';
   }
   out << "result_hash," << result_hash_hex(result) << '\n';
   out << "timing_build_ms," << result.timing.build_ms << '\n';
@@ -97,8 +97,9 @@ void write_json(std::ostream& out, const Q5Result& result) {
   for (std::size_t i = 0; i < result.rows.size(); ++i) {
     const auto& row = result.rows[i];
     out << "    {\"nation\": \"" << json_escape(row.nation_name)
-        << "\", \"revenue_cents\": " << row.revenue_cents
-        << ", \"revenue\": \"" << format_cents(row.revenue_cents) << "\"}";
+        << "\", \"revenue_1e4\": " << row.revenue_1e4
+        << ", \"revenue\": \"" << format_revenue_1e4(row.revenue_1e4)
+        << "\"}";
     out << (i + 1 == result.rows.size() ? "\n" : ",\n");
   }
   out << "  ],\n";

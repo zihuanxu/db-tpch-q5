@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -29,16 +30,17 @@ inline int64_t parse_fixed_decimal(std::string_view value, int64_t scale) {
 
   int64_t frac = 0;
   int64_t frac_scale = 1;
+  int64_t max_frac_scale = scale;
   if (pos < value.size() && value[pos] == '.') {
     ++pos;
     while (pos < value.size() && value[pos] >= '0' && value[pos] <= '9' &&
-           frac_scale < scale) {
+           frac_scale < max_frac_scale) {
       frac = frac * 10 + (value[pos] - '0');
       frac_scale *= 10;
       ++pos;
     }
-    while (pos < value.size() && value[pos] >= '0' && value[pos] <= '9') {
-      ++pos;
+    if (pos < value.size() && value[pos] >= '0' && value[pos] <= '9') {
+      throw std::invalid_argument("too many fractional digits");
     }
   }
 
@@ -55,12 +57,31 @@ inline int64_t parse_fixed_decimal(std::string_view value, int64_t scale) {
   return negative ? -result : result;
 }
 
-inline int64_t compute_revenue_cents(int64_t extendedprice_cents,
-                                     int32_t discount_basis_points) {
-  return (extendedprice_cents * (10000 - discount_basis_points)) / 10000;
+inline int64_t compute_revenue_1e4(int64_t extendedprice_cents,
+                                   int32_t discount_hundredths) {
+  int64_t product = 0;
+  if (__builtin_mul_overflow(extendedprice_cents,
+                             static_cast<int64_t>(100 - discount_hundredths),
+                             &product)) {
+    throw std::overflow_error("revenue_1e4 overflow");
+  }
+  return product;
 }
 
-inline std::string format_cents(int64_t cents) {
+inline std::string format_revenue_1e4(int64_t revenue_1e4) {
+  int64_t cents = 0;
+  if (revenue_1e4 >= 0) {
+    if (revenue_1e4 > std::numeric_limits<int64_t>::max() - 50) {
+      throw std::overflow_error("formatted revenue overflow");
+    }
+    cents = (revenue_1e4 + 50) / 100;
+  } else {
+    if (revenue_1e4 < std::numeric_limits<int64_t>::min() + 50) {
+      throw std::overflow_error("formatted revenue overflow");
+    }
+    cents = (revenue_1e4 - 50) / 100;
+  }
+
   const bool negative = cents < 0;
   if (negative) {
     cents = -cents;

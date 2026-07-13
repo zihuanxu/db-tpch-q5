@@ -184,14 +184,15 @@ class MappedHostBuffer {
   std::size_t size_ = 0;
 };
 
-__device__ long long compute_revenue_device(long long extendedprice_cents,
-                                            int discount_basis_points) {
-  return (extendedprice_cents * (10000 - discount_basis_points)) / 10000;
+__device__ long long compute_revenue_1e4_device(long long extendedprice_cents,
+                                                int discount_hundredths) {
+  return extendedprice_cents * (100 - discount_hundredths);
 }
 
 __global__ void lineitem_q5_aggregate_kernel(
     const int32_t* l_orderkey, const int32_t* l_suppkey,
-    const int64_t* l_extendedprice_cents, const int32_t* l_discount_bp,
+    const int64_t* l_extendedprice_cents,
+    const int32_t* l_discount_hundredths,
     int64_t lineitem_count, const int32_t* order_nation_by_key,
     int32_t order_map_size, const int32_t* supplier_nation_by_key,
     int32_t supplier_map_size, unsigned long long* revenue_by_nation,
@@ -215,8 +216,8 @@ __global__ void lineitem_q5_aggregate_kernel(
     return;
   }
 
-  const long long revenue =
-      compute_revenue_device(l_extendedprice_cents[idx], l_discount_bp[idx]);
+  const long long revenue = compute_revenue_1e4_device(
+      l_extendedprice_cents[idx], l_discount_hundredths[idx]);
   atomicAdd(&revenue_by_nation[order_nation],
             static_cast<unsigned long long>(revenue));
 }
@@ -241,8 +242,8 @@ void append_rows_from_revenue(Q5Result* result, const Q5PreparedPlan& plan,
 
   std::sort(result->rows.begin(), result->rows.end(),
             [](const Q5ResultRow& a, const Q5ResultRow& b) {
-              if (a.revenue_cents != b.revenue_cents) {
-                return a.revenue_cents > b.revenue_cents;
+              if (a.revenue_1e4 != b.revenue_1e4) {
+                return a.revenue_1e4 > b.revenue_1e4;
               }
               return a.nation_name < b.nation_name;
             });
@@ -250,7 +251,7 @@ void append_rows_from_revenue(Q5Result* result, const Q5PreparedPlan& plan,
 
 double launch_lineitem_kernel(const int32_t* l_orderkey, const int32_t* l_suppkey,
                               const int64_t* l_extendedprice_cents,
-                              const int32_t* l_discount_bp,
+                              const int32_t* l_discount_hundredths,
                               std::size_t lineitem_count,
                               const int32_t* order_nation_by_key,
                               std::size_t order_map_size,
@@ -266,7 +267,7 @@ double launch_lineitem_kernel(const int32_t* l_orderkey, const int32_t* l_suppke
   check_cuda(cudaEventRecord(kernel_start.get()), "cudaEventRecord kernel_start");
   if (blocks > 0) {
     lineitem_q5_aggregate_kernel<<<blocks, threads>>>(
-        l_orderkey, l_suppkey, l_extendedprice_cents, l_discount_bp,
+        l_orderkey, l_suppkey, l_extendedprice_cents, l_discount_hundredths,
         static_cast<int64_t>(lineitem_count), order_nation_by_key,
         static_cast<int32_t>(order_map_size), supplier_nation_by_key,
         static_cast<int32_t>(supplier_map_size), revenue_by_nation,
@@ -304,7 +305,8 @@ Q5Result execute_q5_gpu_copy(const TpchDatabase& db, const Q5Params& params) {
   d_l_suppkey.copy_from_host(db.lineitem.l_suppkey.data(), lineitem_count);
   d_l_extendedprice.copy_from_host(db.lineitem.l_extendedprice_cents.data(),
                                    lineitem_count);
-  d_l_discount.copy_from_host(db.lineitem.l_discount_bp.data(), lineitem_count);
+  d_l_discount.copy_from_host(db.lineitem.l_discount_hundredths.data(),
+                              lineitem_count);
   d_order_nation.copy_from_host(plan.order_nation_by_key.data(),
                                 plan.order_nation_by_key.size());
   d_supplier_nation.copy_from_host(plan.supplier_nation_by_key.data(),
@@ -362,7 +364,8 @@ Q5Result execute_q5_gpu_managed(const TpchDatabase& db, const Q5Params& params) 
   m_l_suppkey.copy_from_host(db.lineitem.l_suppkey.data(), lineitem_count);
   m_l_extendedprice.copy_from_host(db.lineitem.l_extendedprice_cents.data(),
                                    lineitem_count);
-  m_l_discount.copy_from_host(db.lineitem.l_discount_bp.data(), lineitem_count);
+  m_l_discount.copy_from_host(db.lineitem.l_discount_hundredths.data(),
+                              lineitem_count);
   m_order_nation.copy_from_host(plan.order_nation_by_key.data(),
                                 plan.order_nation_by_key.size());
   m_supplier_nation.copy_from_host(plan.supplier_nation_by_key.data(),
@@ -428,7 +431,8 @@ Q5Result execute_q5_gpu_mapped(const TpchDatabase& db, const Q5Params& params) {
   h_l_suppkey.copy_from_host(db.lineitem.l_suppkey.data(), lineitem_count);
   h_l_extendedprice.copy_from_host(db.lineitem.l_extendedprice_cents.data(),
                                    lineitem_count);
-  h_l_discount.copy_from_host(db.lineitem.l_discount_bp.data(), lineitem_count);
+  h_l_discount.copy_from_host(db.lineitem.l_discount_hundredths.data(),
+                              lineitem_count);
   h_order_nation.copy_from_host(plan.order_nation_by_key.data(),
                                 plan.order_nation_by_key.size());
   h_supplier_nation.copy_from_host(plan.supplier_nation_by_key.data(),

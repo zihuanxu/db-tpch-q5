@@ -30,8 +30,8 @@ void scan_lineitem_range(const TpchDatabase& db, const Q5PreparedPlan& plan,
       continue;
     }
     (*revenue_by_nation)[static_cast<std::size_t>(order_nation)] +=
-        compute_revenue_cents(db.lineitem.l_extendedprice_cents[row],
-                              db.lineitem.l_discount_bp[row]);
+        compute_revenue_1e4(db.lineitem.l_extendedprice_cents[row],
+                            db.lineitem.l_discount_hundredths[row]);
   }
 }
 
@@ -95,8 +95,8 @@ Q5Result execute_q5_cpu(const TpchDatabase& db, const Q5Params& params) {
 
   std::sort(result.rows.begin(), result.rows.end(),
             [](const Q5ResultRow& a, const Q5ResultRow& b) {
-              if (a.revenue_cents != b.revenue_cents) {
-                return a.revenue_cents > b.revenue_cents;
+              if (a.revenue_1e4 != b.revenue_1e4) {
+                return a.revenue_1e4 > b.revenue_1e4;
               }
               return a.nation_name < b.nation_name;
             });

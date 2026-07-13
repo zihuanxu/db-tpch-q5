@@ -1,5 +1,7 @@
 #include <cassert>
 #include <cstdint>
+#include <limits>
+#include <stdexcept>
 
 #include "common/bitmap.hpp"
 #include "common/column.hpp"
@@ -30,9 +32,31 @@ int main() {
   assert(memq5::date_to_days("1970-01-01") == 0);
 
   assert(memq5::parse_fixed_decimal("123.45", 100) == 12345);
+  assert(memq5::parse_fixed_decimal("0.05", 100) == 5);
   assert(memq5::parse_fixed_decimal("0.05", 10000) == 500);
-  assert(memq5::compute_revenue_cents(10000, 1000) == 9000);
-  assert(memq5::format_cents(19000) == "190.00");
+  bool rejected_extra_digits = false;
+  try {
+    static_cast<void>(memq5::parse_fixed_decimal("12.345", 100));
+  } catch (const std::invalid_argument&) {
+    rejected_extra_digits = true;
+  }
+  assert(rejected_extra_digits);
+
+  assert(memq5::compute_revenue_1e4(12345, 6) == 1160430);
+  assert(memq5::compute_revenue_1e4(10000, 10) == 900000);
+
+  bool overflow_detected = false;
+  try {
+    static_cast<void>(memq5::compute_revenue_1e4(std::numeric_limits<int64_t>::max(),
+                                                 0));
+  } catch (const std::overflow_error&) {
+    overflow_detected = true;
+  }
+  assert(overflow_detected);
+
+  assert(memq5::format_revenue_1e4(1160430) == "116.04");
+  assert(memq5::format_revenue_1e4(1160450) == "116.05");
+  assert(memq5::format_revenue_1e4(-1160450) == "-116.05");
 
   return 0;
 }

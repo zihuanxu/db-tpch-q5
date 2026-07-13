@@ -93,8 +93,8 @@ TpchDatabase load_tpch(const std::string& data_dir) {
     db.lineitem.l_suppkey.push_back(std::stoi(fields[2]));
     db.lineitem.l_extendedprice_cents.push_back(
         parse_fixed_decimal(fields[5], 100));
-    db.lineitem.l_discount_bp.push_back(
-        static_cast<int32_t>(parse_fixed_decimal(fields[6], 10000)));
+    db.lineitem.l_discount_hundredths.push_back(
+        static_cast<int32_t>(parse_fixed_decimal(fields[6], 100)));
   });
 
   return db;

@@ -17,7 +17,7 @@ struct Q5Timing {
 
 struct Q5ResultRow {
   std::string nation_name;
-  int64_t revenue_cents = 0;
+  int64_t revenue_1e4 = 0;
 };
 
 struct Q5Result {
