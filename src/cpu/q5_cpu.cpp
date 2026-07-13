@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <exception>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -60,6 +62,8 @@ Q5Result execute_q5_cpu(const TpchDatabase& db, const Q5Params& params) {
         static_cast<std::size_t>(worker_count),
         std::vector<int64_t>(revenue_by_nation.size(), 0));
     std::vector<std::thread> workers;
+    std::exception_ptr worker_exception;
+    std::mutex worker_exception_mutex;
     workers.reserve(static_cast<std::size_t>(worker_count));
 
     for (int worker = 0; worker < worker_count; ++worker) {
@@ -69,12 +73,26 @@ Q5Result execute_q5_cpu(const TpchDatabase& db, const Q5Params& params) {
       const std::size_t end =
           lineitem_count * static_cast<std::size_t>(worker + 1) /
           static_cast<std::size_t>(worker_count);
-      workers.emplace_back(scan_lineitem_range, std::cref(db), std::cref(plan), begin,
-                           end, &local_revenues[static_cast<std::size_t>(worker)]);
+      workers.emplace_back([&db, &plan, begin, end, &local_revenues, worker,
+                            &worker_exception, &worker_exception_mutex]() {
+        try {
+          scan_lineitem_range(db, plan, begin, end,
+                              &local_revenues[static_cast<std::size_t>(worker)]);
+        } catch (...) {
+          std::lock_guard<std::mutex> lock(worker_exception_mutex);
+          if (!worker_exception) {
+            worker_exception = std::current_exception();
+          }
+        }
+      });
     }
 
     for (std::thread& worker : workers) {
       worker.join();
+    }
+
+    if (worker_exception) {
+      std::rethrow_exception(worker_exception);
     }
 
     for (const auto& local : local_revenues) {
