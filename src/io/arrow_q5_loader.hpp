@@ -20,6 +20,12 @@ struct ArrowQ5TableMetadata {
 };
 
 struct ArrowQ5Dataset {
+  std::shared_ptr<arrow::Table> region;
+  std::shared_ptr<arrow::Table> nation;
+  std::shared_ptr<arrow::Table> supplier;
+  std::shared_ptr<arrow::Table> customer;
+  std::shared_ptr<arrow::Table> orders;
+  std::shared_ptr<arrow::Table> lineitem;
   std::map<std::string, std::shared_ptr<arrow::Table>> tables;
   std::map<std::string, ArrowQ5TableMetadata> metadata;
 };

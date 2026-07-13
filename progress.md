@@ -46,14 +46,43 @@ Evidence recorded on 2026-07-14:
   target-range checks and side-effect-free assertions were added with TDD.
 - A clean `Release` Arrow build under `/tmp/memq5-v21-release-build` compiled and
   passed 6/6 tests, including every strict manifest rejection case.
+- V2.1 was committed as `39b31dd`, tagged `submission-v2.1-arrow-loader`, and
+  packaged as `dist/memory-db-tpch-q5-v2.1.tar.gz`.
+- The extracted V2.1 package passed the default CPU/CUDA self-check and a clean
+  Arrow Release build with 6/6 tests.
 
 ### V2.2 Arrow-native CPU query
 
-- [ ] Expose the canonical `ArrowTpchDataset` interface.
-- [ ] Refactor the specialized CPU backend to consume Arrow buffers directly.
-- [ ] Add an Arrow Acero implementation of Q5.
-- [ ] Extend the CLI and JSON result contract for both CPU engines.
-- [ ] Prove tiny equality and official SF1 oracle equality.
+- [x] Expose typed canonical Arrow tables while retaining the validated map view.
+- [x] Add a specialized CPU backend that consumes zero-copy Arrow batch views.
+- [x] Add an Acero implementation for dictionary-boundary decode, filters, and
+  hash joins, followed by checked exact revenue accumulation.
+- [x] Add `memq5_arrow_query` and explicit result counters for both CPU engines.
+- [x] Prove tiny equality and official SF1 oracle equality.
+
+Evidence recorded on 2026-07-14:
+
+- Arrow Debug/Release CTest: 13/13 passed, including both engines, both CLI
+  smoke tests, and three invalid-argument rejection tests.
+- Specialized and Acero SF1 outputs both have result hash `542abf4003633c7c`.
+- Both SF1 CSV outputs passed `scripts/verify_q5_oracle.py` against the official
+  TPC-H V3.0.1 `q5.out`.
+- Specialized scan partitions global row ranges across Arrow batches and checks
+  duplicate keys, Decimal128 scale, multiplication, local sums, and merge sums.
+- Acero performs the relational filter/join path; final exact scale-4
+  accumulation remains checked C++ code rather than an overstated Acero decimal
+  aggregate claim.
+- Review hardening: `verify_q5_oracle.py` now parses signed int64 exact values,
+  checks scale-4-to-scale-2 formatting, recomputes the C++ FNV-1a result hash,
+  and rejects negative/fractional counters or invalid timings. Its focused test
+  suite passes 11/11.
+- Review hardening: all legacy CUDA modes now count matched rows in the shared
+  kernel and report input rows plus H2D/D2H/mapped-read bytes. A test-first
+  assertion failed on the previous zero counters, then passed on the real GPU
+  for copy, managed, and mapped after the implementation.
+- Full V2 gate: oracle Python tests 11/11, Arrow/baseline Python tests 12/12,
+  default CPU/CUDA/tiny self-check, clean Arrow Release build, and both SF1
+  engines with the strengthened oracle all passed.
 
 ## V3 - Arrow-native CUDA Modes
 
@@ -89,5 +118,5 @@ Evidence recorded on 2026-07-14:
 
 ## Current Action
 
-Finish V2.1 packaging and review, then implement V2.2 without waiting for a
-stage confirmation.
+Finish the V2 release audit and package, then start V3 Arrow-native CUDA without
+waiting for a stage confirmation.

@@ -35,11 +35,12 @@ Arrow/PyArrow、三种 CUDA 内存模式和 RAPIDS cuDF。它不是通用数据�
 - 在 RTX 4090 服务器上完成 CUDA 构建、CTest、tiny、synthetic、官方 TPC-H SF1、cuDF 对照和 CPU/PyArrow/GPU/cuDF full matrix 实验。
 - 修复逐行截断问题，正式 SF1 的六个后端输出一致 hash
   `542abf4003633c7c`，并与官方 `q5.out` 五行结果逐行一致。
-- 加入 Arrow IPC 数据生成和 manifest，PyArrow 与 cuDF 正式基线共用同一份
-  Arrow 数据集；C++/CUDA 仍从 `.tbl` 构造自定义连续数组。
+- 加入 Arrow IPC 数据生成和 manifest，PyArrow、cuDF 和 C++ Arrow CPU
+  共用同一份 Arrow 数据集；旧 C++/CUDA 路径仍从 `.tbl` 构造连续数组。
 - V2.1 新增可选 C++ Arrow IPC loader，可在 C++ 层校验六表 schema、行数、
-  record batch、字节数、SHA256 和非空约束；CPU 查询直接消费 Arrow Table
-  将在 V2.2 完成。
+  record batch、字节数、SHA256 和非空约束。
+- V2.2 新增直接遍历 Arrow batch/buffer 的专用 CPU 引擎，以及使用 Acero
+  filter/hash join 的关系算子引擎；两者在 tiny 和 SF1 上结果一致。
 
 ## TPC-H Q5/GPU 复现
 
@@ -102,7 +103,8 @@ conda run -n memq5-cudf python scripts/prepare_arrow_dataset.py \
 ```
 
 C++ Arrow loader 的独立构建与验证见
-`docs/STAGE_V2_1_ARROW_LOADER.md`。
+`docs/STAGE_V2_1_ARROW_LOADER.md`。Arrow CPU 查询见
+`docs/STAGE_V2_2_ARROW_CPU.md`。
 
 ## 版本控制说明
 

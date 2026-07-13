@@ -36,6 +36,20 @@ int main() {
   assert(cpu.rows.size() == managed.rows.size());
   assert(cpu.rows.size() == mapped.rows.size());
 
+  for (const memq5::Q5Result* result : {&gpu, &managed, &mapped}) {
+    assert(result->counters.input_lineitem_rows == 6);
+    assert(result->counters.matched_lineitem_rows == 2);
+    assert(result->counters.cpu_input_rows == 0);
+    assert(result->counters.gpu_input_rows == 6);
+    assert(result->counters.d2h_bytes > 0);
+  }
+  assert(gpu.counters.h2d_bytes > 0);
+  assert(gpu.counters.mapped_remote_read_bytes == 0);
+  assert(managed.counters.h2d_bytes > 0);
+  assert(managed.counters.mapped_remote_read_bytes == 0);
+  assert(mapped.counters.h2d_bytes == 0);
+  assert(mapped.counters.mapped_remote_read_bytes > 0);
+
   for (std::size_t i = 0; i < cpu.rows.size(); ++i) {
     assert(cpu.rows[i].nation_name == gpu.rows[i].nation_name);
     assert(cpu.rows[i].revenue_1e4 == gpu.rows[i].revenue_1e4);

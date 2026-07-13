@@ -35,6 +35,13 @@ OUTPUT_FIELDS = [
     "d2h_ms",
     "scan_ms",
     "total_ms",
+    "input_lineitem_rows",
+    "matched_lineitem_rows",
+    "cpu_input_rows",
+    "gpu_input_rows",
+    "h2d_bytes",
+    "d2h_bytes",
+    "mapped_remote_read_bytes",
     "elapsed_ms",
     "error",
 ]

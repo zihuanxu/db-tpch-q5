@@ -88,6 +88,15 @@ void write_rows_csv(std::ostream& out, const Q5Result& result) {
   out << "timing_d2h_ms," << result.timing.d2h_ms << '\n';
   out << "timing_scan_ms," << result.timing.scan_ms << '\n';
   out << "timing_total_ms," << result.timing.total_ms << '\n';
+  out << "input_lineitem_rows," << result.counters.input_lineitem_rows << '\n';
+  out << "matched_lineitem_rows," << result.counters.matched_lineitem_rows
+      << '\n';
+  out << "cpu_input_rows," << result.counters.cpu_input_rows << '\n';
+  out << "gpu_input_rows," << result.counters.gpu_input_rows << '\n';
+  out << "h2d_bytes," << result.counters.h2d_bytes << '\n';
+  out << "d2h_bytes," << result.counters.d2h_bytes << '\n';
+  out << "mapped_remote_read_bytes,"
+      << result.counters.mapped_remote_read_bytes << '\n';
 }
 
 void write_json(std::ostream& out, const Q5Result& result) {
@@ -110,6 +119,20 @@ void write_json(std::ostream& out, const Q5Result& result) {
   out << "    \"d2h\": " << result.timing.d2h_ms << ",\n";
   out << "    \"scan\": " << result.timing.scan_ms << ",\n";
   out << "    \"total\": " << result.timing.total_ms << "\n";
+  out << "  },\n";
+  out << "  \"counters\": {\n";
+  out << "    \"input_lineitem_rows\": "
+      << result.counters.input_lineitem_rows << ",\n";
+  out << "    \"matched_lineitem_rows\": "
+      << result.counters.matched_lineitem_rows << ",\n";
+  out << "    \"cpu_input_rows\": " << result.counters.cpu_input_rows
+      << ",\n";
+  out << "    \"gpu_input_rows\": " << result.counters.gpu_input_rows
+      << ",\n";
+  out << "    \"h2d_bytes\": " << result.counters.h2d_bytes << ",\n";
+  out << "    \"d2h_bytes\": " << result.counters.d2h_bytes << ",\n";
+  out << "    \"mapped_remote_read_bytes\": "
+      << result.counters.mapped_remote_read_bytes << "\n";
   out << "  }\n";
   out << "}\n";
 }
@@ -117,13 +140,22 @@ void write_json(std::ostream& out, const Q5Result& result) {
 void write_benchmark_csv(std::ostream& out, const std::string& engine,
                          const std::string& region, const std::string& date,
                          int threads, const Q5Result& result) {
-  out << "engine,region,date,threads,result_rows,result_hash,build_ms,h2d_ms,kernel_ms,d2h_ms,scan_ms,total_ms\n";
+  out << "engine,region,date,threads,result_rows,result_hash,build_ms,h2d_ms,"
+         "kernel_ms,d2h_ms,scan_ms,total_ms,input_lineitem_rows,"
+         "matched_lineitem_rows,cpu_input_rows,gpu_input_rows,h2d_bytes,"
+         "d2h_bytes,mapped_remote_read_bytes\n";
   out << engine << ',' << region << ',' << date << ',' << threads << ','
       << result.rows.size() << ',' << result_hash_hex(result) << ','
       << result.timing.build_ms << ','
       << result.timing.h2d_ms << ',' << result.timing.kernel_ms << ','
       << result.timing.d2h_ms << ',' << result.timing.scan_ms << ','
-      << result.timing.total_ms << '\n';
+      << result.timing.total_ms << ','
+      << result.counters.input_lineitem_rows << ','
+      << result.counters.matched_lineitem_rows << ','
+      << result.counters.cpu_input_rows << ','
+      << result.counters.gpu_input_rows << ',' << result.counters.h2d_bytes
+      << ',' << result.counters.d2h_bytes << ','
+      << result.counters.mapped_remote_read_bytes << '\n';
 }
 
 }  // namespace memq5

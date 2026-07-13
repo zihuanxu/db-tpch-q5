@@ -7,11 +7,19 @@ import csv
 import json
 import re
 import sys
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 HASH_RE = re.compile(r"^[0-9a-fA-F]{16}$")
 TWO_DECIMAL_RE = re.compile(r"^-?\d+\.\d{2}$")
 NUMBER_RE = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$")
+INTEGER_RE = re.compile(r"^-?\d+$")
+NON_NEGATIVE_INTEGER_RE = re.compile(r"^\d+$")
+INT64_MIN = -(1 << 63)
+INT64_MAX = (1 << 63) - 1
+UINT64_MASK = (1 << 64) - 1
+FNV_OFFSET_BASIS = 14695981039346656037
+FNV_PRIME = 1099511628211
 TIMING_KEYS = {
     "timing_build_ms",
     "timing_h2d_ms",
@@ -20,6 +28,36 @@ TIMING_KEYS = {
     "timing_scan_ms",
     "timing_total_ms",
 }
+COUNTER_KEYS = {
+    "input_lineitem_rows",
+    "matched_lineitem_rows",
+    "cpu_input_rows",
+    "gpu_input_rows",
+    "h2d_bytes",
+    "d2h_bytes",
+    "mapped_remote_read_bytes",
+}
+
+
+def format_revenue_1e4(value: int) -> str:
+    if value > INT64_MAX - 50 or value < INT64_MIN + 50:
+        raise ValueError("revenue_1e4 cannot be formatted without int64 overflow")
+    cents = (value + 50) // 100 if value >= 0 else -((-value + 50) // 100)
+    sign = "-" if cents < 0 else ""
+    cents = abs(cents)
+    return f"{sign}{cents // 100}.{cents % 100:02d}"
+
+
+def result_hash_hex(rows: list[tuple[str, int]]) -> str:
+    result = FNV_OFFSET_BASIS
+    for nation, revenue_1e4 in rows:
+        for byte in nation.encode("utf-8") + b"\xff":
+            result = ((result ^ byte) * FNV_PRIME) & UINT64_MASK
+        unsigned_revenue = revenue_1e4 & UINT64_MASK
+        for shift in range(0, 64, 8):
+            byte = (unsigned_revenue >> shift) & 0xFF
+            result = ((result ^ byte) * FNV_PRIME) & UINT64_MASK
+    return f"{result:016x}"
 
 
 def parse_actual_rows(path: Path) -> tuple[list[dict[str, str]], str]:
@@ -35,6 +73,7 @@ def parse_actual_rows(path: Path) -> tuple[list[dict[str, str]], str]:
             raise ValueError("actual rows header must be nation,revenue_1e4,revenue")
 
         rows: list[dict[str, str]] = []
+        exact_rows: list[tuple[str, int]] = []
         hashes: list[str] = []
         seen_hash = False
 
@@ -52,12 +91,20 @@ def parse_actual_rows(path: Path) -> tuple[list[dict[str, str]], str]:
                 continue
 
             if seen_hash:
-                if (
-                    len(row) != 2
-                    or key not in TIMING_KEYS
-                    or not NUMBER_RE.fullmatch(row[1])
-                ):
+                if len(row) != 2 or key not in TIMING_KEYS | COUNTER_KEYS:
                     raise ValueError(f"unexpected row after result_hash at actual row {line_number}")
+                if key in COUNTER_KEYS:
+                    if not NON_NEGATIVE_INTEGER_RE.fullmatch(row[1]):
+                        raise ValueError("counter must be a non-negative integer")
+                else:
+                    if not NUMBER_RE.fullmatch(row[1]):
+                        raise ValueError("timing must be a non-negative finite number")
+                    try:
+                        timing = Decimal(row[1])
+                    except InvalidOperation as exc:
+                        raise ValueError("timing must be a non-negative finite number") from exc
+                    if not timing.is_finite() or timing < 0:
+                        raise ValueError("timing must be a non-negative finite number")
                 continue
 
             if len(row) != 3:
@@ -67,10 +114,23 @@ def parse_actual_rows(path: Path) -> tuple[list[dict[str, str]], str]:
                     f"actual row {line_number} revenue must have exactly two decimal places"
                 )
 
+            if not INTEGER_RE.fullmatch(row[1]):
+                raise ValueError(f"actual row {line_number} revenue_1e4 must be an int64")
+            revenue_1e4 = int(row[1])
+            if revenue_1e4 < INT64_MIN or revenue_1e4 > INT64_MAX:
+                raise ValueError(f"actual row {line_number} revenue_1e4 must be an int64")
+            if format_revenue_1e4(revenue_1e4) != row[2]:
+                raise ValueError(
+                    f"actual row {line_number} revenue does not match revenue_1e4"
+                )
+
             rows.append({"nation": row[0], "revenue": row[2]})
+            exact_rows.append((row[0], revenue_1e4))
 
         if len(hashes) != 1:
             raise ValueError("expected exactly one 16-hex result_hash row")
+        if hashes[0] != result_hash_hex(exact_rows):
+            raise ValueError("result_hash does not match exact rows")
 
         return rows, hashes[0]
 

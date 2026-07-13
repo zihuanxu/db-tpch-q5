@@ -24,6 +24,9 @@ int main() {
   assert(result.rows[0].revenue_1e4 == 1900000);
   assert(result.rows[1].nation_name == "INDIA");
   assert(result.rows[1].revenue_1e4 == 900000);
+  assert(result.counters.input_lineitem_rows == 6);
+  assert(result.counters.matched_lineitem_rows == 2);
+  assert(result.counters.cpu_input_rows == 6);
 
   params.threads = 2;
   const memq5::Q5Result parallel = memq5::execute_q5_cpu(db, params);

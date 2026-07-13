@@ -21,6 +21,7 @@ from arrow_q5 import run_q5 as run_arrow_q5
 from common import ResultRow, emit_json, emit_rows, result_hash
 from prepare_arrow_dataset import prepare_dataset
 from python_q5 import run_q5 as run_python_q5
+from run_benchmarks import write_rows
 
 
 def test_result_contract_uses_raw_revenue_1e4_display_rounding_and_exact_hash() -> None:
@@ -64,6 +65,33 @@ def test_python_and_arrow_match_tiny_exact_rows_and_hash(tmp_path: Path) -> None
     assert python_rows == expected
     assert arrow_rows == expected
     assert result_hash(python_rows) == result_hash(arrow_rows)
+
+
+def test_run_benchmarks_preserves_query_counters(tmp_path: Path) -> None:
+    output = tmp_path / "counters.csv"
+    write_rows(
+        output,
+        [
+            {
+                "run_id": "0",
+                "status": "ok",
+                "engine": "cpu-specialized",
+                "input_lineitem_rows": "6",
+                "matched_lineitem_rows": "2",
+                "cpu_input_rows": "6",
+                "gpu_input_rows": "0",
+                "h2d_bytes": "0",
+                "d2h_bytes": "0",
+                "mapped_remote_read_bytes": "0",
+            }
+        ],
+    )
+
+    row = next(csv.DictReader(output.open("r", encoding="utf-8")))
+    assert row["input_lineitem_rows"] == "6"
+    assert row["matched_lineitem_rows"] == "2"
+    assert row["cpu_input_rows"] == "6"
+    assert row["mapped_remote_read_bytes"] == "0"
 
 
 def test_run_benchmarks_requires_arrow_dataset_and_skips_warmups_in_csv(tmp_path: Path) -> None:

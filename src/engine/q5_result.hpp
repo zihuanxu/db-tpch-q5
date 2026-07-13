@@ -20,9 +20,20 @@ struct Q5ResultRow {
   int64_t revenue_1e4 = 0;
 };
 
+struct Q5Counters {
+  int64_t input_lineitem_rows = 0;
+  int64_t matched_lineitem_rows = 0;
+  int64_t cpu_input_rows = 0;
+  int64_t gpu_input_rows = 0;
+  int64_t h2d_bytes = 0;
+  int64_t d2h_bytes = 0;
+  int64_t mapped_remote_read_bytes = 0;
+};
+
 struct Q5Result {
   std::vector<Q5ResultRow> rows;
   Q5Timing timing;
+  Q5Counters counters;
 };
 
 }  // namespace memq5

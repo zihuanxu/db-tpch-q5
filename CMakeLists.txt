@@ -27,10 +27,13 @@ target_compile_options(memq5_core PRIVATE
 
 if(MEMQ5_ENABLE_ARROW)
   find_package(Arrow 23.0.1 EXACT CONFIG REQUIRED)
+  find_package(ArrowAcero 23.0.1 EXACT CONFIG REQUIRED)
   find_package(OpenSSL REQUIRED)
   find_package(nlohmann_json CONFIG REQUIRED)
 
   add_library(memq5_arrow
+    src/cpu/q5_acero.cpp
+    src/cpu/q5_arrow_cpu.cpp
     src/io/arrow_q5_loader.cpp
   )
 
@@ -39,7 +42,8 @@ if(MEMQ5_ENABLE_ARROW)
   )
 
   target_link_libraries(memq5_arrow
-    PUBLIC Arrow::arrow_shared
+    PUBLIC Arrow::arrow_shared ArrowCompute::arrow_compute_shared
+           ArrowAcero::arrow_acero_shared memq5_core
     PRIVATE OpenSSL::Crypto nlohmann_json::nlohmann_json
   )
 
@@ -51,6 +55,11 @@ if(MEMQ5_ENABLE_ARROW)
     src/cli/memq5_arrow_check.cpp
   )
   target_link_libraries(memq5_arrow_check PRIVATE memq5_arrow)
+
+  add_executable(memq5_arrow_query
+    src/cli/memq5_arrow_query.cpp
+  )
+  target_link_libraries(memq5_arrow_query PRIVATE memq5_arrow)
 endif()
 
 add_executable(memq5

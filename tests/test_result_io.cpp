@@ -15,6 +15,9 @@ int main() {
   result.timing.d2h_ms = 0.0;
   result.timing.scan_ms = 2.0;
   result.timing.total_ms = 3.0;
+  result.counters.input_lineitem_rows = 6;
+  result.counters.matched_lineitem_rows = 2;
+  result.counters.cpu_input_rows = 6;
 
   const std::string hash = memq5::result_hash_hex(result);
   assert(hash.size() == 16);
@@ -34,12 +37,19 @@ int main() {
   assert(json.str().find("\"result_hash\": \"" + hash + "\"") != std::string::npos);
   assert(json.str().find("\"nation\": \"INDIA\"") != std::string::npos);
   assert(json.str().find("\"revenue_1e4\": 900000") != std::string::npos);
+  assert(json.str().find("\"input_lineitem_rows\": 6") !=
+         std::string::npos);
+  assert(json.str().find("\"matched_lineitem_rows\": 2") !=
+         std::string::npos);
+  assert(json.str().find("\"cpu_input_rows\": 6") != std::string::npos);
   assert(json.str().find("revenue_cents") == std::string::npos);
 
   std::ostringstream bench;
   memq5::write_benchmark_csv(bench, "cpu", "ASIA", "1994-01-01", 4, result);
   assert(bench.str().find("engine,region,date,threads,result_rows,result_hash") == 0);
   assert(bench.str().find("cpu,ASIA,1994-01-01,4,2," + hash) != std::string::npos);
+  assert(bench.str().find("input_lineitem_rows,matched_lineitem_rows") !=
+         std::string::npos);
 
   return 0;
 }

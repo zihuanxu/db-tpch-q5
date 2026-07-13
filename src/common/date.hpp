@@ -31,6 +31,14 @@ inline CivilDate parse_date(const std::string& value) {
   if (value.size() != 10 || value[4] != '-' || value[7] != '-') {
     throw std::invalid_argument("date must use YYYY-MM-DD format");
   }
+  for (std::size_t index = 0; index < value.size(); ++index) {
+    if (index == 4 || index == 7) {
+      continue;
+    }
+    if (value[index] < '0' || value[index] > '9') {
+      throw std::invalid_argument("date must contain only YYYY-MM-DD digits");
+    }
+  }
   CivilDate date;
   date.year = std::stoi(value.substr(0, 4));
   date.month = std::stoi(value.substr(5, 2));

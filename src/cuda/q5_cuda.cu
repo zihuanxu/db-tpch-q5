@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -196,7 +197,7 @@ __global__ void lineitem_q5_aggregate_kernel(
     int64_t lineitem_count, const int32_t* order_nation_by_key,
     int32_t order_map_size, const int32_t* supplier_nation_by_key,
     int32_t supplier_map_size, unsigned long long* revenue_by_nation,
-    int32_t revenue_count) {
+    int32_t revenue_count, unsigned long long* matched_rows) {
   const int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx >= lineitem_count) {
     return;
@@ -218,8 +219,46 @@ __global__ void lineitem_q5_aggregate_kernel(
 
   const long long revenue = compute_revenue_1e4_device(
       l_extendedprice_cents[idx], l_discount_hundredths[idx]);
+  atomicAdd(matched_rows, 1ull);
   atomicAdd(&revenue_by_nation[order_nation],
             static_cast<unsigned long long>(revenue));
+}
+
+int64_t checked_byte_count(std::size_t lineitem_count,
+                           std::size_t order_map_size,
+                           std::size_t supplier_map_size) {
+  constexpr std::size_t kLineitemRowBytes =
+      sizeof(int32_t) * 3 + sizeof(int64_t);
+  const std::size_t size_max = std::numeric_limits<std::size_t>::max();
+  if (order_map_size > size_max - supplier_map_size) {
+    throw std::overflow_error("CUDA input byte count overflow");
+  }
+  const std::size_t map_entries = order_map_size + supplier_map_size;
+  if (map_entries > size_max / sizeof(int32_t) ||
+      lineitem_count > size_max / kLineitemRowBytes) {
+    throw std::overflow_error("CUDA input byte count overflow");
+  }
+  const std::size_t map_bytes = map_entries * sizeof(int32_t);
+  const std::size_t lineitem_bytes = lineitem_count * kLineitemRowBytes;
+  if (lineitem_bytes > size_max - map_bytes) {
+    throw std::overflow_error("CUDA input byte count overflow");
+  }
+  const std::size_t bytes = lineitem_bytes + map_bytes;
+  if (bytes > static_cast<std::size_t>(std::numeric_limits<int64_t>::max())) {
+    throw std::overflow_error("CUDA input byte count exceeds int64");
+  }
+  return static_cast<int64_t>(bytes);
+}
+
+int64_t checked_output_byte_count(std::size_t revenue_count) {
+  if (revenue_count >
+      static_cast<std::size_t>(std::numeric_limits<int64_t>::max() /
+                               sizeof(unsigned long long)) -
+          1) {
+    throw std::overflow_error("CUDA output byte count exceeds int64");
+  }
+  return static_cast<int64_t>((revenue_count + 1) *
+                              sizeof(unsigned long long));
 }
 
 std::vector<int64_t> to_signed_revenue(const std::vector<unsigned long long>& input) {
@@ -258,7 +297,8 @@ double launch_lineitem_kernel(const int32_t* l_orderkey, const int32_t* l_suppke
                               const int32_t* supplier_nation_by_key,
                               std::size_t supplier_map_size,
                               unsigned long long* revenue_by_nation,
-                              std::size_t revenue_count) {
+                              std::size_t revenue_count,
+                              unsigned long long* matched_rows) {
   CudaEvent kernel_start;
   CudaEvent kernel_stop;
   const int threads = 256;
@@ -271,7 +311,7 @@ double launch_lineitem_kernel(const int32_t* l_orderkey, const int32_t* l_suppke
         static_cast<int64_t>(lineitem_count), order_nation_by_key,
         static_cast<int32_t>(order_map_size), supplier_nation_by_key,
         static_cast<int32_t>(supplier_map_size), revenue_by_nation,
-        static_cast<int32_t>(revenue_count));
+        static_cast<int32_t>(revenue_count), matched_rows);
     check_cuda(cudaGetLastError(), "lineitem_q5_aggregate_kernel launch");
   }
   check_cuda(cudaEventRecord(kernel_stop.get()), "cudaEventRecord kernel_stop");
@@ -297,6 +337,7 @@ Q5Result execute_q5_gpu_copy(const TpchDatabase& db, const Q5Params& params) {
   DeviceBuffer<int32_t> d_order_nation(plan.order_nation_by_key.size());
   DeviceBuffer<int32_t> d_supplier_nation(plan.supplier_nation_by_key.size());
   DeviceBuffer<unsigned long long> d_revenue(revenue_count);
+  DeviceBuffer<unsigned long long> d_matched(1);
 
   CudaEvent h2d_start;
   CudaEvent h2d_stop;
@@ -314,6 +355,8 @@ Q5Result execute_q5_gpu_copy(const TpchDatabase& db, const Q5Params& params) {
   check_cuda(cudaMemset(d_revenue.data(), 0,
                         revenue_count * sizeof(unsigned long long)),
              "cudaMemset revenue");
+  check_cuda(cudaMemset(d_matched.data(), 0, sizeof(unsigned long long)),
+             "cudaMemset matched rows");
   check_cuda(cudaEventRecord(h2d_stop.get()), "cudaEventRecord h2d_stop");
   result.timing.h2d_ms = elapsed_ms(h2d_start, h2d_stop);
 
@@ -321,19 +364,29 @@ Q5Result execute_q5_gpu_copy(const TpchDatabase& db, const Q5Params& params) {
       d_l_orderkey.data(), d_l_suppkey.data(), d_l_extendedprice.data(),
       d_l_discount.data(), lineitem_count, d_order_nation.data(),
       d_order_nation.size(), d_supplier_nation.data(), d_supplier_nation.size(),
-      d_revenue.data(), d_revenue.size());
+      d_revenue.data(), d_revenue.size(), d_matched.data());
 
   std::vector<unsigned long long> revenue_unsigned(revenue_count, 0);
+  unsigned long long matched_rows = 0;
   CudaEvent d2h_start;
   CudaEvent d2h_stop;
   check_cuda(cudaEventRecord(d2h_start.get()), "cudaEventRecord d2h_start");
   d_revenue.copy_to_host(revenue_unsigned.data(), revenue_unsigned.size());
+  d_matched.copy_to_host(&matched_rows, 1);
   check_cuda(cudaEventRecord(d2h_stop.get()), "cudaEventRecord d2h_stop");
   result.timing.d2h_ms = elapsed_ms(d2h_start, d2h_stop);
   result.timing.scan_ms =
       result.timing.h2d_ms + result.timing.kernel_ms + result.timing.d2h_ms;
 
   append_rows_from_revenue(&result, plan, revenue_unsigned);
+
+  result.counters.input_lineitem_rows = static_cast<int64_t>(lineitem_count);
+  result.counters.matched_lineitem_rows = static_cast<int64_t>(matched_rows);
+  result.counters.gpu_input_rows = static_cast<int64_t>(lineitem_count);
+  result.counters.h2d_bytes = checked_byte_count(
+      lineitem_count, plan.order_nation_by_key.size(),
+      plan.supplier_nation_by_key.size());
+  result.counters.d2h_bytes = checked_output_byte_count(revenue_count);
 
   result.timing.total_ms = total_timer.elapsed_ms();
   return result;
@@ -359,6 +412,7 @@ Q5Result execute_q5_gpu_managed(const TpchDatabase& db, const Q5Params& params) 
   ManagedBuffer<int32_t> m_order_nation(plan.order_nation_by_key.size());
   ManagedBuffer<int32_t> m_supplier_nation(plan.supplier_nation_by_key.size());
   ManagedBuffer<unsigned long long> m_revenue(revenue_count);
+  ManagedBuffer<unsigned long long> m_matched(1);
 
   m_l_orderkey.copy_from_host(db.lineitem.l_orderkey.data(), lineitem_count);
   m_l_suppkey.copy_from_host(db.lineitem.l_suppkey.data(), lineitem_count);
@@ -371,6 +425,7 @@ Q5Result execute_q5_gpu_managed(const TpchDatabase& db, const Q5Params& params) 
   m_supplier_nation.copy_from_host(plan.supplier_nation_by_key.data(),
                                    plan.supplier_nation_by_key.size());
   m_revenue.zero();
+  m_matched.zero();
 
   CudaEvent h2d_start;
   CudaEvent h2d_stop;
@@ -382,6 +437,7 @@ Q5Result execute_q5_gpu_managed(const TpchDatabase& db, const Q5Params& params) 
   m_order_nation.prefetch_to_device(device);
   m_supplier_nation.prefetch_to_device(device);
   m_revenue.prefetch_to_device(device);
+  m_matched.prefetch_to_device(device);
   check_cuda(cudaEventRecord(h2d_stop.get()), "cudaEventRecord managed_h2d_stop");
   result.timing.h2d_ms = elapsed_ms(h2d_start, h2d_stop);
 
@@ -389,22 +445,32 @@ Q5Result execute_q5_gpu_managed(const TpchDatabase& db, const Q5Params& params) 
       m_l_orderkey.data(), m_l_suppkey.data(), m_l_extendedprice.data(),
       m_l_discount.data(), lineitem_count, m_order_nation.data(),
       m_order_nation.size(), m_supplier_nation.data(), m_supplier_nation.size(),
-      m_revenue.data(), m_revenue.size());
+      m_revenue.data(), m_revenue.size(), m_matched.data());
 
   CudaEvent d2h_start;
   CudaEvent d2h_stop;
   check_cuda(cudaEventRecord(d2h_start.get()), "cudaEventRecord managed_d2h_start");
   m_revenue.prefetch_to_cpu();
+  m_matched.prefetch_to_cpu();
   check_cuda(cudaEventRecord(d2h_stop.get()), "cudaEventRecord managed_d2h_stop");
   result.timing.d2h_ms = elapsed_ms(d2h_start, d2h_stop);
 
   std::vector<unsigned long long> revenue_unsigned(revenue_count, 0);
   std::copy(m_revenue.data(), m_revenue.data() + revenue_count,
             revenue_unsigned.begin());
+  const unsigned long long matched_rows = m_matched.data()[0];
 
   result.timing.scan_ms =
       result.timing.h2d_ms + result.timing.kernel_ms + result.timing.d2h_ms;
   append_rows_from_revenue(&result, plan, revenue_unsigned);
+  result.counters.input_lineitem_rows = static_cast<int64_t>(lineitem_count);
+  result.counters.matched_lineitem_rows = static_cast<int64_t>(matched_rows);
+  result.counters.gpu_input_rows = static_cast<int64_t>(lineitem_count);
+  result.counters.h2d_bytes =
+      checked_byte_count(lineitem_count, plan.order_nation_by_key.size(),
+                         plan.supplier_nation_by_key.size()) +
+      checked_output_byte_count(revenue_count);
+  result.counters.d2h_bytes = checked_output_byte_count(revenue_count);
   result.timing.total_ms = total_timer.elapsed_ms();
   return result;
 }
@@ -426,6 +492,7 @@ Q5Result execute_q5_gpu_mapped(const TpchDatabase& db, const Q5Params& params) {
   MappedHostBuffer<int32_t> h_order_nation(plan.order_nation_by_key.size());
   MappedHostBuffer<int32_t> h_supplier_nation(plan.supplier_nation_by_key.size());
   DeviceBuffer<unsigned long long> d_revenue(revenue_count);
+  DeviceBuffer<unsigned long long> d_matched(1);
 
   h_l_orderkey.copy_from_host(db.lineitem.l_orderkey.data(), lineitem_count);
   h_l_suppkey.copy_from_host(db.lineitem.l_suppkey.data(), lineitem_count);
@@ -444,6 +511,8 @@ Q5Result execute_q5_gpu_mapped(const TpchDatabase& db, const Q5Params& params) {
   check_cuda(cudaMemset(d_revenue.data(), 0,
                         revenue_count * sizeof(unsigned long long)),
              "cudaMemset mapped revenue");
+  check_cuda(cudaMemset(d_matched.data(), 0, sizeof(unsigned long long)),
+             "cudaMemset mapped matched rows");
   check_cuda(cudaEventRecord(setup_stop.get()), "cudaEventRecord mapped_setup_stop");
   result.timing.h2d_ms = elapsed_ms(setup_start, setup_stop);
 
@@ -452,19 +521,28 @@ Q5Result execute_q5_gpu_mapped(const TpchDatabase& db, const Q5Params& params) {
       h_l_extendedprice.device_data(), h_l_discount.device_data(), lineitem_count,
       h_order_nation.device_data(), h_order_nation.size(),
       h_supplier_nation.device_data(), h_supplier_nation.size(), d_revenue.data(),
-      d_revenue.size());
+      d_revenue.size(), d_matched.data());
 
   std::vector<unsigned long long> revenue_unsigned(revenue_count, 0);
+  unsigned long long matched_rows = 0;
   CudaEvent d2h_start;
   CudaEvent d2h_stop;
   check_cuda(cudaEventRecord(d2h_start.get()), "cudaEventRecord mapped_d2h_start");
   d_revenue.copy_to_host(revenue_unsigned.data(), revenue_unsigned.size());
+  d_matched.copy_to_host(&matched_rows, 1);
   check_cuda(cudaEventRecord(d2h_stop.get()), "cudaEventRecord mapped_d2h_stop");
   result.timing.d2h_ms = elapsed_ms(d2h_start, d2h_stop);
 
   result.timing.scan_ms =
       result.timing.h2d_ms + result.timing.kernel_ms + result.timing.d2h_ms;
   append_rows_from_revenue(&result, plan, revenue_unsigned);
+  result.counters.input_lineitem_rows = static_cast<int64_t>(lineitem_count);
+  result.counters.matched_lineitem_rows = static_cast<int64_t>(matched_rows);
+  result.counters.gpu_input_rows = static_cast<int64_t>(lineitem_count);
+  result.counters.d2h_bytes = checked_output_byte_count(revenue_count);
+  result.counters.mapped_remote_read_bytes = checked_byte_count(
+      lineitem_count, plan.order_nation_by_key.size(),
+      plan.supplier_nation_by_key.size());
   result.timing.total_ms = total_timer.elapsed_ms();
   return result;
 }

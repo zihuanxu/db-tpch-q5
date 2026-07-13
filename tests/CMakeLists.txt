@@ -4,6 +4,9 @@ function(add_memq5_test name source)
   target_compile_definitions(${name} PRIVATE
     MEMQ5_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny"
   )
+  target_compile_options(${name} PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-UNDEBUG>
+  )
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
@@ -27,6 +30,67 @@ if(MEMQ5_ENABLE_ARROW)
     $<$<CXX_COMPILER_ID:GNU,Clang>:-UNDEBUG>
   )
   add_test(NAME test_arrow_q5_loader COMMAND test_arrow_q5_loader)
+
+  add_executable(test_q5_arrow_cpu test_q5_arrow_cpu.cpp)
+  target_link_libraries(test_q5_arrow_cpu PRIVATE memq5_arrow)
+  target_compile_definitions(test_q5_arrow_cpu PRIVATE
+    MEMQ5_ARROW_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow"
+  )
+  target_compile_options(test_q5_arrow_cpu PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-UNDEBUG>
+  )
+  add_test(NAME test_q5_arrow_cpu COMMAND test_q5_arrow_cpu)
+
+  add_executable(test_q5_acero test_q5_acero.cpp)
+  target_link_libraries(test_q5_acero PRIVATE memq5_arrow)
+  target_compile_definitions(test_q5_acero PRIVATE
+    MEMQ5_ARROW_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow"
+  )
+  target_compile_options(test_q5_acero PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-UNDEBUG>
+  )
+  add_test(NAME test_q5_acero COMMAND test_q5_acero)
+
+  add_test(
+    NAME test_q5_arrow_cli_specialized
+    COMMAND $<TARGET_FILE:memq5_arrow_query>
+      --dataset ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow
+      --engine cpu-specialized --region ASIA --date 1994-01-01
+      --threads 2 --format json
+  )
+  set_tests_properties(test_q5_arrow_cli_specialized PROPERTIES
+    PASS_REGULAR_EXPRESSION "\"result_hash\": \"248d10b6ee352953\""
+  )
+
+  add_test(
+    NAME test_q5_arrow_cli_acero
+    COMMAND $<TARGET_FILE:memq5_arrow_query>
+      --dataset ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow
+      --engine arrow-acero --region ASIA --date 1994-01-01
+      --threads 2 --format json
+  )
+  set_tests_properties(test_q5_arrow_cli_acero PROPERTIES
+    PASS_REGULAR_EXPRESSION "\"result_hash\": \"248d10b6ee352953\""
+  )
+
+  foreach(invalid_case IN ITEMS bad_threads bad_date bad_calendar_date)
+    if(invalid_case STREQUAL "bad_threads")
+      set(invalid_args --threads 2junk)
+    elseif(invalid_case STREQUAL "bad_date")
+      set(invalid_args --date 199x-01-01)
+    else()
+      set(invalid_args --date 1994-02-30)
+    endif()
+    add_test(
+      NAME test_q5_arrow_cli_${invalid_case}
+      COMMAND $<TARGET_FILE:memq5_arrow_query>
+        --dataset ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow
+        --engine cpu-specialized ${invalid_args} --format json
+    )
+    set_tests_properties(test_q5_arrow_cli_${invalid_case} PROPERTIES
+      WILL_FAIL TRUE
+    )
+  endforeach()
 endif()
 
 if(MEMQ5_ENABLE_CUDA)
@@ -40,6 +104,9 @@ if(MEMQ5_ENABLE_CUDA)
     CUDA_STANDARD 17
     CUDA_STANDARD_REQUIRED ON
     CUDA_EXTENSIONS OFF
+  )
+  target_compile_options(test_q5_cuda PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-UNDEBUG>
   )
   add_test(NAME test_q5_cuda COMMAND test_q5_cuda)
 endif()

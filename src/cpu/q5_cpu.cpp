@@ -16,7 +16,8 @@ namespace {
 
 void scan_lineitem_range(const TpchDatabase& db, const Q5PreparedPlan& plan,
                          std::size_t begin, std::size_t end,
-                         std::vector<int64_t>* revenue_by_nation) {
+                         std::vector<int64_t>* revenue_by_nation,
+                         int64_t* matched_rows) {
   for (std::size_t row = begin; row < end; ++row) {
     const int32_t orderkey = db.lineitem.l_orderkey[row];
     const int32_t suppkey = db.lineitem.l_suppkey[row];
@@ -34,6 +35,7 @@ void scan_lineitem_range(const TpchDatabase& db, const Q5PreparedPlan& plan,
     (*revenue_by_nation)[static_cast<std::size_t>(order_nation)] +=
         compute_revenue_1e4(db.lineitem.l_extendedprice_cents[row],
                             db.lineitem.l_discount_hundredths[row]);
+    ++(*matched_rows);
   }
 }
 
@@ -54,13 +56,17 @@ Q5Result execute_q5_cpu(const TpchDatabase& db, const Q5Params& params) {
   const int worker_count =
       static_cast<int>(std::min<std::size_t>(requested_threads,
                                              std::max<std::size_t>(lineitem_count, 1)));
+  int64_t matched_rows = 0;
 
   if (worker_count <= 1 || lineitem_count == 0) {
-    scan_lineitem_range(db, plan, 0, lineitem_count, &revenue_by_nation);
+    scan_lineitem_range(db, plan, 0, lineitem_count, &revenue_by_nation,
+                        &matched_rows);
   } else {
     std::vector<std::vector<int64_t>> local_revenues(
         static_cast<std::size_t>(worker_count),
         std::vector<int64_t>(revenue_by_nation.size(), 0));
+    std::vector<int64_t> local_matched_rows(
+        static_cast<std::size_t>(worker_count), 0);
     std::vector<std::thread> workers;
     std::exception_ptr worker_exception;
     std::mutex worker_exception_mutex;
@@ -74,10 +80,12 @@ Q5Result execute_q5_cpu(const TpchDatabase& db, const Q5Params& params) {
           lineitem_count * static_cast<std::size_t>(worker + 1) /
           static_cast<std::size_t>(worker_count);
       workers.emplace_back([&db, &plan, begin, end, &local_revenues, worker,
-                            &worker_exception, &worker_exception_mutex]() {
+                            &local_matched_rows, &worker_exception,
+                            &worker_exception_mutex]() {
         try {
           scan_lineitem_range(db, plan, begin, end,
-                              &local_revenues[static_cast<std::size_t>(worker)]);
+                              &local_revenues[static_cast<std::size_t>(worker)],
+                              &local_matched_rows[static_cast<std::size_t>(worker)]);
         } catch (...) {
           std::lock_guard<std::mutex> lock(worker_exception_mutex);
           if (!worker_exception) {
@@ -100,9 +108,15 @@ Q5Result execute_q5_cpu(const TpchDatabase& db, const Q5Params& params) {
         revenue_by_nation[nation] += local[nation];
       }
     }
+    for (const int64_t local_matched : local_matched_rows) {
+      matched_rows += local_matched;
+    }
   }
 
   result.timing.scan_ms = scan_timer.elapsed_ms();
+  result.counters.input_lineitem_rows = static_cast<int64_t>(lineitem_count);
+  result.counters.matched_lineitem_rows = matched_rows;
+  result.counters.cpu_input_rows = static_cast<int64_t>(lineitem_count);
 
   for (std::size_t nation = 0; nation < revenue_by_nation.size(); ++nation) {
     if (revenue_by_nation[nation] != 0) {

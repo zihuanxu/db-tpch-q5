@@ -335,6 +335,13 @@ arrow::Result<ArrowQ5Dataset> load_arrow_q5_dataset(
         ArrowQ5TableMetadata{file_name, rows, bytes, record_batches, canonical_hash});
   }
 
+  dataset.region = dataset.tables.at("region");
+  dataset.nation = dataset.tables.at("nation");
+  dataset.supplier = dataset.tables.at("supplier");
+  dataset.customer = dataset.tables.at("customer");
+  dataset.orders = dataset.tables.at("orders");
+  dataset.lineitem = dataset.tables.at("lineitem");
+
   return dataset;
 }
 

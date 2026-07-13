@@ -50,7 +50,7 @@ python3 scripts/package_submission.py \
 | 课程要求 | 最小版本中的实现 | 状态 |
 |---|---|---|
 | TPC-H Q5 CPU-GPU 协同查询 | CPU 构造过滤传播 map，CPU 或 CUDA 扫描 `lineitem` 聚合 | 已实现 |
-| CPU 端 Arrow | Arrow IPC 数据集；C++ loader 完成 schema/manifest 校验；PyArrow 完成 Q5；C++ 查询仍待 V2.2 接入 | 部分实现，较 V1 增强 |
+| CPU 端 Arrow | Arrow IPC 数据集；C++ loader 校验 schema/manifest；`cpu-specialized` 直接读 Arrow buffers；`arrow-acero` 使用 Acero filter/hash join | 已实现（V2） |
 | PCIe 数据传输 | `gpu-copy` 使用显式 `cudaMemcpy` | 已实现 |
 | UVA/统一地址访问 | `gpu-mapped` 使用 mapped pinned host memory；另有 `gpu-managed` | 已实现 |
 | GPU 算子库 | RAPIDS cuDF Q5 baseline | 已实现并跑过 SF1 |
@@ -63,7 +63,7 @@ python3 scripts/package_submission.py \
 
 - 只做了 SF1，没有 SF10 或更大规模。
 - GPU 只负责最后的 `lineitem` 扫描聚合，查询前半段仍在 CPU。
-- 自定义 C++ 列容器不是完整 Apache Arrow；真正的 Arrow 实验在 PyArrow baseline。
+- 旧 GPU 路径仍使用从 `.tbl` 构造的自定义连续列；V3 才切换到 Arrow 输入。
 - C++ 与 PyArrow/cuDF 的内部计时边界不同，不能把 `total_ms` 直接当成严格公平排名。
 - 最小正式实验只使用固定 8 线程 C++ 设置、一次预热和三次重复，没有置信区间。
 
