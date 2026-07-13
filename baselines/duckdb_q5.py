@@ -62,7 +62,7 @@ def load_duckdb(con, data_dir: Path) -> None:
     con.execute(
         "create table lineitem("
         "l_orderkey integer, l_suppkey integer, "
-        "l_extendedprice_cents bigint, l_discount_bp integer)"
+        "l_extendedprice_cents bigint, l_discount_hundredths integer)"
     )
     con.executemany(
         "insert into lineitem values (?, ?, ?, ?)",
@@ -71,7 +71,7 @@ def load_duckdb(con, data_dir: Path) -> None:
                 int(row[0]),
                 int(row[2]),
                 parse_decimal_scaled(row[5], 100),
-                parse_decimal_scaled(row[6], 10000),
+                parse_decimal_scaled(row[6], 100),
             )
             for row in read_tbl(data_dir / "lineitem.tbl")
         ],
@@ -92,7 +92,7 @@ def run_q5(data_dir: Path, region: str, start_date: str) -> list[ResultRow]:
         """
         select
           n.n_name,
-          sum(cast(floor((l.l_extendedprice_cents * (10000 - l.l_discount_bp)) / 10000) as bigint)) as revenue_cents
+          sum(cast(l.l_extendedprice_cents * (100 - l.l_discount_hundredths) as bigint)) as revenue_1e4
         from customer c
         join orders o on c.c_custkey = o.o_custkey
         join lineitem l on l.l_orderkey = o.o_orderkey
@@ -104,7 +104,7 @@ def run_q5(data_dir: Path, region: str, start_date: str) -> list[ResultRow]:
           and o.o_orderdate >= cast(? as date)
           and o.o_orderdate < cast(? as date)
         group by n.n_name
-        order by revenue_cents desc, n.n_name
+        order by revenue_1e4 desc, n.n_name
         """,
         [region, start_date, end_date],
     ).fetchall()

@@ -6,133 +6,75 @@ import argparse
 import sys
 import time
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.compute as pc
-import pyarrow.csv as csv
 
+from arrow_dataset import load_arrow_dataset
 from common import ResultRow, emit_benchmark, emit_json, emit_rows
 
 
-def add_year(value: str) -> str:
+def add_year(value: str) -> date:
     parsed = date.fromisoformat(value)
     try:
-        return parsed.replace(year=parsed.year + 1).isoformat()
+        return parsed.replace(year=parsed.year + 1)
     except ValueError:
-        return parsed.replace(year=parsed.year + 1, day=28).isoformat()
+        return parsed.replace(year=parsed.year + 1, day=28)
 
 
-def read_arrow_table(
-    path: Path,
-    names: list[str],
-    usecols: list[str],
-    column_types: dict[str, pa.DataType],
-) -> pa.Table:
-    return csv.read_csv(
-        path,
-        read_options=csv.ReadOptions(column_names=names),
-        parse_options=csv.ParseOptions(delimiter="|"),
-        convert_options=csv.ConvertOptions(
-            include_columns=usecols,
-            column_types=column_types,
-            strings_can_be_null=False,
-        ),
-    )
+def _replace_column(table: pa.Table, column_name: str, column: pa.Array | pa.ChunkedArray) -> pa.Table:
+    index = table.schema.get_field_index(column_name)
+    return table.set_column(index, column_name, column)
 
 
-def run_q5(data_dir: Path, region_name: str, start_date: str) -> list[ResultRow]:
-    region = read_arrow_table(
-        data_dir / "region.tbl",
-        ["r_regionkey", "r_name", "r_comment", "_empty"],
-        ["r_regionkey", "r_name"],
-        {"r_regionkey": pa.int64(), "r_name": pa.string()},
+def _decode_name_column(table: pa.Table, column_name: str) -> pa.Table:
+    return _replace_column(table, column_name, pc.cast(table[column_name], pa.string()))
+
+
+def _decimal_column_to_scaled_int(
+    column: pa.Array | pa.ChunkedArray,
+    multiplier: int,
+    integer_type: pa.DataType = pa.int64(),
+) -> pa.Array | pa.ChunkedArray:
+    decimal_scalar = pa.scalar(Decimal(str(multiplier)), type=pa.decimal128(len(str(multiplier)), 0))
+    multiplied = pc.multiply(column, decimal_scalar)
+    precision = max(18, getattr(column.type, "precision", 18) + len(str(multiplier)))
+    scaled = pc.cast(multiplied, pa.decimal128(precision, 0))
+    return pc.cast(scaled, integer_type)
+
+
+def _load_q5_tables(dataset_path: Path) -> dict[str, pa.Table]:
+    tables = load_arrow_dataset(dataset_path)
+    tables["region"] = _decode_name_column(tables["region"], "r_name")
+    tables["nation"] = _decode_name_column(tables["nation"], "n_name")
+
+    lineitem = tables["lineitem"]
+    lineitem = lineitem.append_column(
+        "l_extendedprice_cents",
+        _decimal_column_to_scaled_int(lineitem["l_extendedprice"], 100),
     )
-    nation = read_arrow_table(
-        data_dir / "nation.tbl",
-        ["n_nationkey", "n_name", "n_regionkey", "n_comment", "_empty"],
-        ["n_nationkey", "n_name", "n_regionkey"],
-        {"n_nationkey": pa.int64(), "n_name": pa.string(), "n_regionkey": pa.int64()},
+    lineitem = lineitem.append_column(
+        "l_discount_hundredths",
+        _decimal_column_to_scaled_int(lineitem["l_discount"], 100, pa.int32()),
     )
-    supplier = read_arrow_table(
-        data_dir / "supplier.tbl",
-        [
-            "s_suppkey",
-            "s_name",
-            "s_address",
-            "s_nationkey",
-            "s_phone",
-            "s_acctbal",
-            "s_comment",
-            "_empty",
-        ],
-        ["s_suppkey", "s_nationkey"],
-        {"s_suppkey": pa.int64(), "s_nationkey": pa.int64()},
-    )
-    customer = read_arrow_table(
-        data_dir / "customer.tbl",
-        [
-            "c_custkey",
-            "c_name",
-            "c_address",
-            "c_nationkey",
-            "c_phone",
-            "c_acctbal",
-            "c_mktsegment",
-            "c_comment",
-            "_empty",
-        ],
-        ["c_custkey", "c_nationkey"],
-        {"c_custkey": pa.int64(), "c_nationkey": pa.int64()},
-    )
-    orders = read_arrow_table(
-        data_dir / "orders.tbl",
-        [
-            "o_orderkey",
-            "o_custkey",
-            "o_orderstatus",
-            "o_totalprice",
-            "o_orderdate",
-            "o_orderpriority",
-            "o_clerk",
-            "o_shippriority",
-            "o_comment",
-            "_empty",
-        ],
-        ["o_orderkey", "o_custkey", "o_orderdate"],
-        {"o_orderkey": pa.int64(), "o_custkey": pa.int64(), "o_orderdate": pa.string()},
-    )
-    lineitem = read_arrow_table(
-        data_dir / "lineitem.tbl",
-        [
-            "l_orderkey",
-            "l_partkey",
-            "l_suppkey",
-            "l_linenumber",
-            "l_quantity",
-            "l_extendedprice",
-            "l_discount",
-            "l_tax",
-            "l_returnflag",
-            "l_linestatus",
-            "l_shipdate",
-            "l_commitdate",
-            "l_receiptdate",
-            "l_shipinstruct",
-            "l_shipmode",
-            "l_comment",
-            "_empty",
-        ],
-        ["l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"],
-        {
-            "l_orderkey": pa.int64(),
-            "l_suppkey": pa.int64(),
-            "l_extendedprice": pa.float64(),
-            "l_discount": pa.float64(),
-        },
+    tables["lineitem"] = lineitem
+    return tables
+
+
+def run_q5(dataset_path: Path, region_name: str, start_date: str) -> list[ResultRow]:
+    tables = _load_q5_tables(dataset_path)
+    region = tables["region"]
+    nation = tables["nation"]
+    supplier = tables["supplier"]
+    customer = tables["customer"]
+    orders = tables["orders"]
+    lineitem = tables["lineitem"].select(
+        ["l_orderkey", "l_suppkey", "l_extendedprice_cents", "l_discount_hundredths"]
     )
 
-    selected_region = region.filter(pc.equal(region["r_name"], region_name))
+    selected_region = region.filter(pc.equal(region["r_name"], pa.scalar(region_name, type=pa.string())))
     selected_nation = nation.join(
         selected_region,
         keys="n_regionkey",
@@ -148,17 +90,18 @@ def run_q5(data_dir: Path, region_name: str, start_date: str) -> list[ResultRow]
     ).select(["s_suppkey", "s_nationkey", "n_name"])
 
     customer = customer.join(
-        selected_nation,
+        selected_nation.select(["n_nationkey"]),
         keys="c_nationkey",
         right_keys="n_nationkey",
         join_type="inner",
     ).select(["c_custkey", "c_nationkey"])
 
-    end_date = add_year(start_date)
+    start = date.fromisoformat(start_date)
+    end = add_year(start_date)
     orders = orders.filter(
         pc.and_(
-            pc.greater_equal(orders["o_orderdate"], start_date),
-            pc.less(orders["o_orderdate"], end_date),
+            pc.greater_equal(orders["o_orderdate"], pa.scalar(start, type=pa.date32())),
+            pc.less(orders["o_orderdate"], pa.scalar(end, type=pa.date32())),
         )
     )
 
@@ -183,41 +126,32 @@ def run_q5(data_dir: Path, region_name: str, start_date: str) -> list[ResultRow]
     )
     joined = joined.filter(pc.equal(joined["c_nationkey"], joined["s_nationkey"]))
 
-    extendedprice_cents = pc.cast(
-        pc.round(pc.multiply(joined["l_extendedprice"], 100)),
-        pa.int64(),
+    revenue_1e4 = pc.multiply(
+        joined["l_extendedprice_cents"],
+        pc.subtract(pa.scalar(100, type=pa.int32()), joined["l_discount_hundredths"]),
     )
-    discount_bp = pc.cast(
-        pc.round(pc.multiply(joined["l_discount"], 10000)),
-        pa.int64(),
-    )
-    revenue_cents = pc.divide(
-        pc.multiply(extendedprice_cents, pc.subtract(10000, discount_bp)),
-        10000,
-    )
-    joined = joined.append_column("revenue_cents", revenue_cents)
-
     result = (
-        joined.group_by("n_name")
-        .aggregate([("revenue_cents", "sum")])
-        .sort_by([("revenue_cents_sum", "descending"), ("n_name", "ascending")])
+        joined.append_column("revenue_1e4", revenue_1e4)
+        .group_by("n_name")
+        .aggregate([("revenue_1e4", "sum")])
+        .sort_by([("revenue_1e4_sum", "descending"), ("n_name", "ascending")])
     )
 
     names = result["n_name"].to_pylist()
-    revenues = result["revenue_cents_sum"].to_pylist()
+    revenues = result["revenue_1e4_sum"].to_pylist()
     return [ResultRow(str(name), int(revenue)) for name, revenue in zip(names, revenues)]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="PyArrow baseline for TPC-H Q5")
-    parser.add_argument("--data-dir", required=True)
+    parser.add_argument("--dataset", required=True)
     parser.add_argument("--region", default="ASIA")
     parser.add_argument("--date", default="1994-01-01")
     parser.add_argument("--format", choices=["rows", "json", "benchmark"], default="rows")
     args = parser.parse_args()
 
     started = time.perf_counter()
-    rows = run_q5(Path(args.data_dir), args.region, args.date)
+    rows = run_q5(Path(args.dataset), args.region, args.date)
     total_ms = (time.perf_counter() - started) * 1000.0
     if args.format == "rows":
         emit_rows(rows)

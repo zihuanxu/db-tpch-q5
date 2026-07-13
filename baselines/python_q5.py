@@ -73,8 +73,8 @@ def run_q5(data_dir: Path, region_name: str, start_date: str) -> list[ResultRow]
         if order_nation_key is None or order_nation_key != supplier_nation_key:
             continue
         extendedprice_cents = parse_decimal_scaled(row[5], 100)
-        discount_bp = parse_decimal_scaled(row[6], 10000)
-        revenue = extendedprice_cents * (10000 - discount_bp) // 10000
+        discount_hundredths = parse_decimal_scaled(row[6], 100)
+        revenue = extendedprice_cents * (100 - discount_hundredths)
         revenue_by_nation[order_nation_key] = revenue_by_nation.get(order_nation_key, 0) + revenue
 
     rows = [
@@ -82,7 +82,7 @@ def run_q5(data_dir: Path, region_name: str, start_date: str) -> list[ResultRow]
         for key, revenue in revenue_by_nation.items()
         if revenue != 0
     ]
-    rows.sort(key=lambda row: (-row.revenue_cents, row.nation))
+    rows.sort(key=lambda row: (-row.revenue_1e4, row.nation))
     return rows
 
 

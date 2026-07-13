@@ -6,8 +6,13 @@ import argparse
 import sys
 import time
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
+import pyarrow as pa
+import pyarrow.compute as pc
+
+from arrow_dataset import load_arrow_dataset
 from common import ResultRow, emit_benchmark, emit_json, emit_rows
 
 
@@ -19,106 +24,65 @@ def add_year(value: str) -> str:
         return parsed.replace(year=parsed.year + 1, day=28).isoformat()
 
 
-def read_cudf_table(cudf, path: Path, names: list[str], usecols: list[int]):
-    return cudf.read_csv(
-        str(path),
-        sep="|",
-        header=None,
-        names=names,
-        usecols=usecols,
+def _replace_column(table: pa.Table, column_name: str, column: pa.Array | pa.ChunkedArray) -> pa.Table:
+    index = table.schema.get_field_index(column_name)
+    return table.set_column(index, column_name, column)
+
+
+def _decode_name_column(table: pa.Table, column_name: str) -> pa.Table:
+    return _replace_column(table, column_name, pc.cast(table[column_name], pa.string()))
+
+
+def _decimal_column_to_scaled_int(
+    column: pa.Array | pa.ChunkedArray,
+    multiplier: int,
+    integer_type: pa.DataType = pa.int64(),
+) -> pa.Array | pa.ChunkedArray:
+    decimal_scalar = pa.scalar(Decimal(str(multiplier)), type=pa.decimal128(len(str(multiplier)), 0))
+    multiplied = pc.multiply(column, decimal_scalar)
+    precision = max(18, getattr(column.type, "precision", 18) + len(str(multiplier)))
+    scaled = pc.cast(multiplied, pa.decimal128(precision, 0))
+    return pc.cast(scaled, integer_type)
+
+
+def _load_cudf_tables(dataset_path: Path, cudf):
+    tables = load_arrow_dataset(dataset_path)
+    tables["region"] = _decode_name_column(tables["region"], "r_name")
+    tables["nation"] = _decode_name_column(tables["nation"], "n_name")
+
+    lineitem = tables["lineitem"].select(["l_orderkey", "l_suppkey"])
+    # Derive exact integer columns in Arrow first so cuDF does not depend on Decimal128 behavior.
+    lineitem = lineitem.append_column(
+        "l_extendedprice_cents",
+        _decimal_column_to_scaled_int(tables["lineitem"]["l_extendedprice"], 100),
     )
+    lineitem = lineitem.append_column(
+        "l_discount_hundredths",
+        _decimal_column_to_scaled_int(tables["lineitem"]["l_discount"], 100, pa.int32()),
+    )
+    tables["lineitem"] = lineitem
+    return {name: _cudf_from_arrow(cudf, table) for name, table in tables.items()}
 
 
-def run_q5(data_dir: Path, region_name: str, start_date: str) -> list[ResultRow]:
+def _cudf_from_arrow(cudf, table: pa.Table):
+    if hasattr(cudf, "from_arrow"):
+        return cudf.from_arrow(table)
+    return cudf.DataFrame.from_arrow(table)
+
+
+def run_q5(dataset_path: Path, region_name: str, start_date: str) -> list[ResultRow]:
     try:
         import cudf
     except ImportError as exc:
         raise SystemExit("RAPIDS cudf Python package is not installed") from exc
 
-    region = read_cudf_table(
-        cudf,
-        data_dir / "region.tbl",
-        ["r_regionkey", "r_name", "r_comment", "_empty"],
-        [0, 1],
-    )
-    nation = read_cudf_table(
-        cudf,
-        data_dir / "nation.tbl",
-        ["n_nationkey", "n_name", "n_regionkey", "n_comment", "_empty"],
-        [0, 1, 2],
-    )
-    supplier = read_cudf_table(
-        cudf,
-        data_dir / "supplier.tbl",
-        [
-            "s_suppkey",
-            "s_name",
-            "s_address",
-            "s_nationkey",
-            "s_phone",
-            "s_acctbal",
-            "s_comment",
-            "_empty",
-        ],
-        [0, 3],
-    )
-    customer = read_cudf_table(
-        cudf,
-        data_dir / "customer.tbl",
-        [
-            "c_custkey",
-            "c_name",
-            "c_address",
-            "c_nationkey",
-            "c_phone",
-            "c_acctbal",
-            "c_mktsegment",
-            "c_comment",
-            "_empty",
-        ],
-        [0, 3],
-    )
-    orders = read_cudf_table(
-        cudf,
-        data_dir / "orders.tbl",
-        [
-            "o_orderkey",
-            "o_custkey",
-            "o_orderstatus",
-            "o_totalprice",
-            "o_orderdate",
-            "o_orderpriority",
-            "o_clerk",
-            "o_shippriority",
-            "o_comment",
-            "_empty",
-        ],
-        [0, 1, 4],
-    )
-    lineitem = read_cudf_table(
-        cudf,
-        data_dir / "lineitem.tbl",
-        [
-            "l_orderkey",
-            "l_partkey",
-            "l_suppkey",
-            "l_linenumber",
-            "l_quantity",
-            "l_extendedprice",
-            "l_discount",
-            "l_tax",
-            "l_returnflag",
-            "l_linestatus",
-            "l_shipdate",
-            "l_commitdate",
-            "l_receiptdate",
-            "l_shipinstruct",
-            "l_shipmode",
-            "l_comment",
-            "_empty",
-        ],
-        [0, 2, 5, 6],
-    )
+    tables = _load_cudf_tables(dataset_path, cudf)
+    region = tables["region"]
+    nation = tables["nation"]
+    supplier = tables["supplier"]
+    customer = tables["customer"]
+    orders = tables["orders"]
+    lineitem = tables["lineitem"]
 
     selected_region = region[region["r_name"] == region_name]
     selected_nation = nation.merge(
@@ -130,7 +94,9 @@ def run_q5(data_dir: Path, region_name: str, start_date: str) -> list[ResultRow]
     )[["s_suppkey", "s_nationkey", "n_name"]]
 
     customer = customer.merge(
-        selected_nation, left_on="c_nationkey", right_on="n_nationkey"
+        selected_nation[["n_nationkey"]],
+        left_on="c_nationkey",
+        right_on="n_nationkey",
     )[["c_custkey", "c_nationkey"]]
 
     start = cudf.to_datetime(start_date)
@@ -147,36 +113,32 @@ def run_q5(data_dir: Path, region_name: str, start_date: str) -> list[ResultRow]
     joined = joined.merge(supplier, left_on="l_suppkey", right_on="s_suppkey")
     joined = joined[joined["c_nationkey"] == joined["s_nationkey"]]
 
-    joined["extendedprice_cents"] = (joined["l_extendedprice"] * 100).round().astype("int64")
-    joined["discount_bp"] = (joined["l_discount"] * 10000).round().astype("int32")
-    joined["revenue_cents"] = (
-        joined["extendedprice_cents"] * (10000 - joined["discount_bp"]) / 10000
+    joined["revenue_1e4"] = (
+        joined["l_extendedprice_cents"]
+        * (100 - joined["l_discount_hundredths"].astype("int64"))
     ).astype("int64")
 
     result = (
         joined.groupby("n_name")
-        .agg({"revenue_cents": "sum"})
+        .agg({"revenue_1e4": "sum"})
         .reset_index()
-        .sort_values(["revenue_cents", "n_name"], ascending=[False, True])
+        .sort_values(["revenue_1e4", "n_name"], ascending=[False, True])
     )
 
     pdf = result.to_pandas()
-    return [
-        ResultRow(str(row.n_name), int(row.revenue_cents))
-        for row in pdf.itertuples(index=False)
-    ]
+    return [ResultRow(str(row.n_name), int(row.revenue_1e4)) for row in pdf.itertuples(index=False)]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="RAPIDS cuDF baseline for TPC-H Q5")
-    parser.add_argument("--data-dir", required=True)
+    parser.add_argument("--dataset", required=True)
     parser.add_argument("--region", default="ASIA")
     parser.add_argument("--date", default="1994-01-01")
     parser.add_argument("--format", choices=["rows", "json", "benchmark"], default="rows")
     args = parser.parse_args()
 
     started = time.perf_counter()
-    rows = run_q5(Path(args.data_dir), args.region, args.date)
+    rows = run_q5(Path(args.dataset), args.region, args.date)
     total_ms = (time.perf_counter() - started) * 1000.0
     if args.format == "rows":
         emit_rows(rows)

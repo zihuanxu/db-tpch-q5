@@ -12,6 +12,7 @@ from pathlib import Path
 
 
 CPP_ENGINES = {"cpu", "gpu-copy", "gpu-managed", "gpu-mapped"}
+ARROW_DATASET_ENGINES = {"arrow", "cudf"}
 PYTHON_BASELINES = {
     "python": "baselines/python_q5.py",
     "arrow": "baselines/arrow_q5.py",
@@ -58,11 +59,9 @@ def build_command(args: argparse.Namespace, engine: str, threads: int) -> list[s
         ]
 
     if engine in PYTHON_BASELINES:
-        return [
+        command = [
             sys.executable,
             PYTHON_BASELINES[engine],
-            "--data-dir",
-            str(args.data_dir),
             "--region",
             args.region,
             "--date",
@@ -70,8 +69,34 @@ def build_command(args: argparse.Namespace, engine: str, threads: int) -> list[s
             "--format",
             "benchmark",
         ]
+        if engine in ARROW_DATASET_ENGINES:
+            if args.arrow_dataset is None:
+                raise ValueError("--arrow-dataset is required for arrow and cudf engines")
+            command.extend(["--dataset", str(args.arrow_dataset)])
+        else:
+            command.extend(["--data-dir", str(args.data_dir)])
+        return command
 
     raise ValueError(f"unknown engine: {engine}")
+
+
+def _error_row(
+    args: argparse.Namespace,
+    engine: str,
+    run_id: int,
+    threads: int,
+    error: str,
+) -> dict[str, str]:
+    return {
+        "run_id": str(run_id),
+        "status": "error",
+        "engine": engine,
+        "region": args.region,
+        "date": args.date,
+        "threads": str(threads if engine in CPP_ENGINES else 1),
+        "elapsed_ms": "0.000000",
+        "error": error,
+    }
 
 
 def parse_benchmark(stdout: str) -> dict[str, str]:
@@ -83,7 +108,12 @@ def parse_benchmark(stdout: str) -> dict[str, str]:
 
 
 def run_one(args: argparse.Namespace, engine: str, run_id: int, threads: int) -> dict[str, str]:
-    command = build_command(args, engine, threads)
+    try:
+        command = build_command(args, engine, threads)
+    except ValueError as exc:
+        return [
+            _error_row(args, engine, run_id, threads, str(exc))
+        ][0]
     started = time.perf_counter()
     completed = subprocess.run(
         command,
@@ -145,6 +175,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
     parser.add_argument("--memq5", type=Path, default=Path("build/memq5"))
     parser.add_argument("--data-dir", type=Path, default=Path("tests/fixtures/tpch_q5_tiny"))
+    parser.add_argument("--arrow-dataset", type=Path)
     parser.add_argument("--region", default="ASIA")
     parser.add_argument("--date", default="1994-01-01")
     parser.add_argument("--threads", type=int, default=1)
@@ -159,9 +190,17 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated list: cpu,python,arrow,gpu-copy,gpu-managed,gpu-mapped,duckdb,cudf",
     )
     parser.add_argument("--repeat", type=int, default=1)
+    parser.add_argument("--warmup", type=int, default=0)
     parser.add_argument("--output", type=Path, default=Path("results/benchmarks.csv"))
     parser.add_argument("--fail-on-error", action="store_true")
     return parser.parse_args()
+
+
+def iter_engine_runs(engines: list[str], thread_values: list[int]):
+    for engine in engines:
+        engine_threads = thread_values if engine in CPP_ENGINES else [1]
+        for threads in engine_threads:
+            yield engine, threads
 
 
 def main() -> int:
@@ -173,23 +212,34 @@ def main() -> int:
     else:
         thread_values = [args.threads]
 
+    warmup_errors: list[dict[str, str]] = []
+    for _ in range(args.warmup):
+        for engine, threads in iter_engine_runs(engines, thread_values):
+            row = run_one(args, engine, -1, threads)
+            if row.get("status") != "ok":
+                warmup_errors.append(row)
+
     rows: list[dict[str, str]] = []
     run_id = 0
     for _ in range(args.repeat):
-        for engine in engines:
-            engine_threads = thread_values if engine in CPP_ENGINES else [1]
-            for threads in engine_threads:
+        for engine, threads in iter_engine_runs(engines, thread_values):
                 rows.append(run_one(args, engine, run_id, threads))
                 run_id += 1
 
     write_rows(args.output, rows)
 
     errors = [row for row in rows if row.get("status") != "ok"]
+    if warmup_errors:
+        print(f"{len(warmup_errors)} warmup runs failed or were unavailable")
+        for row in warmup_errors:
+            print(f"- {row.get('engine')}: {row.get('error')}")
     print(f"wrote {len(rows)} rows to {args.output}")
     if errors:
         print(f"{len(errors)} runs failed or were unavailable")
         for row in errors:
             print(f"- {row.get('engine')}: {row.get('error')}")
+        return 1 if args.fail_on_error else 0
+    if warmup_errors:
         return 1 if args.fail_on_error else 0
     return 0
 
