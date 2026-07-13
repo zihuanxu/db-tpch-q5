@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -14,6 +15,15 @@ import pyarrow.compute as pc
 
 from arrow_dataset import load_arrow_dataset
 from common import ResultRow, emit_benchmark, emit_json, emit_rows
+
+
+@dataclass(frozen=True)
+class CudfBenchmarkResult:
+    rows: list[ResultRow]
+    load_ms: float
+    query_ms: float
+    input_lineitem_rows: int
+    matched_lineitem_rows: int
 
 
 def add_year(value: str) -> str:
@@ -70,13 +80,7 @@ def _cudf_from_arrow(cudf, table: pa.Table):
     return cudf.DataFrame.from_arrow(table)
 
 
-def run_q5(dataset_path: Path, region_name: str, start_date: str) -> list[ResultRow]:
-    try:
-        import cudf
-    except ImportError as exc:
-        raise SystemExit("RAPIDS cudf Python package is not installed") from exc
-
-    tables = _load_cudf_tables(dataset_path, cudf)
+def _execute_q5(tables, cudf, region_name: str, start_date: str) -> tuple[list[ResultRow], int]:
     region = tables["region"]
     nation = tables["nation"]
     supplier = tables["supplier"]
@@ -112,6 +116,7 @@ def run_q5(dataset_path: Path, region_name: str, start_date: str) -> list[Result
     )
     joined = joined.merge(supplier, left_on="l_suppkey", right_on="s_suppkey")
     joined = joined[joined["c_nationkey"] == joined["s_nationkey"]]
+    matched_lineitem_rows = len(joined)
 
     joined["revenue_1e4"] = (
         joined["l_extendedprice_cents"]
@@ -126,7 +131,38 @@ def run_q5(dataset_path: Path, region_name: str, start_date: str) -> list[Result
     )
 
     pdf = result.to_pandas()
-    return [ResultRow(str(row.n_name), int(row.revenue_1e4)) for row in pdf.itertuples(index=False)]
+    rows = [ResultRow(str(row.n_name), int(row.revenue_1e4)) for row in pdf.itertuples(index=False)]
+    return rows, matched_lineitem_rows
+
+
+def run_benchmark(
+    dataset_path: Path, region_name: str, start_date: str
+) -> CudfBenchmarkResult:
+    try:
+        import cudf
+    except ImportError as exc:
+        raise SystemExit("RAPIDS cudf Python package is not installed") from exc
+
+    load_started = time.perf_counter()
+    tables = _load_cudf_tables(dataset_path, cudf)
+    load_ms = (time.perf_counter() - load_started) * 1000.0
+    input_lineitem_rows = len(tables["lineitem"])
+    query_started = time.perf_counter()
+    rows, matched_lineitem_rows = _execute_q5(
+        tables, cudf, region_name, start_date
+    )
+    query_ms = (time.perf_counter() - query_started) * 1000.0
+    return CudfBenchmarkResult(
+        rows=rows,
+        load_ms=load_ms,
+        query_ms=query_ms,
+        input_lineitem_rows=input_lineitem_rows,
+        matched_lineitem_rows=matched_lineitem_rows,
+    )
+
+
+def run_q5(dataset_path: Path, region_name: str, start_date: str) -> list[ResultRow]:
+    return run_benchmark(dataset_path, region_name, start_date).rows
 
 
 def main() -> int:
@@ -137,15 +173,24 @@ def main() -> int:
     parser.add_argument("--format", choices=["rows", "json", "benchmark"], default="rows")
     args = parser.parse_args()
 
-    started = time.perf_counter()
-    rows = run_q5(Path(args.dataset), args.region, args.date)
-    total_ms = (time.perf_counter() - started) * 1000.0
+    benchmark = run_benchmark(Path(args.dataset), args.region, args.date)
+    rows = benchmark.rows
     if args.format == "rows":
         emit_rows(rows)
     elif args.format == "json":
         emit_json(rows)
     else:
-        emit_benchmark("cudf", args.region, args.date, rows, total_ms=total_ms)
+        emit_benchmark(
+            "cudf",
+            args.region,
+            args.date,
+            rows,
+            total_ms=benchmark.query_ms,
+            load_ms=benchmark.load_ms,
+            input_lineitem_rows=benchmark.input_lineitem_rows,
+            matched_lineitem_rows=benchmark.matched_lineitem_rows,
+            gpu_input_rows=benchmark.input_lineitem_rows,
+        )
     return 0
 
 

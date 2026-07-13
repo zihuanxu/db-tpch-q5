@@ -164,11 +164,35 @@ Evidence recorded on 2026-07-14:
 
 ## V5 - Evidence And Experiments
 
-- [ ] Define and validate one versioned run-record schema.
-- [ ] Separate cold-start and resident scenarios.
-- [ ] Preserve stdout, stderr, failures, environment, memory, and checksums.
-- [ ] Add correctness gating, statistics, matrix definitions, and traceable plots.
-- [ ] Run the feasible formal SF1/SF10 matrix and preserve honest failures.
+- [x] Define and validate one versioned run-record schema.
+- [x] Separate cold-start records from resident requests; reject unsupported
+  resident measurement instead of substituting cold processes.
+- [x] Preserve stdout, stderr, failures, environment, CPU memory, and checksums.
+- [x] Add hash correctness gating, explicit statistics, and a frozen SF1 matrix.
+- [ ] Run the feasible formal SF1 matrix and preserve honest failures.
+
+Evidence recorded so far on 2026-07-14:
+
+- The current focused V5/base suite passes 43/43 tests, including schema,
+  launch/timeout/RSS monitoring, strict backend-output attribution, statistics,
+  exact formal-matrix expansion, evidence coverage, checksum, and official
+  oracle tests. Existing Arrow/baseline tests pass 12/12 and cuDF GPU tests
+  pass 2/2.
+- A strict tiny smoke across specialized CPU, Acero, copy, managed, mapped,
+  hybrid, and cuDF produced seven valid measured rows with zero failures and
+  the expected hash `248d10b6ee352953`.
+- A mixed cold/resident CPU smoke produced eight successful cold rows and eight
+  explicit `ERROR_RESIDENT_UNSUPPORTED` rows. All 16 rows passed schema
+  validation, demonstrating that unsupported data is retained rather than
+  silently dropped or relabeled.
+- The V5 scope intentionally omits true resident sessions, NVML GPU peak-memory
+  sampling, SF10 generation, and profiler-derived plots. These omissions are
+  documented rather than represented by synthetic results.
+- Three review rounds found and closed incomplete-matrix certification,
+  process-launch loss, permissive CSV attribution, cuDF timing/counter mismatch,
+  external-log references, non-recomputed summaries, and unhashed matrix
+  inputs. Final re-review reported no Critical, Important, or Minor finding and
+  approved the V5 evidence tooling for the formal run.
 
 ## V6 - Publication And Release
 

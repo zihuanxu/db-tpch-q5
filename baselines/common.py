@@ -98,9 +98,21 @@ def emit_benchmark(
     rows: list[ResultRow],
     threads: int = 1,
     total_ms: float = 0.0,
+    load_ms: float = 0.0,
+    input_lineitem_rows: int = 0,
+    matched_lineitem_rows: int = 0,
+    cpu_input_rows: int = 0,
+    gpu_input_rows: int = 0,
 ) -> None:
-    print("engine,region,date,threads,result_rows,result_hash,build_ms,h2d_ms,kernel_ms,d2h_ms,scan_ms,total_ms")
+    print(
+        "engine,region,date,threads,result_rows,result_hash,load_ms,build_ms,"
+        "h2d_ms,kernel_ms,d2h_ms,scan_ms,total_ms,cpu_ms,gpu_ms,overlap_ms,"
+        "input_lineitem_rows,matched_lineitem_rows,cpu_input_rows,gpu_input_rows,"
+        "h2d_bytes,d2h_bytes,mapped_remote_read_bytes"
+    )
     print(
         f"{engine},{region},{date},{threads},{len(rows)},{result_hash(rows)},"
-        f"0,0,0,0,{total_ms:.6f},{total_ms:.6f}"
+        f"{load_ms:.6f},0,0,0,0,{total_ms:.6f},{total_ms:.6f},0,0,0,"
+        f"{input_lineitem_rows},{matched_lineitem_rows},{cpu_input_rows},"
+        f"{gpu_input_rows},0,0,0"
     )
