@@ -1,0 +1,57 @@
+{
+  "batch_rows": 2,
+  "format_version": 1,
+  "scale_factor": "tiny",
+  "source_command": "committed tiny fixture",
+  "source_kind": "command",
+  "tables": {
+    "customer": {
+      "bytes": 882,
+      "file": "customer.arrow",
+      "record_batches": 2,
+      "rows": 4,
+      "schema": "c_custkey: int32 not null\nc_nationkey: int32 not null",
+      "sha256": "91f85c8cfbb634ff0f90d826ba0a703311daf4dfb7e98726b204b06568fc7c19"
+    },
+    "lineitem": {
+      "bytes": 1850,
+      "file": "lineitem.arrow",
+      "record_batches": 3,
+      "rows": 6,
+      "schema": "l_orderkey: int32 not null\nl_suppkey: int32 not null\nl_extendedprice: decimal128(15, 2) not null\nl_discount: decimal128(15, 2) not null",
+      "sha256": "9ff65899cba6323d8a74299548bd9414a3844ad5df5b2560ead3230ffbda186f"
+    },
+    "nation": {
+      "bytes": 1434,
+      "file": "nation.arrow",
+      "record_batches": 2,
+      "rows": 4,
+      "schema": "n_nationkey: int32 not null\nn_name: dictionary<values=string, indices=int32, ordered=0> not null\nn_regionkey: int32 not null",
+      "sha256": "8839ee99045eff3f987c5597c8efce18be1ee608ccea3283eea80a0ce7df0610"
+    },
+    "orders": {
+      "bytes": 1410,
+      "file": "orders.arrow",
+      "record_batches": 3,
+      "rows": 5,
+      "schema": "o_orderkey: int32 not null\no_custkey: int32 not null\no_orderdate: date32[day] not null",
+      "sha256": "add710f56555f6424983cd467ddb1418e6121ff2bb969c42285915f982deb916"
+    },
+    "region": {
+      "bytes": 1450,
+      "file": "region.arrow",
+      "record_batches": 3,
+      "rows": 5,
+      "schema": "r_regionkey: int32 not null\nr_name: dictionary<values=string, indices=int32, ordered=0> not null",
+      "sha256": "6e686dae318e0d42c0bc8cdbbfadccd40f95d2ce1b6f4ff6250215d5545aaec4"
+    },
+    "supplier": {
+      "bytes": 882,
+      "file": "supplier.arrow",
+      "record_batches": 2,
+      "rows": 3,
+      "schema": "s_suppkey: int32 not null\ns_nationkey: int32 not null",
+      "sha256": "1ee3a83b546887334ef99c8770e39a186e3341ad75bb67214a3c010cdb89533a"
+    }
+  }
+}

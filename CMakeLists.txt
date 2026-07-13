@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project(memq5 LANGUAGES CXX)
 
+option(MEMQ5_ENABLE_ARROW "Build the Apache Arrow IPC loader" OFF)
 option(MEMQ5_ENABLE_TESTS "Build tests" ON)
 option(MEMQ5_ENABLE_CUDA "Build CUDA engines" OFF)
 
@@ -23,6 +24,34 @@ target_include_directories(memq5_core PUBLIC
 target_compile_options(memq5_core PRIVATE
   $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
 )
+
+if(MEMQ5_ENABLE_ARROW)
+  find_package(Arrow 23.0.1 EXACT CONFIG REQUIRED)
+  find_package(OpenSSL REQUIRED)
+  find_package(nlohmann_json CONFIG REQUIRED)
+
+  add_library(memq5_arrow
+    src/io/arrow_q5_loader.cpp
+  )
+
+  target_include_directories(memq5_arrow PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+  )
+
+  target_link_libraries(memq5_arrow
+    PUBLIC Arrow::arrow_shared
+    PRIVATE OpenSSL::Crypto nlohmann_json::nlohmann_json
+  )
+
+  target_compile_options(memq5_arrow PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
+  )
+
+  add_executable(memq5_arrow_check
+    src/cli/memq5_arrow_check.cpp
+  )
+  target_link_libraries(memq5_arrow_check PRIVATE memq5_arrow)
+endif()
 
 add_executable(memq5
   src/cli/memq5.cpp

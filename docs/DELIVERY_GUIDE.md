@@ -50,7 +50,7 @@ python3 scripts/package_submission.py \
 | 课程要求 | 最小版本中的实现 | 状态 |
 |---|---|---|
 | TPC-H Q5 CPU-GPU 协同查询 | CPU 构造过滤传播 map，CPU 或 CUDA 扫描 `lineitem` 聚合 | 已实现 |
-| CPU 端 Arrow | Arrow IPC 数据集；PyArrow 完成实际 Q5 join/group_by；自定义 C++ 仍为连续数组 | 部分实现 |
+| CPU 端 Arrow | Arrow IPC 数据集；C++ loader 完成 schema/manifest 校验；PyArrow 完成 Q5；C++ 查询仍待 V2.2 接入 | 部分实现，较 V1 增强 |
 | PCIe 数据传输 | `gpu-copy` 使用显式 `cudaMemcpy` | 已实现 |
 | UVA/统一地址访问 | `gpu-mapped` 使用 mapped pinned host memory；另有 `gpu-managed` | 已实现 |
 | GPU 算子库 | RAPIDS cuDF Q5 baseline | 已实现并跑过 SF1 |

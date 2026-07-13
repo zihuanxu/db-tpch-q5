@@ -37,6 +37,9 @@ Arrow/PyArrow、三种 CUDA 内存模式和 RAPIDS cuDF。它不是通用数据�
   `542abf4003633c7c`，并与官方 `q5.out` 五行结果逐行一致。
 - 加入 Arrow IPC 数据生成和 manifest，PyArrow 与 cuDF 正式基线共用同一份
   Arrow 数据集；C++/CUDA 仍从 `.tbl` 构造自定义连续数组。
+- V2.1 新增可选 C++ Arrow IPC loader，可在 C++ 层校验六表 schema、行数、
+  record batch、字节数、SHA256 和非空约束；CPU 查询直接消费 Arrow Table
+  将在 V2.2 完成。
 
 ## TPC-H Q5/GPU 复现
 
@@ -97,6 +100,9 @@ conda run -n memq5-cudf python scripts/prepare_arrow_dataset.py \
   --scale-factor 1 --batch-rows 262144 \
   --source-command "TPC-H V3.0.1 dbgen -s 1" --replace
 ```
+
+C++ Arrow loader 的独立构建与验证见
+`docs/STAGE_V2_1_ARROW_LOADER.md`。
 
 ## 版本控制说明
 
