@@ -10,6 +10,10 @@
 #include "engine/q5_result_io.hpp"
 #include "io/arrow_q5_loader.hpp"
 
+#ifdef MEMQ5_HAS_ARROW_CUDA
+#include "cuda/q5_arrow_cuda.hpp"
+#endif
+
 namespace {
 
 struct Options {
@@ -24,7 +28,11 @@ struct Options {
 
 void print_usage(std::ostream& output) {
   output << "usage: memq5_arrow_query --dataset <dir> "
-            "--engine cpu-specialized|arrow-acero "
+            "--engine cpu-specialized|arrow-acero"
+#ifdef MEMQ5_HAS_ARROW_CUDA
+            "|gpu-copy|gpu-managed|gpu-mapped"
+#endif
+            " "
             "[--region ASIA] [--date 1994-01-01] [--threads N] "
             "[--format json|csv|benchmark] [--skip-checksums]\n";
 }
@@ -81,7 +89,14 @@ Options parse_options(int argc, char** argv) {
   if (options.dataset_dir.empty()) {
     throw std::runtime_error("--dataset is required");
   }
-  if (options.engine != "cpu-specialized" && options.engine != "arrow-acero") {
+  bool supported_engine =
+      options.engine == "cpu-specialized" || options.engine == "arrow-acero";
+#ifdef MEMQ5_HAS_ARROW_CUDA
+  supported_engine = supported_engine || options.engine == "gpu-copy" ||
+                     options.engine == "gpu-managed" ||
+                     options.engine == "gpu-mapped";
+#endif
+  if (!supported_engine) {
     throw std::runtime_error("unsupported Arrow engine: " + options.engine);
   }
   if (options.format != "json" && options.format != "csv" &&
@@ -111,9 +126,21 @@ int main(int argc, char** argv) {
     params.threads = options.threads;
 
     arrow::Result<memq5::Q5Result> result =
-        options.engine == "cpu-specialized"
-            ? memq5::execute_q5_arrow_cpu(dataset, params)
-            : memq5::execute_q5_acero(dataset, params);
+        arrow::Status::Invalid("unsupported Arrow engine");
+    if (options.engine == "cpu-specialized") {
+      result = memq5::execute_q5_arrow_cpu(dataset, params);
+    } else if (options.engine == "arrow-acero") {
+      result = memq5::execute_q5_acero(dataset, params);
+    }
+#ifdef MEMQ5_HAS_ARROW_CUDA
+    else if (options.engine == "gpu-copy") {
+      result = memq5::execute_q5_arrow_gpu_copy(dataset, params);
+    } else if (options.engine == "gpu-managed") {
+      result = memq5::execute_q5_arrow_gpu_managed(dataset, params);
+    } else if (options.engine == "gpu-mapped") {
+      result = memq5::execute_q5_arrow_gpu_mapped(dataset, params);
+    }
+#endif
     if (!result.ok()) {
       std::cerr << result.status().ToString() << '\n';
       return 1;

@@ -18,17 +18,10 @@
 
 #include "common/fixed_point.hpp"
 #include "common/timer.hpp"
+#include "engine/arrow_q5_plan.hpp"
 
 namespace memq5 {
 namespace {
-
-struct ArrowQ5Plan {
-  std::vector<int32_t> supplier_nation_by_key;
-  std::vector<int32_t> order_nation_by_key;
-  std::vector<std::string> nation_name_by_key;
-  int32_t max_nation_key = -1;
-  double build_ms = 0.0;
-};
 
 struct ScanPartial {
   std::vector<int64_t> revenue_by_nation;
@@ -165,8 +158,10 @@ bool valid_key(const std::vector<int32_t>& values, int32_t key) {
   return key >= 0 && static_cast<std::size_t>(key) < values.size();
 }
 
-arrow::Result<ArrowQ5Plan> build_arrow_plan(const ArrowQ5Dataset& dataset,
-                                            const Q5Params& params) {
+}  // namespace
+
+arrow::Result<ArrowQ5Plan> build_arrow_q5_plan(const ArrowQ5Dataset& dataset,
+                                               const Q5Params& params) {
   Stopwatch timer;
   int32_t region_key = -1;
   std::unordered_set<int32_t> region_keys;
@@ -335,6 +330,8 @@ arrow::Result<ArrowQ5Plan> build_arrow_plan(const ArrowQ5Dataset& dataset,
   return plan;
 }
 
+namespace {
+
 arrow::Status checked_accumulate(int64_t value, int64_t* destination) {
   int64_t sum = 0;
   if (__builtin_add_overflow(*destination, value, &sum)) {
@@ -422,7 +419,7 @@ arrow::Result<Q5Result> execute_q5_arrow_cpu_impl(const ArrowQ5Dataset& dataset,
                                                   const Q5Params& params) {
   Stopwatch total_timer;
   ARROW_ASSIGN_OR_RAISE(const ArrowQ5Plan plan,
-                        build_arrow_plan(dataset, params));
+                        build_arrow_q5_plan(dataset, params));
   ARROW_ASSIGN_OR_RAISE(const auto batches, table_batches(dataset.lineitem));
 
   const auto lineitem_count =

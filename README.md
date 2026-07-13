@@ -41,6 +41,8 @@ Arrow/PyArrow、三种 CUDA 内存模式和 RAPIDS cuDF。它不是通用数据�
   record batch、字节数、SHA256 和非空约束。
 - V2.2 新增直接遍历 Arrow batch/buffer 的专用 CPU 引擎，以及使用 Acero
   filter/hash join 的关系算子引擎；两者在 tiny 和 SF1 上结果一致。
+- V3 让 `gpu-copy`、`gpu-managed`、`gpu-mapped` 从同一 Arrow dataset 读取，
+  共用精确 CUDA kernel，并记录 H2D、D2H 和 mapped 远程读取字节。
 
 ## TPC-H Q5/GPU 复现
 
@@ -104,7 +106,8 @@ conda run -n memq5-cudf python scripts/prepare_arrow_dataset.py \
 
 C++ Arrow loader 的独立构建与验证见
 `docs/STAGE_V2_1_ARROW_LOADER.md`。Arrow CPU 查询见
-`docs/STAGE_V2_2_ARROW_CPU.md`。
+`docs/STAGE_V2_2_ARROW_CPU.md`，Arrow 输入的 CUDA 三模式见
+`docs/STAGE_V3_ARROW_CUDA.md`。
 
 ## 版本控制说明
 

@@ -9,6 +9,10 @@
 #include "engine/q5_result_io.hpp"
 #include "io/tpch_loader.hpp"
 
+#ifdef NDEBUG
+#error "CUDA tests require assertions"
+#endif
+
 int main() {
   int device_count = 0;
   const cudaError_t status = cudaGetDeviceCount(&device_count);

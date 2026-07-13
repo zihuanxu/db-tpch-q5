@@ -49,7 +49,7 @@ Acero：
   `248d10b6ee352953`。
 - SF1 的两个引擎 hash 均为 `542abf4003633c7c`，五行结果逐行通过官方
   TPC-H V3.0.1 `q5.out` 校验。
-- Python oracle 11/11、Arrow/baseline Python 12/12 通过；默认 CPU/CUDA/tiny
+- Python oracle 14/14、Arrow/baseline Python 12/12 通过；默认 CPU/CUDA/tiny
   自检全部通过。
 
 ## 阶段边界

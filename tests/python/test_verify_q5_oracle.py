@@ -337,6 +337,85 @@ def test_verify_q5_oracle_rejects_negative_or_fractional_counter(
         assert "counter must be a non-negative integer" in completed.stderr
 
 
+def test_verify_q5_oracle_rejects_counter_above_int64(tmp_path: Path) -> None:
+    actual = write_text(
+        tmp_path / "actual.csv",
+        "\n".join(
+            [
+                "nation,revenue_1e4,revenue",
+                "INDONESIA,555500,55.55",
+                f"result_hash,{HASH_ONE}",
+                f"input_lineitem_rows,{1 << 63}",
+                "",
+            ]
+        ),
+    )
+    oracle = write_text(
+        tmp_path / "q5.out",
+        "\n".join(["nation|revenue|", "INDONESIA|55.55|", ""]),
+    )
+
+    completed = run_verify(actual, oracle)
+
+    assert completed.returncode != 0
+    assert "counter must fit int64" in completed.stderr
+
+
+def test_verify_q5_oracle_rejects_duplicate_counter(tmp_path: Path) -> None:
+    actual = write_text(
+        tmp_path / "actual.csv",
+        "\n".join(
+            [
+                "nation,revenue_1e4,revenue",
+                "INDONESIA,555500,55.55",
+                f"result_hash,{HASH_ONE}",
+                "input_lineitem_rows,1",
+                "input_lineitem_rows,2",
+                "",
+            ]
+        ),
+    )
+    oracle = write_text(
+        tmp_path / "q5.out",
+        "\n".join(["nation|revenue|", "INDONESIA|55.55|", ""]),
+    )
+
+    completed = run_verify(actual, oracle)
+
+    assert completed.returncode != 0
+    assert "duplicate metadata key" in completed.stderr
+
+
+def test_verify_q5_oracle_rejects_inconsistent_row_counters(tmp_path: Path) -> None:
+    actual = write_text(
+        tmp_path / "actual.csv",
+        "\n".join(
+            [
+                "nation,revenue_1e4,revenue",
+                "INDONESIA,555500,55.55",
+                f"result_hash,{HASH_ONE}",
+                "input_lineitem_rows,1",
+                "matched_lineitem_rows,2",
+                "cpu_input_rows,1",
+                "gpu_input_rows,0",
+                "h2d_bytes,0",
+                "d2h_bytes,0",
+                "mapped_remote_read_bytes,0",
+                "",
+            ]
+        ),
+    )
+    oracle = write_text(
+        tmp_path / "q5.out",
+        "\n".join(["nation|revenue|", "INDONESIA|55.55|", ""]),
+    )
+
+    completed = run_verify(actual, oracle)
+
+    assert completed.returncode != 0
+    assert "matched_lineitem_rows exceeds input_lineitem_rows" in completed.stderr
+
+
 def test_verify_q5_oracle_rejects_revenue_without_exactly_two_decimals(tmp_path: Path) -> None:
     oracle = write_text(
         tmp_path / "q5.out",

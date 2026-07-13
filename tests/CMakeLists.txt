@@ -106,7 +106,38 @@ if(MEMQ5_ENABLE_CUDA)
     CUDA_EXTENSIONS OFF
   )
   target_compile_options(test_q5_cuda PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-UNDEBUG>
+    $<$<COMPILE_LANGUAGE:CUDA>:-UNDEBUG>
   )
   add_test(NAME test_q5_cuda COMMAND test_q5_cuda)
+endif()
+
+if(MEMQ5_ENABLE_ARROW AND MEMQ5_ENABLE_CUDA)
+  set_source_files_properties(test_q5_arrow_cuda.cpp PROPERTIES LANGUAGE CUDA)
+  add_executable(test_q5_arrow_cuda test_q5_arrow_cuda.cpp)
+  target_link_libraries(test_q5_arrow_cuda PRIVATE memq5_arrow_cuda)
+  target_compile_definitions(test_q5_arrow_cuda PRIVATE
+    MEMQ5_ARROW_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow"
+  )
+  set_target_properties(test_q5_arrow_cuda PROPERTIES
+    CUDA_STANDARD 17
+    CUDA_STANDARD_REQUIRED ON
+    CUDA_EXTENSIONS OFF
+  )
+  target_compile_options(test_q5_arrow_cuda PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:-UNDEBUG>
+  )
+  add_test(NAME test_q5_arrow_cuda COMMAND test_q5_arrow_cuda)
+
+  foreach(gpu_engine IN ITEMS gpu-copy gpu-managed gpu-mapped)
+    add_test(
+      NAME test_q5_arrow_cli_${gpu_engine}
+      COMMAND $<TARGET_FILE:memq5_arrow_query>
+        --dataset ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow
+        --engine ${gpu_engine} --region ASIA --date 1994-01-01
+        --threads 2 --format json
+    )
+    set_tests_properties(test_q5_arrow_cli_${gpu_engine} PROPERTIES
+      PASS_REGULAR_EXPRESSION "\"result_hash\": \"248d10b6ee352953\""
+    )
+  endforeach()
 endif()

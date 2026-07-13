@@ -75,6 +75,8 @@ def parse_actual_rows(path: Path) -> tuple[list[dict[str, str]], str]:
         rows: list[dict[str, str]] = []
         exact_rows: list[tuple[str, int]] = []
         hashes: list[str] = []
+        seen_metadata: set[str] = set()
+        counter_values: dict[str, int] = {}
         seen_hash = False
 
         for line_number, raw_row in enumerate(reader, start=2):
@@ -93,9 +95,16 @@ def parse_actual_rows(path: Path) -> tuple[list[dict[str, str]], str]:
             if seen_hash:
                 if len(row) != 2 or key not in TIMING_KEYS | COUNTER_KEYS:
                     raise ValueError(f"unexpected row after result_hash at actual row {line_number}")
+                if key in seen_metadata:
+                    raise ValueError(f"duplicate metadata key: {key}")
+                seen_metadata.add(key)
                 if key in COUNTER_KEYS:
                     if not NON_NEGATIVE_INTEGER_RE.fullmatch(row[1]):
                         raise ValueError("counter must be a non-negative integer")
+                    counter = int(row[1])
+                    if counter > INT64_MAX:
+                        raise ValueError("counter must fit int64")
+                    counter_values[key] = counter
                 else:
                     if not NUMBER_RE.fullmatch(row[1]):
                         raise ValueError("timing must be a non-negative finite number")
@@ -131,6 +140,24 @@ def parse_actual_rows(path: Path) -> tuple[list[dict[str, str]], str]:
             raise ValueError("expected exactly one 16-hex result_hash row")
         if hashes[0] != result_hash_hex(exact_rows):
             raise ValueError("result_hash does not match exact rows")
+        if counter_values:
+            if set(counter_values) != COUNTER_KEYS:
+                raise ValueError("counter metadata must contain every counter exactly once")
+            if (
+                counter_values["matched_lineitem_rows"]
+                > counter_values["input_lineitem_rows"]
+            ):
+                raise ValueError(
+                    "matched_lineitem_rows exceeds input_lineitem_rows"
+                )
+            if (
+                counter_values["cpu_input_rows"]
+                + counter_values["gpu_input_rows"]
+                != counter_values["input_lineitem_rows"]
+            ):
+                raise ValueError(
+                    "cpu_input_rows plus gpu_input_rows must equal input_lineitem_rows"
+                )
 
         return rows, hashes[0]
 

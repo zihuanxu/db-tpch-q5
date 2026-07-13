@@ -92,6 +92,25 @@ if(MEMQ5_ENABLE_CUDA)
     CUDA_STANDARD_REQUIRED ON
     CUDA_EXTENSIONS OFF
   )
+
+  if(MEMQ5_ENABLE_ARROW)
+    add_library(memq5_arrow_cuda
+      src/cuda/q5_arrow_cuda.cu
+    )
+    target_include_directories(memq5_arrow_cuda PUBLIC
+      ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_link_libraries(memq5_arrow_cuda PUBLIC memq5_arrow)
+    target_compile_definitions(memq5_arrow_cuda PUBLIC
+      MEMQ5_HAS_ARROW_CUDA=1
+    )
+    set_target_properties(memq5_arrow_cuda PROPERTIES
+      CUDA_STANDARD 17
+      CUDA_STANDARD_REQUIRED ON
+      CUDA_EXTENSIONS OFF
+    )
+    target_link_libraries(memq5_arrow_query PRIVATE memq5_arrow_cuda)
+  endif()
 endif()
 
 if(MEMQ5_ENABLE_TESTS)

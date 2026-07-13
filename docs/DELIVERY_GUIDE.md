@@ -51,8 +51,8 @@ python3 scripts/package_submission.py \
 |---|---|---|
 | TPC-H Q5 CPU-GPU 协同查询 | CPU 构造过滤传播 map，CPU 或 CUDA 扫描 `lineitem` 聚合 | 已实现 |
 | CPU 端 Arrow | Arrow IPC 数据集；C++ loader 校验 schema/manifest；`cpu-specialized` 直接读 Arrow buffers；`arrow-acero` 使用 Acero filter/hash join | 已实现（V2） |
-| PCIe 数据传输 | `gpu-copy` 使用显式 `cudaMemcpy` | 已实现 |
-| UVA/统一地址访问 | `gpu-mapped` 使用 mapped pinned host memory；另有 `gpu-managed` | 已实现 |
+| PCIe 数据传输 | V3 `gpu-copy` 从 Arrow staging buffers 显式 `cudaMemcpy` 到显存 | 已实现 |
+| UVA/统一地址访问 | V3 `gpu-mapped` 使用 mapped pinned host memory；`gpu-managed` 显式 prefetch | 已实现 |
 | GPU 算子库 | RAPIDS cuDF Q5 baseline | 已实现并跑过 SF1 |
 | 可共享、可重现、可验证 | CMake、CTest、tiny fixture、数据生成器、Arrow manifest、实验流水线、官方 oracle | 已实现 |
 | 论文形式报告 | 计算机学报模板 `docs/FINAL_REPORT.pdf` 和 LaTeX 源稿 | 已实现 |
@@ -63,7 +63,8 @@ python3 scripts/package_submission.py \
 
 - 只做了 SF1，没有 SF10 或更大规模。
 - GPU 只负责最后的 `lineitem` 扫描聚合，查询前半段仍在 CPU。
-- 旧 GPU 路径仍使用从 `.tbl` 构造的自定义连续列；V3 才切换到 Arrow 输入。
+- 当前 Arrow 23 环境没有 Arrow CUDA 扩展；V3 从 Arrow Table staging 到原生
+  CUDA device/managed/mapped buffer，不能写成使用了 `arrow::cuda::CudaBuffer`。
 - C++ 与 PyArrow/cuDF 的内部计时边界不同，不能把 `total_ms` 直接当成严格公平排名。
 - 最小正式实验只使用固定 8 线程 C++ 设置、一次预热和三次重复，没有置信区间。
 
