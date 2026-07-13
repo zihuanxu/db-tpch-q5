@@ -10,6 +10,16 @@ import sys
 from pathlib import Path
 
 HASH_RE = re.compile(r"^[0-9a-fA-F]{16}$")
+TWO_DECIMAL_RE = re.compile(r"^-?\d+\.\d{2}$")
+NUMBER_RE = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$")
+TIMING_KEYS = {
+    "timing_build_ms",
+    "timing_h2d_ms",
+    "timing_kernel_ms",
+    "timing_d2h_ms",
+    "timing_scan_ms",
+    "timing_total_ms",
+}
 
 
 def parse_actual_rows(path: Path) -> tuple[list[dict[str, str]], str]:
@@ -36,16 +46,26 @@ def parse_actual_rows(path: Path) -> tuple[list[dict[str, str]], str]:
             key = row[0]
             if key == "result_hash":
                 seen_hash = True
-                if len(row) < 2 or not HASH_RE.fullmatch(row[1]):
+                if len(row) != 2 or not HASH_RE.fullmatch(row[1]):
                     raise ValueError("expected exactly one 16-hex result_hash row")
                 hashes.append(row[1].lower())
                 continue
 
             if seen_hash:
+                if (
+                    len(row) != 2
+                    or key not in TIMING_KEYS
+                    or not NUMBER_RE.fullmatch(row[1])
+                ):
+                    raise ValueError(f"unexpected row after result_hash at actual row {line_number}")
                 continue
 
             if len(row) != 3:
                 raise ValueError(f"actual row {line_number} must have exactly 3 columns")
+            if not TWO_DECIMAL_RE.fullmatch(row[2]):
+                raise ValueError(
+                    f"actual row {line_number} revenue must have exactly two decimal places"
+                )
 
             rows.append({"nation": row[0], "revenue": row[2]})
 
@@ -64,8 +84,12 @@ def parse_oracle_rows(path: Path) -> list[dict[str, str]]:
     header_fields = [field.strip().lower() for field in nonempty_lines[0].split("|")]
     while header_fields and header_fields[-1] == "":
         header_fields.pop()
-    if header_fields[:2] != ["nation", "revenue"]:
-        raise ValueError("oracle header must begin with nation|revenue|")
+    if (
+        len(header_fields) < 2
+        or header_fields[0] not in {"nation", "n_name"}
+        or header_fields[1] != "revenue"
+    ):
+        raise ValueError("oracle header must begin with n_name|revenue or nation|revenue")
 
     rows: list[dict[str, str]] = []
     for line_number, line in enumerate(nonempty_lines[1:], start=2):
@@ -74,6 +98,10 @@ def parse_oracle_rows(path: Path) -> list[dict[str, str]]:
             fields.pop()
         if len(fields) < 2:
             raise ValueError(f"oracle row {line_number} must contain nation and revenue")
+        if not TWO_DECIMAL_RE.fullmatch(fields[1]):
+            raise ValueError(
+                f"oracle row {line_number} revenue must have exactly two decimal places"
+            )
         rows.append({"nation": fields[0], "revenue": fields[1]})
 
     return rows
