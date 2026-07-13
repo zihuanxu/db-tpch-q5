@@ -13,8 +13,8 @@ acceptance checks pass. User-owned legacy drafts in `docs/FINAL_REPORT.md` and
 | --- | --- | --- |
 | V1 | Minimal exact Q5 submission and SF1 evidence | FROZEN (`submission-v1-minimal`) |
 | V2 | Canonical Arrow IPC data and Arrow-native C++ CPU queries | COMPLETED (`submission-v2-arrow-cpu`) |
-| V3 | Arrow-native `gpu-copy`, `gpu-managed`, and `gpu-mapped` | IN PROGRESS |
-| V4 | Concurrent CPU-GPU hybrid query and canonical Arrow cuDF baseline | PENDING |
+| V3 | Arrow-native `gpu-copy`, `gpu-managed`, and `gpu-mapped` | COMPLETED (`submission-v3-arrow-cuda`) |
+| V4 | Concurrent CPU-GPU hybrid query and canonical Arrow cuDF baseline | IN PROGRESS |
 | V5 | Reproducible benchmark/evidence pipeline and formal experiment bundle | PENDING |
 | V6 | Claim-controlled paper, takeover material, CI, package, and release audit | PENDING |
 
@@ -117,6 +117,9 @@ Evidence recorded on 2026-07-14:
 - The deliverable explicitly records that Arrow CUDA extension classes are not
   available in this environment; the canonical Arrow tables are staged into
   native CUDA device, managed, or mapped buffers without claiming otherwise.
+- V3 was committed as `b0667b9`. The archive
+  `dist/memory-db-tpch-q5-v3.tar.gz` was extracted into a clean directory and
+  rebuilt as Arrow+CUDA Release; all 18 tests passed on the real GPU.
 
 ## V4 - Hybrid And cuDF
 
@@ -144,5 +147,5 @@ Evidence recorded on 2026-07-14:
 
 ## Current Action
 
-Implement one Arrow-backed CUDA execution interface and prove copy, managed, and
-mapped mode correctness before moving directly to V4.
+Implement deterministic Arrow batch partitioning, concurrent CPU/GPU execution,
+and a canonical Arrow-fed cuDF gate before moving directly to V5.
