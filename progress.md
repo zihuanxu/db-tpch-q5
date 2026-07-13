@@ -285,6 +285,12 @@ Evidence recorded so far on 2026-07-14:
 - Paper provenance now binds SHA256 values for `paper.tex`, generated results,
   and the built PDF. The final auditable package contains 687 files and passed
   both root and clean-extraction release audits with no engineering failure.
+- A post-freeze audit found that cuDF tests checked package availability but not
+  CUDA device availability. In the final sandbox this produced two
+  `cudaErrorNoDevice` failures while C++ CUDA tests correctly skipped. The test
+  prerequisite now uses `numba.cuda.is_available()`: the no-device rerun passes
+  12 tests and explicitly skips 2, while the earlier real-GPU 14/14 evidence is
+  retained as the runtime result.
 
 ## Current Action
 

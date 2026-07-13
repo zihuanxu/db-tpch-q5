@@ -14,8 +14,17 @@ from common import ResultRow
 from cudf_q5 import run_benchmark, run_q5
 
 
-def test_cudf_consumes_all_canonical_arrow_tables(monkeypatch: pytest.MonkeyPatch) -> None:
+def _require_cudf_device():
     cudf = pytest.importorskip("cudf")
+    from numba import cuda
+
+    if not cuda.is_available():
+        pytest.skip("CUDA device is unavailable")
+    return cudf
+
+
+def test_cudf_consumes_all_canonical_arrow_tables(monkeypatch: pytest.MonkeyPatch) -> None:
+    cudf = _require_cudf_device()
     schemas: list[object] = []
 
     def recording_from_arrow(table):
@@ -41,7 +50,7 @@ def test_cudf_consumes_all_canonical_arrow_tables(monkeypatch: pytest.MonkeyPatc
 
 
 def test_cudf_benchmark_separates_load_and_query_and_counts_rows() -> None:
-    pytest.importorskip("cudf")
+    _require_cudf_device()
     result = run_benchmark(
         ROOT / "tests" / "fixtures" / "tpch_q5_tiny_arrow",
         "ASIA",

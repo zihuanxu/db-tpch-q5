@@ -14,7 +14,8 @@
 - [x] 最终 CPU CI：14/14 CTest、79 项 Python 通过，2 项设备测试跳过。
 - [x] 最终 Arrow+CUDA 编译和 21 项 CTest：0 失败；本轮沙箱没有设备节点，
   7 项 CUDA runtime 测试跳过，真实 GPU 21/21 结果保存在 V4/V5 记录中。
-- [x] 最终 RAPIDS/PyArrow 测试：14/14 通过。
+- [x] RAPIDS/PyArrow：真实 GPU 验证 14/14 通过；当前无设备复验为
+  12 passed、2 个 cuDF runtime 测试明确跳过。
 
 ## 论文与讲解
 

@@ -57,7 +57,9 @@ python3 scripts/release_audit.py --json
 - Arrow+CUDA：重新编译成功，CTest 21 项、0 failed；当前沙箱没有
   `/dev/nvidia*`，7 项 CUDA runtime 测试按返回码 77 跳过。V4 同一代码主线已有
   真实 RTX 4090 21/21 和 compute-sanitizer 零错误记录，V5 正式矩阵也全部成功。
-- RAPIDS/PyArrow：Python 3.11 环境 14/14 通过。
+- RAPIDS/PyArrow：V5 真实 GPU Python 3.11 环境 14/14 通过；最终当前环境没有
+  GPU，复验为 12 passed、2 skipped。cuDF 测试现在同时检查包和 CUDA device，
+  不再把 `cudaErrorNoDevice` 错报为查询实现失败。
 - 论文：3 页 A4 PDF；无 Overfull、未定义引用或 LaTeX error；文本包含正式 hash
   和 61.414/222.832 ms，第一页人工检查无重叠。
 - 提交包：687 个文件，内部 manifest 与外部 SHA256 通过。全新解压目录再次通过
