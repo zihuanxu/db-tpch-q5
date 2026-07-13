@@ -111,9 +111,7 @@ def run_one(args: argparse.Namespace, engine: str, run_id: int, threads: int) ->
     try:
         command = build_command(args, engine, threads)
     except ValueError as exc:
-        return [
-            _error_row(args, engine, run_id, threads, str(exc))
-        ][0]
+        return _error_row(args, engine, run_id, threads, str(exc))
     started = time.perf_counter()
     completed = subprocess.run(
         command,
@@ -223,8 +221,8 @@ def main() -> int:
     run_id = 0
     for _ in range(args.repeat):
         for engine, threads in iter_engine_runs(engines, thread_values):
-                rows.append(run_one(args, engine, run_id, threads))
-                run_id += 1
+            rows.append(run_one(args, engine, run_id, threads))
+            run_id += 1
 
     write_rows(args.output, rows)
 
