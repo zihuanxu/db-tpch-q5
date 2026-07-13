@@ -12,8 +12,8 @@ acceptance checks pass. User-owned legacy drafts in `docs/FINAL_REPORT.md` and
 | Version | Scope | Status |
 | --- | --- | --- |
 | V1 | Minimal exact Q5 submission and SF1 evidence | FROZEN (`submission-v1-minimal`) |
-| V2 | Canonical Arrow IPC data and Arrow-native C++ CPU queries | IN PROGRESS |
-| V3 | Arrow-native `gpu-copy`, `gpu-managed`, and `gpu-mapped` | PENDING |
+| V2 | Canonical Arrow IPC data and Arrow-native C++ CPU queries | COMPLETED (`submission-v2-arrow-cpu`) |
+| V3 | Arrow-native `gpu-copy`, `gpu-managed`, and `gpu-mapped` | IN PROGRESS |
 | V4 | Concurrent CPU-GPU hybrid query and canonical Arrow cuDF baseline | PENDING |
 | V5 | Reproducible benchmark/evidence pipeline and formal experiment bundle | PENDING |
 | V6 | Claim-controlled paper, takeover material, CI, package, and release audit | PENDING |
@@ -83,6 +83,10 @@ Evidence recorded on 2026-07-14:
 - Full V2 gate: oracle Python tests 11/11, Arrow/baseline Python tests 12/12,
   default CPU/CUDA/tiny self-check, clean Arrow Release build, and both SF1
   engines with the strengthened oracle all passed.
+- V2 feature work was committed as `b21a42d`. The source archive
+  `dist/memory-db-tpch-q5-v2.tar.gz` was extracted into a clean directory; the
+  extracted package passed the full CPU/CUDA/tiny self-check on the real GPU and
+  a clean Arrow Release build with 13/13 tests.
 
 ## V3 - Arrow-native CUDA Modes
 
@@ -118,5 +122,5 @@ Evidence recorded on 2026-07-14:
 
 ## Current Action
 
-Finish the V2 release audit and package, then start V3 Arrow-native CUDA without
-waiting for a stage confirmation.
+Implement one Arrow-backed CUDA execution interface and prove copy, managed, and
+mapped mode correctness before moving directly to V4.
