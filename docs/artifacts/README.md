@@ -2,10 +2,11 @@
 
 Date: 2026-07-08
 
-This directory records the minimal audit evidence for the `gpu-results` branch.
-Large generated directories are intentionally not committed. Raw local outputs
-were produced under `results/experiments/`, while the report-ready SVG figures
-were copied to `docs/assets/`.
+This directory records GPU validation evidence. The final, exact SF1 evidence
+used by the paper is self-contained under `docs/artifacts/mvp_sf1/`: raw CSV,
+environment JSON, Arrow manifest, official oracle check, summary, and figures.
+The older SVG figures under `docs/assets/` are retained only as historical
+experiment outputs and are not the source of the final paper's numbers.
 
 ## Environment
 
@@ -108,5 +109,7 @@ The Q5 subset prepared by `scripts/prepare_tpch_q5_data.py` contained:
 ## Open Items
 
 - No larger official TPC-H scale factors were run.
+- The old 2026-07-08 full matrix used per-line cent truncation. The final
+  `mvp_sf1` run fixes the scale and matches the official answer.
 - `build/`, `build-cuda/`, `data/`, `dist/`, `results/`, and the downloaded
   TPC-H tools zip remain excluded from version control.
