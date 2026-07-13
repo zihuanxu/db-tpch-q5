@@ -1,0 +1,33 @@
+name: CPU Arrow CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  arrow-cpu:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v4
+        with:
+          activate-environment: memq5-arrow-cpu
+          environment-file: environment-arrow-cpu.yml
+          miniforge-version: latest
+          conda-solver: libmamba
+      - name: Build and verify Arrow CPU path
+        run: bash scripts/ci_cpu.sh
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpu-ci-logs
+          path: |
+            build-ci-arrow/Testing/Temporary/LastTest.log
+            /tmp/memq5-*.csv

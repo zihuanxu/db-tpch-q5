@@ -21,9 +21,11 @@ Arrow/PyArrow、三种 CUDA 内存模式和 RAPIDS cuDF。它不是通用数据�
 | 文档 | 路径 |
 |---|---|
 | 最小交付说明（从这里开始） | `docs/DELIVERY_GUIDE.md` |
-| 计算机学报模板期末论文（最终版） | `docs/FINAL_REPORT.pdf` / `docs/paper/paper.tex` |
-| 正式 SF1 证据 | `docs/artifacts/mvp_sf1/` |
+| 计算机学报模板期末论文 | `docs/paper/paper.pdf` / `docs/paper/paper.tex` |
+| 正式 SF1 证据 | `docs/artifacts/v5_sf1/` |
 | 答辩速查 | `docs/DEFENSE_CHEATSHEET.md` |
+| 从原理到讲解的学习材料 | `docs/learning/README.md` |
+| 实验过程记录 | `docs/process/README.md` |
 
 ## 完成情况
 
@@ -43,6 +45,11 @@ Arrow/PyArrow、三种 CUDA 内存模式和 RAPIDS cuDF。它不是通用数据�
   filter/hash join 的关系算子引擎；两者在 tiny 和 SF1 上结果一致。
 - V3 让 `gpu-copy`、`gpu-managed`、`gpu-mapped` 从同一 Arrow dataset 读取，
   共用精确 CUDA kernel，并记录 H2D、D2H 和 mapped 远程读取字节。
+- V4 增加 cuDF 与按比例切分的 CPU-GPU hybrid 路径，并统一结果校验协议。
+- V5 在 RTX 4090 上完成冻结的 SF1 正式矩阵，共 19 个配置、3 次预热和
+  10 次计时，原始记录和环境信息保存在 `docs/artifacts/v5_sf1/`。
+- V6 将正式证据接入论文、主张台账、过程文档、学习材料、CPU CI 和发布审计。
+  正式实验没有证明 hybrid 比最优单设备更快，这个负结果也如实保留。
 
 ## TPC-H Q5/GPU 复现
 
@@ -53,6 +60,13 @@ cmake -S . -B build -DMEMQ5_ENABLE_CUDA=OFF -DMEMQ5_ENABLE_TESTS=ON
 cmake --build build
 ctest --test-dir build --output-on-failure
 python3 scripts/self_check.py
+```
+
+安装 Arrow CPU 环境后，可以执行和 GitHub Actions 相同的完整 CPU 验收：
+
+```bash
+conda env create -f environment-arrow-cpu.yml
+conda run -n memq5-arrow-cpu bash scripts/ci_cpu.sh
 ```
 
 tiny fixture 示例：
@@ -109,9 +123,30 @@ C++ Arrow loader 的独立构建与验证见
 `docs/STAGE_V2_2_ARROW_CPU.md`，Arrow 输入的 CUDA 三模式见
 `docs/STAGE_V3_ARROW_CUDA.md`。
 
+## 证据审计与发布
+
+正式结果不是从论文正文手工抄写的。`scripts/import_paper_evidence.py` 从 V5
+证据包生成 `docs/paper/generated/results.tex`，主张状态记录在
+`docs/research/CLAIM_LEDGER.md`。交付前运行：
+
+```bash
+python3 scripts/audit_evidence_bundle.py docs/artifacts/v5_sf1
+python3 scripts/release_audit.py --json
+python3 scripts/package_submission.py
+```
+
+CPU 路径由 `.github/workflows/cpu-ci.yml` 自动构建和测试；CUDA、cuDF 和正式
+SF1 性能仍必须在 NVIDIA GPU 机器上按 `docs/GPU_SERVER_RUNBOOK.md` 复验。
+
+## 许可与引用
+
+本项目自有代码采用 `Apache-2.0` 许可，见 `LICENSE` 和 `NOTICE`。论文或项目
+引用信息见 `CITATION.cff`。TPC-H 工具、生成数据、论文模板以及前期对照目录
+可能有各自许可或使用条款，不由本项目许可证重新授权。
+
 ## 版本控制说明
 
-最小提交包包含源码、脚本、tiny 数据、最终论文和必要 SF1 CSV/manifest，以下
+V6 提交包包含源码、脚本、tiny 数据、论文和可审计的 V5 SF1 证据，以下
 内容不放入压缩包：
 
 - CMake/autotools 构建目录。

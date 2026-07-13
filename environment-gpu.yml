@@ -1,12 +1,17 @@
-name: memq5-arrow-cpu
+name: memq5-cudf
 channels:
-  - defaults
+  - rapidsai
+  - conda-forge
+  - nvidia
+  - nodefaults
 dependencies:
   - python=3.11
-  - cmake
-  - ninja
+  - cuda-version=12.6
   - arrow-cpp=23.0.1
   - pyarrow=23.0.1
+  - cudf=26.06
+  - cmake
+  - ninja
   - openssl
   - nlohmann_json
   - pytest

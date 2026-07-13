@@ -1,0 +1,11 @@
+MEMQ5 TPC-H Q5 CPU-GPU Research Prototype
+Copyright 2026 Xu Zihuan
+
+The Apache-2.0 license applies to original MEMQ5 source, scripts, tests, and
+documentation in this repository. It does not relicense third-party material:
+
+- docs/paper/template contains Computer Journal of China template files and is
+  governed by its upstream terms.
+- hashjoin-cpu is preserved prior-work/upstream-derived course material; consult
+  its provenance and upstream project before redistribution.
+- TPC-H tools and generated benchmark data are not distributed by this project.

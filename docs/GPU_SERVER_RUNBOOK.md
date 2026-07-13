@@ -1,198 +1,143 @@
 # GPU Server Runbook
 
-This runbook records the GPU validation procedure used for the 2026-07-01
-RTX 4090 run and remains the reproducibility checklist for future official
-TPC-H scale-factor experiments.
+V6 runbook，最后核对 2026-07-14。正式环境为 GPU 0 RTX 4090、compute
+capability 8.9、driver 595.71.05、nvcc 12.6、Arrow 23.0.1、cuDF 26.06.00。
+正式 SF1 hash 为 `542abf4003633c7c`。
 
-Completed validation snapshot:
-
-- GPU runtime host: NVIDIA GeForce RTX 4090, compute capability 8.9.
-- CMake CUDA architecture: `89`.
-- `ctest --test-dir build-cuda --output-on-failure`: passed, including
-  `test_q5_cuda`.
-- Tiny CPU/GPU/Python hash: `1e07d78fa8eededb`.
-- Synthetic CPU/GPU/Python hash: `d5ffe393223a207e`.
-- Official TPC-H SF1 CPU/GPU hash: `9f1f5f7578dd816e`.
-- Official TPC-H SF1 CPU/GPU/cuDF hash: `9f1f5f7578dd816e`.
-- cuDF baseline: completed with RAPIDS cuDF `26.06.00` in the `memq5-cudf`
-  conda environment.
-
-## 1. Check The Runtime Host
-
-Run:
+## 1. 检查环境
 
 ```bash
 nvidia-smi
 nvcc --version
 cmake --version
-python3 --version
+conda run -n memq5-cudf python -c \
+  'import pyarrow,cudf; print(pyarrow.__version__, cudf.__version__)'
 ```
 
-Expected:
+RTX 4090/L20 使用 `CMAKE_CUDA_ARCHITECTURES=89`。驱动显示的 CUDA Version
+是驱动支持上限，不等于 `nvcc` 工具链版本。
 
-- `nvidia-smi` prints one or more GPUs.
-- `nvcc` is available.
-- CMake is available.
-- Python 3 is available.
-
-Record the environment:
+## 2. Arrow+CUDA Release 构建
 
 ```bash
-python3 scripts/capture_environment.py --output results/environment_gpu.json
-```
-
-## 2. Choose CUDA Architecture
-
-Use the GPU model from `nvidia-smi` and choose the matching CMake architecture.
-Common values:
-
-| GPU family | CMake value |
-| --- | --- |
-| Turing T4 | `75` |
-| Ampere A100 | `80` |
-| Ampere RTX 30xx / A10 | `86` |
-| Ada RTX 4090 / L20 | `89` |
-| Hopper H100 | `90` |
-
-If uncertain, use the lowest compatible architecture for the server GPU or ask
-the administrator.
-
-## 3. Build
-
-```bash
-cmake -S . -B build-cuda \
+cmake -S . -B build-arrow-cuda-release \
+  -DMEMQ5_ENABLE_ARROW=ON \
   -DMEMQ5_ENABLE_CUDA=ON \
   -DMEMQ5_ENABLE_TESTS=ON \
-  -DCMAKE_CUDA_ARCHITECTURES=<arch>
-
-cmake --build build-cuda
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CUDA_ARCHITECTURES=89
+cmake --build build-arrow-cuda-release -j 8
 ```
 
-## 4. Run Tests
+## 3. 测试门禁
 
 ```bash
-ctest --test-dir build-cuda --output-on-failure
+CUDA_VISIBLE_DEVICES=0 ctest \
+  --test-dir build-arrow-cuda-release \
+  --output-on-failure
 ```
 
-On a correctly configured GPU runtime, `test_q5_cuda` should actually run
-`gpu-copy`, `gpu-managed`, and `gpu-mapped`, then verify all result hashes match
-CPU.
+真实 GPU 上应通过 21/21。无 GPU 环境中 GPU runtime tests 返回 77，由 CTest
+标成 skipped；不能把 skipped 说成真实运行通过。
 
-## 5. Tiny Correctness Experiment
+cuDF/PyArrow Python 3.11 测试：
 
 ```bash
-python3 scripts/run_experiment_pipeline.py \
-  --name tiny_gpu_modes \
-  --memq5 build-cuda/memq5 \
-  --data-dir tests/fixtures/tpch_q5_tiny \
-  --engines cpu,gpu-copy,gpu-managed,gpu-mapped,python \
-  --repeat 5 \
-  --force
+CUDA_VISIBLE_DEVICES=0 conda run -n memq5-cudf \
+  python -m pytest -q tests/python/test_arrow_dataset_mvp.py \
+  tests/python/test_baseline_exact_mvp.py tests/python/test_cudf_q5.py
 ```
 
-Check:
+如果 RAPIDS 环境没有 pytest，可把同为 Python 3.11 的临时 pytest site-packages
+加入 `PYTHONPATH`；不要混用 Python 3.13 site-packages。
+
+## 4. tiny 正确性
 
 ```bash
-cat results/experiments/tiny_gpu_modes/hash_check.txt
-cat results/experiments/tiny_gpu_modes/summary.md
+CUDA_VISIBLE_DEVICES=0 ./build-arrow-cuda-release/memq5_arrow_query \
+  --engine gpu-copy \
+  --dataset tests/fixtures/tpch_q5_tiny_arrow \
+  --region ASIA --date 1994-01-01 --format rows
 ```
 
-Expected:
+预期 JAPAN 190.00、INDIA 90.00，hash `248d10b6ee352953`。再对 managed、
+mapped、hybrid 和 CPU 重复，不能只看进程退出码。
 
-- `hash_check.txt` reports one hash for all successful engines.
-- No GPU engine should be listed as an error.
-
-## 6. Synthetic Development Experiment
-
-Generate deterministic development data:
+## 5. compute-sanitizer
 
 ```bash
-python3 scripts/generate_synthetic_tpch_q5.py \
-  --output data/synthetic_gpu_dev \
-  --customers 10000 \
-  --orders 50000 \
-  --lineitems 200000 \
-  --suppliers 5000 \
-  --asia-heavy
+CUDA_VISIBLE_DEVICES=0 compute-sanitizer --tool memcheck \
+  ./build-arrow-cuda-release/memq5_arrow_query \
+  --engine hybrid-arrow --cpu-ratio 0.5 \
+  --dataset tests/fixtures/tpch_q5_tiny_arrow \
+  --region ASIA --date 1994-01-01 --format benchmark
 ```
 
-Run:
+预期 `ERROR SUMMARY: 0 errors`。
 
-```bash
-python3 scripts/run_experiment_pipeline.py \
-  --name synthetic_gpu_modes \
-  --memq5 build-cuda/memq5 \
-  --data-dir data/synthetic_gpu_dev \
-  --engines cpu,gpu-copy,gpu-managed,gpu-mapped,python \
-  --thread-list 1,2,4,8 \
-  --repeat 5 \
-  --force
-```
+## 6. 准备官方 Arrow 数据
 
-This experiment is for debugging and trend checks only. It is not a substitute
-for final TPC-H dbgen results.
-
-## 7. Official TPC-H Data
-
-After obtaining or generating official TPC-H dbgen `.tbl` files, prepare the Q5
-subset:
+TPC-H tools 和生成的 `.tbl` 不随仓库分发。先合法获得 dbgen，再运行：
 
 ```bash
 python3 scripts/prepare_tpch_q5_data.py \
   --source-dir /path/to/dbgen-output \
   --output-dir data/tpch_sf1 \
+  --scale-factor 1 --mode copy --force
+
+conda run -n memq5-cudf python scripts/prepare_arrow_dataset.py \
+  --input data/tpch_sf1 \
+  --output data/tpch_sf1_arrow \
   --scale-factor 1 \
-  --mode copy \
-  --force
+  --batch-rows 262144 \
+  --source-command 'TPC-H V3.0.1 dbgen -s 1' \
+  --replace
 ```
 
-Validate:
+## 7. 正式 V5 矩阵
+
+矩阵由 `experiments/v5_formal_sf1.yml` 冻结，不手工修改 engine/thread 组合：
 
 ```bash
-python3 scripts/validate_tpch_q5_data.py --data-dir data/tpch_sf1
+CUDA_VISIBLE_DEVICES=0 python3 scripts/run_benchmarks.py \
+  --matrix experiments/v5_formal_sf1.yml \
+  --arrow-cli build-arrow-cuda-release/memq5_arrow_query \
+  --arrow-dataset data/tpch_sf1_arrow \
+  --output results/v5_sf1/raw.csv
 ```
 
-Run:
+运行结束后生成 summary/environment，再 finalize。已冻结结果在
+`docs/artifacts/v5_sf1`，通常只需审计：
 
 ```bash
-python3 scripts/run_experiment_pipeline.py \
-  --name tpch_sf1_gpu_modes \
-  --memq5 build-cuda/memq5 \
-  --data-dir data/tpch_sf1 \
-  --engines cpu,gpu-copy,gpu-managed,gpu-mapped \
-  --thread-list 1,2,4,8 \
-  --repeat 5 \
-  --force
+python3 scripts/benchmark_schema.py validate docs/artifacts/v5_sf1/raw.csv
+python3 scripts/evidence_bundle.py audit --directory docs/artifacts/v5_sf1
 ```
 
-If RAPIDS cuDF is installed, run the CPU/CUDA/cuDF comparison:
+预期：190 measured、57 warmups、checksum/matrix/coverage/summary 全部无错误。
+
+## 8. profiler 边界
+
+当前只证明 hybrid backend duration overlap，没有 Nsight timeline。若新增 profiler：
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 conda run -n memq5-cudf python \
-  scripts/run_experiment_pipeline.py \
-  --name tpch_sf1_with_cudf \
-  --memq5 build-cuda/memq5 \
-  --data-dir data/tpch_sf1 \
-  --engines cpu,gpu-copy,gpu-managed,gpu-mapped,cudf \
-  --thread-list 1,2,4,8 \
-  --repeat 5 \
-  --allow-benchmark-errors \
-  --force
+CUDA_VISIBLE_DEVICES=0 nsys profile \
+  -o results/profiles/hybrid_sf1 \
+  ./build-arrow-cuda-release/memq5_arrow_query \
+  --engine hybrid-arrow --cpu-ratio 0.75 \
+  --dataset data/tpch_sf1_arrow \
+  --region ASIA --date 1994-01-01 --format benchmark
 ```
 
-## 8. Required Artifacts For The Report
+只有 timeline 能定位 CPU scan 与 CUDA kernel 是否重叠。生成的 `.nsys-rep` 不放
+入最小源码包，报告图应带 profiler 版本、命令和 checksum。
 
-For every final experiment directory, keep:
+## 9. 失败分类
 
-- `README.md`
-- `validation.json`
-- `environment.json`
-- `benchmarks.csv`
-- `hash_check.txt`
-- `summary.md`
-- `assets/summary.md`
-- `assets/total_time.svg`
-- `assets/time_breakdown.svg`
+- return 77：`SKIPPED_NO_GPU`；
+- CUDA allocation failure：`ERROR_CUDA_OOM`；
+- timeout：`ERROR_TIMEOUT`；
+- executable/Conda 启动失败：`ERROR_PROCESS_LAUNCH`；
+- 其他非零退出：`ERROR_PROCESS_EXIT`。
 
-These are enough to write the correctness, setup, result, and analysis sections
-of the final report.
+失败记录必须保留 stdout/stderr，不能从 CSV 删除后声称矩阵完整。

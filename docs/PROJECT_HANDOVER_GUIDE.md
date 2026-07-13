@@ -2,11 +2,10 @@
 
 > 最后核对日期：2026-07-14；适用仓库：`db-tpch-q5`；目的：让一个没有参与原始实现的人，能够看懂、复现、修改并诚实地讲清这个项目。
 
-> 最终更新：本文主体记录了接手时对旧版的审计，因此后文仍会出现旧 hash
-> `9f1f...` 和“逐行截断”的历史问题。该问题现已修复：最终六后端 hash 为
-> `542abf4003633c7c`，与官方 `q5.out` 完全一致；PyArrow/cuDF 改为共用
-> Arrow IPC。最终结果只以 `docs/FINAL_REPORT.pdf` 和
-> `docs/artifacts/mvp_sf1/` 为准，旧数字只用于说明发现问题的过程。
+> V6 已验证状态：旧 hash `9f1f...` 和“逐行截断”只属于历史审计。当前
+> 19 组 Arrow 正式配置的 hash 均为 `542abf4003633c7c`，与官方 `q5.out`
+> 完全一致。最终结果只以 `docs/artifacts/v5_sf1/`、
+> `docs/research/CLAIM_LEDGER.md` 和 `docs/paper/paper.pdf` 为准。
 
 ## 0. 先记住这几个结论
 
@@ -15,9 +14,9 @@
    - `hashjoin-cpu/`：基于 ETH Zurich 2013 年内存哈希连接代码扩展的前期实验。
 2. 顶层项目不是数据库，也不是通用 SQL 引擎。它只接受固定的 Q5 参数，并执行手写好的固定查询计划。
 3. CPU 和三个 CUDA 模式使用同一个 CPU 端预处理计划。GPU 只负责最后的 `lineitem` 扫描和分组累加。
-4. 正式 SF1 实验中，各实现都得到同一个项目内哈希 `9f1f5f7578dd816e`。这能证明它们彼此一致，但不能证明它们严格等于 TPC-H 官方小数语义。
-5. 当前实现会先把每条明细的收入截断到分，再求和。因此结果与 `dbgen/answers/q5.out` 相差几元。这是必须主动掌握的正确性边界。
-6. 正式 GPU 表中 `threads=1/2/4/8` 不代表 GPU 使用这些 CPU 线程。GPU 引擎没有使用 `--threads`，这些行本质上是重复实验。
+4. 正式 SF1 的 190 次 measured run 和 57 次 warmup 全部通过 oracle，唯一哈希为 `542abf4003633c7c`。
+5. 当前实现使用 `revenue_1e4` 先精确聚合、最后舍入，已经修复逐明细截断问题。
+6. V5 矩阵只为每个 GPU 模式保留一组 `threads=1` 元数据；真正 CUDA 并行度由 block 和输入行数决定。
 7. `hashjoin-cpu` 中的 VJ 是 direct-address vector index，不是 SIMD 向量指令。
 8. `hashjoin-cpu` 的 star join `pro` 模式并没有调用原版 radix PRO，而是两阶段、会物化中间结果的开放寻址哈希连接。报告里的命名比实际实现更强。
 9. 当前顶层 CPU 项目可直接构建并通过测试。`hashjoin-cpu` 也能构建，但老式 Autoconf 有两个容易踩中的构建问题，后文给出可靠命令。
@@ -244,14 +243,15 @@ CUDA block 固定为 256 个线程。每个命中行都直接对全局 25 国聚
 | `gpu-managed` | `cudaMallocManaged` | CPU 填充后 prefetch 到 GPU | managed 分配、CPU copy、迁移和同步 |
 | `gpu-mapped` | `cudaHostAllocMapped` pinned host memory | GPU 经 PCIe 零拷贝读取主机内存 | pinned 分配、CPU copy、较慢的远程读取 |
 
-正式 SF1 上，`gpu-mapped` 的 kernel 大约 2.71 ms，比 copy/managed 的约 0.22 ms 慢很多；它省掉了大块显式 H2D，却让 kernel 反复跨 PCIe 取数据。
+正式 SF1 上，`gpu-mapped` 的 kernel 中位数约 2.681 ms，比 copy/managed 的
+1.347/1.345 ms 慢；它省掉了大块显式 H2D，却让 kernel 经 PCIe 取数据。
 
 ### 为什么 GPU 总时间反而比 CPU 慢
 
 正式结果中 GPU kernel 很快，但整个程序不是常驻 GPU 服务。每次命令都会：
 
 1. 新进程启动 CUDA runtime。
-2. CPU 重新加载文本数据。
+2. 读取并校验 Arrow 数据。
 3. CPU 重新构建 Q5 映射。
 4. GPU 重新分配输入缓冲区。
 5. 复制或迁移数据。
@@ -260,17 +260,20 @@ CUDA block 固定为 256 个线程。每个命中行都直接对全局 25 国聚
 
 因此 SF1 的单次端到端 GPU 路径被启动、分配和传输成本主导。不能据此得出“GPU 不适合数据库”，只能说当前一次性进程、一次查询、SF1 规模下没有摊薄固定成本。
 
-### `--threads` 对 GPU 无效
+### V5 中 `--threads` 对 GPU 的含义
 
-GPU 函数接收 `Q5Params`，但没有使用 `params.threads`。正式 full matrix 仍对每个 GPU 模式跑了 1、2、4、8 四个 thread 标签，所以 60 个 GPU 样本中存在四组重复标签。讲实验时应说：
+GPU 函数不使用 CPU worker 数。旧 full matrix 曾留下 1、2、4、8 四组冗余标签；
+V5 正式矩阵已经修正，每个 GPU 模式只有 `threads=1` 这一组元数据。讲实验时应说：
 
-> GPU 的四个 thread 标签是脚本矩阵留下的冗余维度，不是 GPU 线程扩展性实验。真正的 CUDA 并行度由 256-thread blocks 和输入行数决定。
+> `threads=1` 不是只启动一个 CUDA thread。真正并行度由 256-thread blocks 和
+> 输入行数决定；该字段只是统一运行记录 schema 的元数据。
 
 ## 9. 输出、结果哈希和计时
 
 ### 9.1 结果哈希
 
-结果先按 revenue 降序排序。`result_hash_hex()` 再用 64 位 FNV-1a 顺序哈希每行的国家名和 `revenue_cents`。
+结果先按 revenue 降序排序。`result_hash_hex()` 再用 64 位 FNV-1a 顺序哈希
+每行国家名和 `revenue_1e4` 精确整数。
 
 哈希适合快速检查不同引擎是否返回完全相同的整数结果，但它不能回答：
 
@@ -280,25 +283,26 @@ GPU 函数接收 `Q5Params`，但没有使用 `params.threads`。正式 full mat
 
 ### 9.2 两种计时口径
 
-顶层 C++ 输出的 `total_ms` 从进入执行引擎开始，到查询结果形成结束。它不包含 `.tbl` 文本加载和进程启动。
-
-实验脚本记录的 `elapsed_ms` 是外部 `subprocess` 墙钟时间，包含进程启动和全部文本加载。
+V5 统一记录 `query_total_ms` 和 `process_elapsed_ms`。前者由后端报告查询阶段，
+后者由外部 monitor 测量整个子进程。
 
 ```text
-C++ internal total_ms:
-    plan build + scan/GPU setup + aggregation + result build
+query_total_ms:
+    backend query phases (see per-engine breakdown)
 
-external elapsed_ms:
-    process startup + .tbl load + internal total + output
+process_elapsed_ms:
+    process startup + Arrow load/check + query + output + exit
 ```
 
-Python、PyArrow、cuDF 基线自己的 `total_ms` 包含它们的数据读取和整个查询。因此直接比较 C++ `total_ms` 与 Arrow/cuDF `total_ms` 并不公平。
+cuDF 还单独报告 `load_ms`。跨后端比较时必须使用同名列，并说明后端对查询阶段
+的边界；不能把一个后端的 query 和另一个后端的 process 比较。
 
 ### 9.3 GPU breakdown 也不是完全同口径
 
 - `gpu-copy.h2d_ms` 包含显式 `cudaMemcpy`。
 - `gpu-managed.h2d_ms` 主要记录 prefetch，不含 CPU 把原数据复制进 managed buffer 的时间。
-- `gpu-mapped.h2d_ms` 主要只覆盖结果清零，不含 CPU 把原数据复制进 pinned buffer 的时间。
+- `gpu-mapped.h2d_ms` 为 0，表示没有大块显式输入 H2D；host prepare 和 kernel
+  期间的远程读取分别属于其他阶段。
 - `build + h2d + kernel + d2h` 小于 `total_ms`，差值里还有 CUDA runtime、分配、CPU copy、同步和释放。
 
 因此 `time_breakdown.svg` 是“已命名阶段对比”，不是完整的总时间分解。
@@ -308,11 +312,11 @@ Python、PyArrow、cuDF 基线自己的 `total_ms` 包含它们的数据读取�
 | 基线 | 实现方式 | 作用 | 当前状态 |
 | --- | --- | --- | --- |
 | `python` | 字典和 Python 循环 | 无依赖正确性参考 | 本次 SF1 可复跑 |
-| `arrow` | PyArrow CSV 读入和 compute 操作 | 列式框架对照 | `memq5-cudf` 环境可复跑 |
+| `arrow-acero` | Arrow C++ filter/hash join/aggregate | 列式关系算子对照 | V5 已正式验证 |
 | `duckdb` | SQL over `.tbl` | 通用数据库对照 | 正式环境未安装，未进入 full matrix |
-| `cudf` | RAPIDS DataFrame | 通用 GPU DataFrame 对照 | 历史 RTX 4090 上已跑；当前驱动不可用 |
+| `cudf` | RAPIDS DataFrame | 通用 GPU DataFrame 对照 | V5 RTX 4090 正式验证 |
 
-所有基线都被刻意写成与 C++ 相同的逐行截断语义：
+所有正式后端都使用相同的 `revenue_1e4` 精确语义：
 
 - Python 使用整数 `// 10000`。
 - DuckDB SQL 显式 `floor(...)`。
@@ -353,27 +357,27 @@ python3 scripts/self_check.py --skip-cuda
 应看到：
 
 ```text
-JAPAN,19000,190.00
-INDIA,9000,90.00
-result_hash,1e07d78fa8eededb
+JAPAN,1900000,190.00
+INDIA,900000,90.00
+result_hash,248d10b6ee352953
 ```
 
 ### 11.3 SF1 CPU 运行
 
 ```bash
-./build/memq5 \
-  --engine cpu \
-  --data-dir data/tpch_sf1 \
+./build-arrow-cuda-release/memq5_arrow_query \
+  --engine cpu-specialized \
+  --dataset data/tpch_sf1_arrow \
   --region ASIA \
   --date 1994-01-01 \
-  --threads 8 \
+  --threads 16 \
   --format benchmark
 ```
 
 应得到 5 行结果，哈希为：
 
 ```text
-9f1f5f7578dd816e
+542abf4003633c7c
 ```
 
 ### 11.4 PyArrow 运行
@@ -382,7 +386,7 @@ result_hash,1e07d78fa8eededb
 
 ```bash
 conda run -n memq5-cudf python baselines/arrow_q5.py \
-  --data-dir data/tpch_sf1 \
+  --dataset data/tpch_sf1_arrow \
   --region ASIA \
   --date 1994-01-01 \
   --format benchmark
@@ -402,7 +406,9 @@ cmake --build build-cuda -j 8
 ctest --test-dir build-cuda --output-on-failure
 ```
 
-当前机器 `nvcc` 是 12.6，但 2026-07-13 的 `nvidia-smi` 无法与驱动通信，所以本次没有重新执行 CUDA 测试。历史正式环境记录了 RTX 4090、driver 595.71.05、cuDF 26.06.00 和成功 GPU 结果。
+V5 正式运行时 `nvcc` 为 12.6，GPU 0 为 RTX 4090，driver 595.71.05，cuDF
+26.06.00。Arrow+CUDA Release CTest、compute-sanitizer、hybrid 和 cuDF 均在
+真实 GPU 上复验通过。
 
 还要注意历史环境曾出现版本口径混杂：PATH 上的 `nvcc` 为 12.6，某次 CMake 选择了 `/usr/bin/nvcc` 12.0，而驱动展示的 “CUDA Version” 是驱动支持上限 13.2。这三个数字不是同一概念。
 
@@ -425,56 +431,57 @@ ctest --test-dir build-cuda --output-on-failure
 
 - CPU：AMD EPYC 9654，2 sockets，384 logical CPUs。
 - GPU：NVIDIA RTX 4090 24 GiB。
-- 正式参数：`ASIA`、`1994-01-01`、5 次重复。
-- full matrix 共 90 行且 0 error。
+- 正式参数：`ASIA`、`1994-01-01`。
+- 每组 3 次 warmup、10 次 measured cold process。
+- full matrix 共 19 组配置、190 条测量记录且 0 error。
 
-90 行的组成：
+19 组配置的组成：
 
 ```text
-(cpu + 3 个 GPU 模式) * 4 个 thread 标签 * 5 次 = 80
-arrow * 5 = 5
-cudf * 5 = 5
-总计 90
+specialized CPU: threads 1/2/4/8/16/32 = 6
+Arrow Acero: threads 1/2/4/8/16/32 = 6
+copy/managed/mapped = 3
+hybrid CPU ratio 0.25/0.50/0.75 = 3
+cuDF = 1
+总计 19
 ```
 
 ### 12.3 报告中的中位数
 
 | 引擎 | 代表参数 | internal total median | external elapsed median | 正确解释 |
 | --- | --- | ---: | ---: | --- |
-| CPU | 8 threads | 75.76 ms | 15.95 s | 查询内最快，文本加载占外部时间大头 |
-| PyArrow | 1 | 835.13 ms | 1.06 s | 查询慢于 C++，但读取文本明显更快 |
-| cuDF | 1 | 4988.09 ms | 5.34 s | 通用 DataFrame join 开销较大 |
-| gpu-copy | thread 标签 1 | 268.76 ms | 16.25 s | kernel 快，分配/启动/传输拖慢总时间 |
-| gpu-managed | thread 标签 1 | 307.68 ms | 16.26 s | 迁移和统一内存管理有额外成本 |
-| gpu-mapped | thread 标签 1 | 354.48 ms | 16.32 s | 零拷贝 kernel 经 PCIe 读取，kernel 更慢 |
+| specialized CPU | 16 threads | 61.414 ms | 381.285 ms | 固定 Q5 专用计划最快 |
+| Arrow Acero | 32 threads | 321.535 ms | 707.231 ms | 通用算子计划准备较重 |
+| cuDF | 1 | 116.427 ms | 3682.381 ms | query 快，cold Python/Conda 进程重 |
+| gpu-copy | 1 | 314.151 ms | 1008.970 ms | 三种 CUDA 中最好 |
+| gpu-managed | 1 | 358.158 ms | 1006.683 ms | prefetch 未超过 copy |
+| gpu-mapped | 1 | 412.264 ms | 1134.574 ms | 无显式大 H2D，但远程读取更慢 |
+| hybrid | 75% CPU | 222.832 ms | 888.370 ms | 正确并发，但未超过 pure CPU |
 
-本次 2026-07-13 复跑受页缓存和当前机器状态影响，C++ SF1 外部时间约 4.6 s，PyArrow 约 2.5 s，纯 Python 约 25.3 s。它们不能替换正式结果，但验证了“计时口径和 I/O 会改变排名”这一点。
+这张表是 V5 `summary.csv` 的中位数，不再混用早期 `.tbl` full matrix。
 
 正式证据不要只看报告正文，原始位置是：
 
 | 证据 | 路径 |
 | --- | --- |
-| 90 行 full matrix | `results/experiments/tpch_sf1_full_matrix_arrow_cudf/benchmarks.csv` |
-| 中位数汇总 | `results/experiments/tpch_sf1_full_matrix_arrow_cudf/summary.md` |
-| 环境和依赖 | `results/experiments/tpch_sf1_full_matrix_arrow_cudf/environment.json` |
-| 数据校验 | `results/experiments/tpch_sf1_full_matrix_arrow_cudf/validation.json` |
-| 跨引擎哈希检查 | `results/experiments/tpch_sf1_full_matrix_arrow_cudf/hash_check.txt` |
-| SF1 表行数 | `data/tpch_sf1/memq5_manifest.json` |
-| 官方参考答案 | `data/tpch_tools/TPC-H V3.0.1/dbgen/answers/q5.out` |
+| 190 条 measured records | `docs/artifacts/v5_sf1/raw.csv` |
+| 57 条 warmup records | `docs/artifacts/v5_sf1/warmups.csv` |
+| 重算统计 | `docs/artifacts/v5_sf1/summary.csv` |
+| 环境和依赖 | `docs/artifacts/v5_sf1/environment.json` |
+| 正确性与覆盖 | `docs/artifacts/v5_sf1/correctness.json` |
+| 完整 artifact checksums | `docs/artifacts/v5_sf1/manifest.json` |
+| 论断状态 | `docs/research/CLAIM_LEDGER.md` |
 
-### 12.4 当前精度与官方答案的差异
+### 12.4 精度问题已经怎样修复
 
-| nation | 项目结果 | 官方 `q5.out` | 差值 |
-| --- | ---: | ---: | ---: |
-| INDONESIA | 55,502,035.06 | 55,502,041.17 | -6.11 |
-| VIETNAM | 55,295,080.65 | 55,295,087.00 | -6.35 |
-| CHINA | 53,724,488.13 | 53,724,494.26 | -6.13 |
-| INDIA | 52,035,506.17 | 52,035,512.00 | -5.83 |
-| JAPAN | 45,410,170.55 | 45,410,175.70 | -5.15 |
+旧实现对每条 lineitem 先截断到分，五个国家分别少约 5--6 元。V2 前已经改为
+保存 `price_cents * (100-discount)` 的 `revenue_1e4`，所有行聚合完成后才显示
+两位小数。现在五行与官方答案严格一致，正式 hash 为 `542abf4003633c7c`。
 
 老师如果问“结果对不对”，最稳妥的回答是：
 
-> CPU、CUDA、Python、PyArrow 和 cuDF 在本项目定义的定点数语义下完全一致，SF1 哈希相同。但当前实现逐明细截断到分，和 TPC-H 官方 decimal 求和语义有几元偏差。若要求严格标准结果，应把每行收入保留更高精度，聚合结束后再格式化到分，并重新生成所有基线和实验哈希。
+> hash 证明所有后端返回同一组精确整数；独立 oracle 又按十进制逐行比较官方
+> `q5.out`。两层检查都通过。旧 `9f1f...` 只用于说明发现并修复过精度错误。
 
 ## 13. `hashjoin-cpu` 是什么
 
@@ -652,24 +659,24 @@ bash scripts/self_check_assignment.sh
 - VJ 手工运行返回 `Results = 4096`。
 - starjoin VJ SF1 返回 `matches=6,000,000`、`aggregate=18,000,000`。
 
-## 19. 文档和实现不一致清单
+## 19. 历史不一致清单与 V6 状态
 
-下面这些不是为了否定项目，而是接手人必须知道的边界。
+下面保留接手审计发现的问题，同时写明 V6 是否已经修复。
 
-| 文档说法或暗示 | 实际实现 |
+| 历史说法或问题 | V6 实际状态 |
 | --- | --- |
-| Arrow-compatible columns | 只是 Arrow-inspired 连续列布局，没有 Arrow 接口或有效性协议 |
+| Arrow-compatible columns | 已改为真实 Arrow IPC、C++ loader 和 Acero 接口 |
 | GPU 构建 order map | order/customer/supplier map 全由 CPU 构建 |
 | GPU shared-memory reduction | 每个命中行直接做全局 `atomicAdd` |
-| Arrow C++/Acero 基线 | 最终是 Python PyArrow 脚本 |
-| benchmark 先 warmup | 当前 runner 每次启动独立进程，没有专门 warmup |
-| 汇总含 min/max/p95 | 当前主要输出 min/median/mean，没有完整 p95/max |
-| 记录吞吐、bytes、RSS | 顶层 benchmark CSV 没有这些字段 |
-| GPU 线程扩展性 1/2/4/8 | `--threads` 对 GPU 无效，是冗余标签 |
+| Arrow C++/Acero 基线 | 已实现真实 Arrow C++ Acero 计划 |
+| benchmark 先 warmup | V5 每组保留 3 条 warmup，再做 10 条 measured |
+| 汇总含 min/max/p95 | V5 从 raw 重算 min/median/max/p95/stddev |
+| 记录吞吐、bytes、RSS | V5 schema 已包含这些字段；GPU peak memory 明确 unsupported |
+| GPU 线程扩展性 1/2/4/8 | V5 去掉冗余 sweep，每个 GPU 模式只留一组元数据 |
 | breakdown 是完整总时间 | allocation/runtime/CPU copy 等有较大未命名余量 |
 | 数据校验包含 FK 完整性 | validator 主要解析并计数，没有真正逐 FK 检查 |
-| CUDA CTest 通过就代表 GPU 跑过 | 无 GPU 时 `test_q5_cuda` 可以 skip 后返回成功，应看日志 |
-| 项目结果等于官方 Q5 | 项目内各引擎一致，但逐行截断造成官方结果偏差 |
+| CUDA CTest 通过就代表 GPU 跑过 | 无设备统一返回 77 并由 CTest 标为 skipped；正式记录另有真实 GPU 运行 |
+| 项目结果等于官方 Q5 | `revenue_1e4` 修复后已由独立 oracle 逐行验证 |
 | VJ present bitmap | 实际是每 key 1 byte，不是 1 bit |
 | starjoin PRO 是 radix PRO | 实际是开放寻址哈希表的物化两阶段版本 |
 | sort-merge 用 64 线程 | 当前实现忽略 `nthreads`，是单线程 `qsort` |
@@ -680,7 +687,7 @@ bash scripts/self_check_assignment.sh
 ### 可以较有把握地说
 
 - 两个子项目的核心代码在当前仓库中存在，并且 CPU 小数据路径能构建和运行。
-- 顶层 CPU、历史 CUDA 和多种基线在项目自定义整数语义下输出一致。
+- 顶层 Arrow CPU、CUDA、hybrid 和 cuDF 输出一致且通过官方 oracle。
 - 正式 SF1 行数与 TPC-H manifest 相符。
 - 当前 CPU 多线程只加速最终大表扫描。
 - 一次性 SF1 GPU 查询的固定成本超过 kernel 节省。
@@ -688,7 +695,7 @@ bash scripts/self_check_assignment.sh
 
 ### 不能过度声称
 
-- 不能说当前数值严格符合官方 TPC-H Q5。
+- 可以说当前 ASIA/1994 参数的五行数值严格符合官方 Q5；不能外推其他参数。
 - 不能说 GPU 普遍慢于 CPU。
 - 不能把当前 mapped 模式称为完整的异步 overlap 优化。
 - 不能说 full matrix 测了 GPU 的 CPU 线程扩展性。

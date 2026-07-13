@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this course research prototype, please cite it as below."
+title: "TPC-H Q5 CPU-GPU Query Processing over Apache Arrow"
+type: software
+authors:
+  - family-names: Xu
+    given-names: Zihuan
+version: 6.0.0
+date-released: 2026-07-14
+repository-code: "https://github.com/zihuanxu/db-tpch-q5"
+license: Apache-2.0
+keywords:
+  - TPC-H
+  - Apache Arrow
+  - CUDA
+  - CPU-GPU query processing

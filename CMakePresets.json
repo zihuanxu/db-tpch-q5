@@ -1,0 +1,57 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "MEMQ5_ENABLE_TESTS": "ON"
+      }
+    },
+    {
+      "name": "cpu-basic",
+      "inherits": "base",
+      "cacheVariables": {
+        "MEMQ5_ENABLE_ARROW": "OFF",
+        "MEMQ5_ENABLE_CUDA": "OFF"
+      }
+    },
+    {
+      "name": "arrow-cpu",
+      "inherits": "base",
+      "cacheVariables": {
+        "MEMQ5_ENABLE_ARROW": "ON",
+        "MEMQ5_ENABLE_CUDA": "OFF",
+        "OPENSSL_ROOT_DIR": "$env{CONDA_PREFIX}"
+      }
+    },
+    {
+      "name": "arrow-cuda",
+      "inherits": "base",
+      "cacheVariables": {
+        "MEMQ5_ENABLE_ARROW": "ON",
+        "MEMQ5_ENABLE_CUDA": "ON",
+        "CMAKE_CUDA_ARCHITECTURES": "89",
+        "OPENSSL_ROOT_DIR": "$env{CONDA_PREFIX}"
+      }
+    }
+  ],
+  "buildPresets": [
+    {"name": "cpu-basic", "configurePreset": "cpu-basic"},
+    {"name": "arrow-cpu", "configurePreset": "arrow-cpu"},
+    {"name": "arrow-cuda", "configurePreset": "arrow-cuda"}
+  ],
+  "testPresets": [
+    {"name": "cpu-basic", "configurePreset": "cpu-basic", "output": {"outputOnFailure": true}},
+    {"name": "arrow-cpu", "configurePreset": "arrow-cpu", "output": {"outputOnFailure": true}},
+    {"name": "arrow-cuda", "configurePreset": "arrow-cuda", "output": {"outputOnFailure": true}}
+  ]
+}

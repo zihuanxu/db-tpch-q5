@@ -1,115 +1,42 @@
-# GPU Validation Audit Artifacts
+# 实验证据目录
 
-Date: 2026-07-08
+最后更新：2026-07-14。
 
-This directory records GPU validation evidence. The final, exact SF1 evidence
-used by the paper is self-contained under `docs/artifacts/mvp_sf1/`: raw CSV,
-environment JSON, Arrow manifest, official oracle check, summary, and figures.
-The older SVG figures under `docs/assets/` are retained only as historical
-experiment outputs and are not the source of the final paper's numbers.
+## 正式证据
 
-## Environment
+论文和 V6 结论只使用 `docs/artifacts/v5_sf1/`。该目录是自包含 evidence
+bundle，包含：
 
-- GPU runtime host: NVIDIA GeForce RTX 4090 selected with `CUDA_VISIBLE_DEVICES=0`.
-- GPU compute capability: 8.9.
-- CMake CUDA architecture: `89`.
-- Driver/runtime from `nvidia-smi`: driver `595.71.05`, CUDA runtime `13.2`.
-- `nvcc --version` on `PATH`: CUDA `12.6`, `V12.6.85`.
-- CMake selected CUDA compiler: `/usr/bin/nvcc`, CUDA `12.0.140`.
-- CMake: `4.3.0`.
-- Python: `3.11.15`.
-- PyArrow: default Python `24.0.0`; full matrix environment `23.0.1`.
-- RAPIDS cuDF: available in the `memq5-cudf` conda environment,
-  `cudf.__version__ == 26.06.00`.
-- Official tools zip: `TPC-H-Tool.zip`.
-- Official tools zip SHA256:
-  `97ccb34cd122d78c2e06e2419e50957f934256868b37c02d0b88aefd9d13a84a`.
+- `matrix.yml`：冻结的 19 个配置；
+- `raw.csv` / `warmups.csv`：190 次测量和 57 次预热；
+- `environment.json` / `commands.txt`：环境与实际命令；
+- `correctness.json`：hash 和官方 q5.out 正确性门禁；
+- `summary.csv` / `summary.json`：由 raw records 重算的统计；
+- `logs/`：每个子进程的 stdout/stderr；
+- `manifest.json` / `manifest.sha256`：文件 checksum、协议和 Git 状态。
 
-## Build And CTest
-
-Commands:
+审计命令：
 
 ```bash
-cmake -S . -B build-cuda \
-  -DMEMQ5_ENABLE_CUDA=ON \
-  -DMEMQ5_ENABLE_TESTS=ON \
-  -DCMAKE_CUDA_ARCHITECTURES=89
-cmake --build build-cuda
-CUDA_VISIBLE_DEVICES=0 ctest --test-dir build-cuda --output-on-failure
+python3 scripts/evidence_bundle.py audit --directory docs/artifacts/v5_sf1
 ```
 
-Result:
+通过标准是 190 个 measured、57 个 warmup、无 checksum/matrix/coverage/summary
+错误，且所有正式记录 hash 为 `542abf4003633c7c`。冻结 manifest SHA-256 为
+`e3337842d367b541b10f3ecb425d1ba0c7a0378555a87f6c42669ed831b5e660`。
 
-- `ctest`: 6/6 tests passed.
-- `test_q5_cuda`: passed on a real NVIDIA GPU; it did not skip for missing
-  devices.
+## 正式环境
 
-## Hash Evidence
+- CPU：2 x AMD EPYC 9654；GPU：NVIDIA GeForce RTX 4090。
+- GPU compute capability 8.9；driver 595.71.05；nvcc 12.6。
+- Arrow/PyArrow 23.0.1；Python 3.11.15；cuDF 26.06.00。
+- 数据：TPC-H V3.0.1 dbgen SF1，Arrow IPC 六表统一输入。
 
-Tiny GPU correctness experiment:
+## 历史目录
 
-```text
-ok ASIA 1994-01-01 hash=1e07d78fa8eededb engines=cpu,gpu-copy,gpu-managed,gpu-mapped,python
-```
+`docs/artifacts/mvp_sf1/` 是更早的最小实验，仅保留用于说明项目演进。它使用
+更少重复和较旧的计时边界，不能与 V5 正式矩阵混用，也不会进入 V6 压缩包。
+`docs/assets/` 下旧图同样只属于历史输出。
 
-Synthetic GPU development experiment:
-
-```text
-ok ASIA 1994-01-01 hash=d5ffe393223a207e engines=cpu,gpu-copy,gpu-managed,gpu-mapped,python
-```
-
-Official TPC-H SF1 experiment:
-
-```text
-ok ASIA 1994-01-01 hash=9f1f5f7578dd816e engines=cpu,gpu-copy,gpu-managed,gpu-mapped
-```
-
-Official TPC-H SF1 experiment with cuDF:
-
-```text
-ok ASIA 1994-01-01 hash=9f1f5f7578dd816e engines=cpu,gpu-copy,gpu-managed,gpu-mapped,cudf
-```
-
-Official TPC-H SF1 full matrix with PyArrow and cuDF:
-
-```text
-ok ASIA 1994-01-01 hash=9f1f5f7578dd816e engines=cpu,cpu,cpu,cpu,arrow,gpu-copy,gpu-copy,gpu-copy,gpu-copy,gpu-managed,gpu-managed,gpu-managed,gpu-managed,gpu-mapped,gpu-mapped,gpu-mapped,gpu-mapped,cudf,...
-```
-
-The `tpch_sf1_with_cudf` benchmark wrote 85 rows, all with `status=ok`, and 0
-error rows. The `tpch_sf1_full_matrix_arrow_cudf` benchmark wrote 90 rows, all
-with `status=ok`, and 0 error rows. The hash checks show that successful CPU,
-GPU, Python, PyArrow, and cuDF runs agreed within each experiment.
-
-## Official SF1 Data Evidence
-
-The Q5 subset prepared by `scripts/prepare_tpch_q5_data.py` contained:
-
-- `region.tbl`: 5 rows
-- `nation.tbl`: 25 rows
-- `supplier.tbl`: 10,000 rows
-- `customer.tbl`: 150,000 rows
-- `orders.tbl`: 1,500,000 rows
-- `lineitem.tbl`: 6,001,215 rows
-- orders in the `1994-01-01` to `1995-01-01` date window: 227,597
-
-## Committed Report Assets
-
-- `docs/assets/tiny_gpu_modes_total_time.svg`
-- `docs/assets/tiny_gpu_modes_time_breakdown.svg`
-- `docs/assets/synthetic_gpu_modes_total_time.svg`
-- `docs/assets/synthetic_gpu_modes_time_breakdown.svg`
-- `docs/assets/tpch_sf1_gpu_modes_total_time.svg`
-- `docs/assets/tpch_sf1_gpu_modes_time_breakdown.svg`
-- `docs/assets/tpch_sf1_with_cudf_total_time.svg`
-- `docs/assets/tpch_sf1_with_cudf_time_breakdown.svg`
-- `docs/assets/tpch_sf1_full_matrix_arrow_cudf_total_time.svg`
-- `docs/assets/tpch_sf1_full_matrix_arrow_cudf_time_breakdown.svg`
-
-## Open Items
-
-- No larger official TPC-H scale factors were run.
-- The old 2026-07-08 full matrix used per-line cent truncation. The final
-  `mvp_sf1` run fixes the scale and matches the official answer.
-- `build/`, `build-cuda/`, `data/`, `dist/`, `results/`, and the downloaded
-  TPC-H tools zip remain excluded from version control.
+生成的 TPC-H `.tbl`、Arrow 数据集、TPC-H 工具、`build*`、`results/` 和
+`dist/` 不提交；它们可按 README 和 GPU runbook 重新生成。

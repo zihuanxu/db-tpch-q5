@@ -1,214 +1,85 @@
 # Current Status
 
-This project has a working CPU correctness path, runtime-validated CUDA paths
-for the three planned GPU memory modes, dependency-free correctness baselines,
-PyArrow/cuDF baseline results, benchmark automation, and official TPC-H SF1
-results. GPU runtime validation, the SF1 CPU/CUDA experiment, and the SF1 cuDF
-baseline were completed on an NVIDIA GeForce RTX 4090 server on 2026-07-01.
-The official SF1 CPU/PyArrow/GPU/cuDF full matrix was completed on the GPU
-server on 2026-07-08.
+最后核对：2026-07-14。当前对外口径只以 V2-V6 源码、
+`docs/research/CLAIM_LEDGER.md` 和 `docs/artifacts/v5_sf1` 为准。早期
+`mvp_sf1`、旧 hash `9f1f...` 和 `.tbl` full matrix 只属于历史审计，不再作为
+最终性能或正确性证据。
 
-## Implemented Engines
+## 已完成实现
 
-- `cpu`
-  - Builds Q5 filter-propagation maps on CPU.
-  - Scans `lineitem` and aggregates revenue.
-  - Supports `--threads N` for parallel lineitem scans.
-- `gpu-copy`
-  - Builds Q5 filter-propagation maps on CPU.
-  - Copies maps and `lineitem` columns to GPU with explicit `cudaMemcpy`.
-  - Runs a handwritten CUDA lineitem aggregation kernel.
-- `gpu-managed`
-  - Uses `cudaMallocManaged`.
-  - Prefetches input/output buffers before and after the kernel.
-- `gpu-mapped`
-  - Uses `cudaHostAllocMapped`.
-  - Lets the GPU read mapped pinned host input buffers through device pointers.
+- canonical Arrow IPC 六表数据、manifest 和 C++ loader；
+- Arrow specialized CPU 与 Arrow Acero 查询；
+- Arrow `gpu-copy`、`gpu-managed`、`gpu-mapped` 三种 CUDA 模式；
+- Arrow batch 级 CPU--GPU `hybrid-arrow`，支持 0.25/0.50/0.75 CPU 比例；
+- 读取同一 Arrow 数据集的 cuDF 算子库基线；
+- `revenue_1e4` 精确整数聚合、结果 hash 和官方 q5.out oracle；
+- 版本化 benchmark schema、进程监控、统计重算和证据 checksum 审计。
 
-The GPU engines compile and run on the validated GPU server. The 2026-07-01 run
-used `CUDA_VISIBLE_DEVICES=0` on an RTX 4090 with compute capability 8.9 and
-`CMAKE_CUDA_ARCHITECTURES=89`.
+## 正式证据锚点
 
-## Implemented Baselines
+| 项目 | V5 正式值 |
+| --- | --- |
+| 数据 | TPC-H SF1，ASIA，1994-01-01 |
+| 配置 | 19 组 |
+| 协议 | 每组 3 warmups + 10 measured cold processes |
+| 成功 | 190/190 measured，57/57 warmups |
+| 唯一 hash | `542abf4003633c7c` |
+| evidence manifest | `e3337842d367b541b10f3ecb425d1ba0c7a0378555a87f6c42669ed831b5e660` |
 
-- `baselines/python_q5.py`
-  - Dependency-free correctness reference.
-- `baselines/arrow_q5.py`
-  - PyArrow columnar CPU operator-library baseline.
-- `baselines/duckdb_q5.py`
-  - SQL correctness/performance baseline when the DuckDB Python package is
-    installed.
-- `baselines/cudf_q5.py`
-  - RAPIDS cuDF operator-library baseline on a RAPIDS GPU environment.
+主要查询中位数：specialized CPU 16 线程 61.414 ms；Acero 32 线程
+321.535 ms；cuDF 116.427 ms；copy/managed/mapped 分别为 314.151、
+358.158、412.264 ms；hybrid 最佳 75% CPU 为 222.832 ms。混合执行正确且
+并发，但没有超过 pure CPU，这是正式负结果。
 
-## Implemented Tools
+`query_total_ms` 是后端查询阶段；`process_elapsed_ms` 还包含启动、Arrow
+加载和 Python/Conda 等成本。cuDF 的查询中位数 116.427 ms，冷进程中位数
+3682.381 ms，这两列不能混作一个排名。
 
-- `scripts/generate_synthetic_tpch_q5.py`
-  - Generates deterministic TPC-H-like Q5 `.tbl` data for local development.
-  - Not a replacement for official TPC-H dbgen data in final experiments.
-- `scripts/validate_tpch_q5_data.py`
-  - Validates required Q5 `.tbl` files, required columns, key/date/decimal
-    parsing, target region, and date-window coverage.
-- `scripts/prepare_tpch_q5_data.py`
-  - Takes an existing official TPC-H dbgen output directory, copies or symlinks
-    the six Q5-required `.tbl` files, validates the data, and writes a manifest
-    with row counts, byte sizes, hashes, source paths, and validation status.
-- `scripts/run_benchmarks.py`
-  - Runs a matrix of engines and repeats.
-  - Supports `--thread-list` for CPU/C++ thread sweeps.
-  - Writes a unified benchmark CSV.
-- `scripts/verify_benchmark_hashes.py`
-  - Verifies all successful runs for the same `(region, date)` agree on
-    `result_hash`.
-- `scripts/summarize_benchmarks.py`
-  - Produces median/mean/min summaries from benchmark CSVs.
-- `scripts/make_report_assets.py`
-  - Produces report-ready `summary.md`, `total_time.svg`, and
-    `time_breakdown.svg` from benchmark CSVs.
-- `scripts/capture_environment.py`
-  - Captures platform, CPU, CUDA, NVIDIA driver, CMake, PyArrow, DuckDB, and
-    cuDF metadata for the final report.
-- `scripts/run_experiment_pipeline.py`
-  - One-command pipeline for data validation, environment capture, benchmark
-    runs, hash verification, summary generation, and report asset generation.
-- `scripts/self_check.py`
-  - Runs Python syntax checks, CMake configure/build, CPU tests, CUDA
-    compile-only tests when `nvcc` is available, data validation, and a tiny
-    end-to-end experiment pipeline.
-- `scripts/package_submission.py`
-  - Creates a source-only submission archive, excluding generated build, data,
-    and result directories.
+## 当前验证命令
 
-## Verification
-
-CPU build:
+证据与出版材料：
 
 ```bash
-cmake --build build
-ctest --test-dir build --output-on-failure
+python3 scripts/evidence_bundle.py audit --directory docs/artifacts/v5_sf1
+python3 scripts/validate_claim_ledger.py docs/research/CLAIM_LEDGER.md
+python3 scripts/validate_process_docs.py docs/process
+python3 scripts/check_learning_links.py docs/learning
+python3 scripts/import_paper_evidence.py \
+  --evidence docs/artifacts/v5_sf1 \
+  --ledger docs/research/CLAIM_LEDGER.md \
+  --output docs/paper/generated
+bash docs/paper/build.sh
 ```
 
-CUDA compile-only build:
+Arrow+CUDA Release 构建：
 
 ```bash
-cmake --build build-cuda
-ctest --test-dir build-cuda --output-on-failure
+cmake -S . -B build-arrow-cuda-release \
+  -DMEMQ5_ENABLE_ARROW=ON \
+  -DMEMQ5_ENABLE_CUDA=ON \
+  -DMEMQ5_ENABLE_TESTS=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CUDA_ARCHITECTURES=89
+cmake --build build-arrow-cuda-release -j 8
+CUDA_VISIBLE_DEVICES=0 ctest --test-dir build-arrow-cuda-release --output-on-failure
 ```
 
-GPU runtime validation:
+正式矩阵的精确命令和环境保存在 `docs/artifacts/v5_sf1/commands.txt` 与
+`environment.json`，无需从旧文档猜测。
 
-```bash
-CUDA_VISIBLE_DEVICES=0 ctest --test-dir build-cuda --output-on-failure
-```
+## 已知限制
 
-Result: all six CTest tests passed, including `test_q5_cuda` on a real NVIDIA
-GPU.
+- 固定 Q5，不是通用 SQL/事务数据库；
+- GPU 只执行 lineitem 扫描和聚合，不是完整六表 GPU 计划；
+- 只有 SF1 cold-process 正式证据；
+- 没有 SF10、resident、并发查询、NVML GPU 峰值显存或 Nsight timeline；
+- duration overlap 不等于已证明 CPU scan 与 CUDA kernel 重叠；
+- hybrid 两侧仍有重复计划和 GPU staging。
 
-Tiny GPU correctness:
+## 外部待办
 
-```bash
-CUDA_VISIBLE_DEVICES=0 python3 scripts/run_experiment_pipeline.py \
-  --name tiny_gpu_modes \
-  --memq5 build-cuda/memq5 \
-  --data-dir tests/fixtures/tpch_q5_tiny \
-  --engines cpu,gpu-copy,gpu-managed,gpu-mapped,python \
-  --repeat 5 \
-  --force
-```
+- 把 `docs/process/` 同步到腾讯共享文档并给老师开权限；
+- 确认 GitHub 仓库可见性并创建最终 release。
 
-Result hash: `1e07d78fa8eededb` for CPU, all three GPU modes, and Python.
-
-Synthetic GPU development run:
-
-```bash
-CUDA_VISIBLE_DEVICES=0 python3 scripts/run_experiment_pipeline.py \
-  --name synthetic_gpu_modes \
-  --memq5 build-cuda/memq5 \
-  --data-dir data/synthetic_gpu_dev \
-  --engines cpu,gpu-copy,gpu-managed,gpu-mapped,python \
-  --thread-list 1,2,4,8 \
-  --repeat 5 \
-  --force
-```
-
-Result hash: `d5ffe393223a207e` for CPU, all three GPU modes, and Python.
-
-Official TPC-H SF1 run:
-
-```bash
-python3 scripts/prepare_tpch_q5_data.py \
-  --source-dir data/tpch_sf1_raw \
-  --output-dir data/tpch_sf1 \
-  --scale-factor 1 \
-  --mode copy \
-  --force
-
-CUDA_VISIBLE_DEVICES=0 python3 scripts/run_experiment_pipeline.py \
-  --name tpch_sf1_gpu_modes \
-  --memq5 build-cuda/memq5 \
-  --data-dir data/tpch_sf1 \
-  --engines cpu,gpu-copy,gpu-managed,gpu-mapped \
-  --thread-list 1,2,4,8 \
-  --repeat 5 \
-  --force
-```
-
-Result hash: `9f1f5f7578dd816e` for CPU and all three GPU modes.
-
-Official TPC-H SF1 run with cuDF:
-
-```bash
-CUDA_VISIBLE_DEVICES=0 conda run -n memq5-cudf python \
-  scripts/run_experiment_pipeline.py \
-  --name tpch_sf1_with_cudf \
-  --memq5 build-cuda/memq5 \
-  --data-dir data/tpch_sf1 \
-  --engines cpu,gpu-copy,gpu-managed,gpu-mapped,cudf \
-  --thread-list 1,2,4,8 \
-  --repeat 5 \
-  --allow-benchmark-errors \
-  --force
-```
-
-Result: 85 successful rows, 0 errors, and result hash
-`9f1f5f7578dd816e` for CPU, all three GPU modes, and cuDF.
-
-Official TPC-H SF1 full matrix with PyArrow and cuDF:
-
-```bash
-CUDA_VISIBLE_DEVICES=0 conda run -n memq5-cudf python \
-  scripts/run_experiment_pipeline.py \
-  --name tpch_sf1_full_matrix_arrow_cudf \
-  --memq5 build-cuda/memq5 \
-  --data-dir data/tpch_sf1 \
-  --engines cpu,arrow,gpu-copy,gpu-managed,gpu-mapped,cudf \
-  --thread-list 1,2,4,8 \
-  --repeat 5 \
-  --force
-```
-
-Result: 90 successful rows, 0 errors, and result hash
-`9f1f5f7578dd816e` for CPU, PyArrow, all three GPU modes, and cuDF.
-
-Synthetic data check:
-
-```bash
-python3 scripts/generate_synthetic_tpch_q5.py --output data/synthetic_dev \
-  --customers 1000 --orders 5000 --lineitems 20000 --suppliers 500 --asia-heavy
-
-python3 scripts/validate_tpch_q5_data.py --data-dir data/synthetic_dev
-
-python3 scripts/run_benchmarks.py --engines cpu,python --thread-list 1,2,4 \
-  --data-dir data/synthetic_dev --repeat 2 \
-  --output results/synthetic_thread_sweep.csv
-
-python3 scripts/verify_benchmark_hashes.py results/synthetic_thread_sweep.csv
-python3 scripts/summarize_benchmarks.py results/synthetic_thread_sweep.csv
-```
-
-## Remaining Work
-
-1. Keep generated TPC-H tools, `.tbl` data, raw `results/`, and build
-   directories out of version control.
-2. Optional future work: run larger official TPC-H scale factors and optimize
-   the GPU path to reuse device-resident data and allocations across queries.
+这两项依赖用户账号操作，仓库内保持 `EXTERNAL_ACTION_REQUIRED`，不会伪装成
+已经完成。

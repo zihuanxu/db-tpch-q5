@@ -221,14 +221,72 @@ Evidence recorded so far on 2026-07-14:
 
 ## V6 - Publication And Release
 
-- [ ] Maintain a claim ledger linked to evidence.
-- [ ] Finish process records and progressive takeover lessons.
-- [ ] Import only verified evidence into the CjC paper and rebuild the PDF.
-- [ ] Add open-source metadata, CPU CI, GPU runbook, and release audit.
-- [ ] Produce and independently self-check the final V6 package.
+- [x] Maintain a claim ledger linked to evidence.
+- [x] Finish process records and progressive takeover lessons.
+- [x] Import only verified evidence into the CjC paper and rebuild the PDF.
+- [x] Add open-source metadata, CPU CI, GPU runbook, and release audit.
+- [x] Produce and independently self-check the final V6 package.
+
+Evidence recorded so far on 2026-07-14:
+
+- Added `docs/research/CLAIM_LEDGER.md` with ten explicit claim states. Verified
+  claims link code, tests, V5 evidence, paper locations, and limitations;
+  unsupported hybrid speedup and resident-mode conclusions remain rejected.
+- The claim parser first accepted only two malformed rows. A regression test
+  requiring all ten rows exposed the issue; the table and validator now pass
+  four focused tests and verify the finalized evidence manifest digest.
+- Added a deterministic evidence-to-LaTeX importer. Six focused publication
+  tests prove that it refuses incomplete evidence or unsupported claims and
+  emits values from `docs/artifacts/v5_sf1`, rather than handwritten numbers.
+- Reworked `docs/paper/paper.tex` around the canonical Arrow input, 19 frozen
+  configurations, 3 warmups, 10 measurements, current result hash, query versus
+  process timing, and the negative hybrid result. The CjC-template PDF builds
+  successfully as a three-page paper; a final PDF content check is still due.
+- Added seven reconstructed process records, each marked as reconstructed from
+  repository evidence, plus an explicit Tencent-document external-action file.
+  The process validator passes and names the formal `v5-sf1-final` run.
+- Added seven progressive takeover lessons covering Q5, Arrow, CPU, CUDA memory
+  modes, hybrid execution, experiments, and defense. Every code link, exercise
+  answer, and required section passes the learning-material validator.
+- Added 5-minute and 10-minute defense scripts, high-risk questions, and a final
+  architecture explanation. Updated the current status, defense cheat sheet,
+  GPU runbook, and handover guide to use the V5 hash and timings.
+- Added Apache-2.0 metadata, citation/contribution/changelog files, CPU/GPU Conda
+  environments, CMake presets, a CPU Dockerfile, a tiny oracle fixture, and a
+  GitHub Actions CPU workflow. Release-file and CI static tests pass 4/4.
+- Rebuilt the evidence-linked CjC paper as a three-page A4 PDF. Text extraction
+  found the frozen hash and current medians, while the log had no overfull box,
+  undefined reference, or LaTeX error; the first page was also visually checked.
+- Added `check_paper.py`, `release_audit.py`, and a deterministic package builder
+  with an internal file manifest and external archive SHA256. The audit reports
+  six engineering categories passing and keeps Tencent/GitHub actions external.
+- The first Arrow CPU CI run exposed mixed system/Conda OpenSSL libraries. A
+  failing regression preceded the fix: CI now requires `CONDA_PREFIX`, starts
+  from a fresh cache, and points CMake at that environment's OpenSSL. The full
+  gate then passed 14/14 CTest and 75 Python tests with two expected skips.
+- The final source package audit exposed two portability bugs in sequence. Git's
+  quoted non-ASCII paths omitted all Chinese process/learning filenames; after
+  switching to NUL-delimited paths, the no-`.git` extracted tree exposed a test
+  assumption. Both now have regressions and the corrected package has 686 files.
+- A completely new package extraction passed release audit, a clean Arrow
+  Release build, 14/14 CTest, 79 Python tests with two expected device skips,
+  and both specialized/Acero tiny oracle checks.
+- Arrow+CUDA rebuilt successfully. CTest reported zero failures across 21 tests;
+  seven CUDA runtime tests skipped because this final sandbox has no NVIDIA
+  device node. Earlier V4 real-RTX-4090 21/21 and sanitizer evidence, plus the
+  complete V5 matrix, remain the runtime proof. RAPIDS/PyArrow tests passed 14/14.
+- A Docker build was attempted after the static release checks, but the local
+  daemon socket denied access even outside the file sandbox. The image is not
+  claimed as runtime-verified; Conda/CMake remains the tested reproduction path.
+- Independent final review found three release-audit defects. Regressions now
+  prove that a missing archive payload returns an error instead of a traceback,
+  required files cannot be replaced by directories, and `.dockerignore` is
+  covered by the release gate. All three fixes passed in the extracted package.
+- Paper provenance now binds SHA256 values for `paper.tex`, generated results,
+  and the built PDF. The final auditable package contains 687 files and passed
+  both root and clean-extraction release audits with no engineering failure.
 
 ## Current Action
 
-Import only the newly verified V4/V5 claims into publication and takeover
-materials, add final CI/release metadata, and independently audit the V6 source
-package.
+Freeze the verified V6 commit/tag without staging the user's separate report
+edits, then report the two remaining external publication actions.

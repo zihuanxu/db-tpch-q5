@@ -1,137 +1,80 @@
-# Completion Audit
+# V6 完成情况审计
 
-Date: 2026-07-01
+日期：2026-07-14
 
-This document checks the project against the current deliverable goal:
+V2 至 V5 的实现和正式实验已经冻结；V6 的论文、主张台账、过程记录、接手材料、
+开源元数据、CI、自动审计和提交包均已完成工程验收。腾讯文档共享和 GitHub
+公开发布仍是明确的外部操作，不计为本地代码失败。
 
-> Implement deliverable code, experiment automation, self-checks, a report draft,
-> GPU validation evidence, and official TPC-H data requirements.
+## 需求状态
 
-## Audit Summary
-
-Local deliverables are complete. GPU runtime validation, official TPC-H dbgen
-SF1 experiments, the RAPIDS/cuDF SF1 baseline, and the CPU/PyArrow/GPU/cuDF
-full matrix have been completed on an NVIDIA GeForce RTX 4090 server.
-
-## Requirement Status
-
-| Requirement | Status | Evidence |
+| 需求 | 状态 | 主要证据 |
 | --- | --- | --- |
-| CPU Q5 implementation | Complete | `src/cpu/q5_cpu.cpp`, `tests/test_q5_cpu.cpp` |
-| Multi-thread CPU scan | Complete | `--threads`, `--thread-list`, synthetic thread checks |
-| TPC-H Q5 loader | Complete | `src/io/tpch_loader.cpp`, loader tests |
-| Fixed-width column store helpers | Complete | `src/common/*`, common tests |
-| Query plan/filter propagation | Complete | `src/engine/q5_plan.cpp`, plan tests |
-| GPU explicit-copy mode | Complete, runtime validated on RTX 4090 | `gpu-copy` in `src/cuda/q5_cuda.cu`, `test_q5_cuda`, `tiny_gpu_modes` |
-| GPU managed-memory mode | Complete, runtime validated on RTX 4090 | `gpu-managed` in `src/cuda/q5_cuda.cu`, `test_q5_cuda`, `tiny_gpu_modes` |
-| GPU mapped pinned-memory mode | Complete, runtime validated on RTX 4090 | `gpu-mapped` in `src/cuda/q5_cuda.cu`, `test_q5_cuda`, `tiny_gpu_modes` |
-| Python correctness baseline | Complete | `baselines/python_q5.py` |
-| PyArrow baseline | Complete, validated in SF1 full matrix | `baselines/arrow_q5.py`, `tpch_sf1_full_matrix_arrow_cudf` |
-| DuckDB SQL baseline | Complete, optional dependency | `baselines/duckdb_q5.py` |
-| RAPIDS cuDF baseline | Complete, runtime validated on RTX 4090 with cuDF 26.06.00 | `baselines/cudf_q5.py`, `tpch_sf1_with_cudf` |
-| Data validation | Complete | `scripts/validate_tpch_q5_data.py` |
-| Official data preparation wrapper | Complete | `scripts/prepare_tpch_q5_data.py` |
-| Benchmark automation | Complete | `scripts/run_benchmarks.py` |
-| Experiment pipeline | Complete | `scripts/run_experiment_pipeline.py` |
-| Hash consistency check | Complete | `scripts/verify_benchmark_hashes.py` |
-| Summary and report figures | Complete | `scripts/summarize_benchmarks.py`, `scripts/make_report_assets.py` |
-| Environment capture | Complete | `scripts/capture_environment.py` |
-| Local self-check | Complete | `scripts/self_check.py` |
-| Source-only packaging | Complete | `scripts/package_submission.py` |
-| Report draft | Complete | `docs/FINAL_REPORT_DRAFT.md` |
-| GPU server runbook | Complete | `docs/GPU_SERVER_RUNBOOK.md` |
-| Submission checklist | Complete | `docs/SUBMISSION_CHECKLIST.md` |
+| TPC-H Q5 六表语义与精确收入 | 完成 | `src/engine/`、oracle tests |
+| Apache Arrow CPU 存储/查询 | 完成 | loader、specialized、Acero、Arrow CTest |
+| CUDA explicit copy | 完成 | `gpu-copy`、SF1、sanitizer |
+| CUDA managed memory | 完成 | `gpu-managed`、SF1、sanitizer |
+| UVA mapped host memory | 完成 | `gpu-mapped`、mapped read counters |
+| RAPIDS cuDF 算子库 | 完成 | `baselines/cudf_q5.py`、SF1 测量 |
+| CPU-GPU hybrid | 完成但假设被拒绝 | 三个比例正确；SF1 未快于最优 CPU |
+| 正式实验协议与证据 | 完成 | `docs/artifacts/v5_sf1/` |
+| 论文 | 完成 | `docs/paper/paper.tex`、`paper.pdf` |
+| 接手与答辩材料 | 完成 | `docs/learning/`、`docs/defense/` |
+| 开源工程入口 | 完成 | license、citation、CI、runbook、release audit |
+| 腾讯过程共享 | 外部待办 | `docs/process/TENCENT_DOCS.md` |
+| GitHub 公开 release | 外部待办 | 本地仓库不能确认远端状态 |
 
-## Verification Scope
+## 正式证据
 
-The project has two verification layers:
+- 实验 ID：`v5-sf1-final`。
+- 矩阵：19 个精确配置，3 次预热和 10 次测量。
+- 结果：57/57 预热、190/190 测量成功，零失败。
+- 正确性：唯一 hash `542abf4003633c7c`，官方五行 oracle 一致。
+- manifest SHA-256：
+  `e3337842d367b541b10f3ecb425d1ba0c7a0378555a87f6c42669ed831b5e660`。
+- 证据包：503 个 checksummed artifacts，包含 raw/warmup CSV、环境、matrix、
+  correctness、summary 和每进程 stdout/stderr。
 
-- Source/local checks prove Python syntax, CPU correctness, CUDA compilation,
-  fixture validation, and source-only packaging behavior.
-- GPU server checks prove CUDA runtime correctness on real device memory for
-  `gpu-copy`, `gpu-managed`, and `gpu-mapped`.
-
-The GPU server run used `CUDA_VISIBLE_DEVICES=0` on an NVIDIA GeForce RTX 4090
-with compute capability 8.9 and `CMAKE_CUDA_ARCHITECTURES=89`.
-
-## Latest Verification
-
-The final local self-check was run with:
+## 自动审计
 
 ```bash
-python3 scripts/self_check.py
+python3 scripts/evidence_bundle.py audit --directory docs/artifacts/v5_sf1
+python3 scripts/check_paper.py
+python3 scripts/validate_claim_ledger.py docs/research/CLAIM_LEDGER.md
+python3 scripts/validate_process_docs.py docs/process
+python3 scripts/check_learning_links.py docs/learning
+python3 scripts/release_audit.py --json
 ```
 
-Result: pass.
+`release_audit.py` 只有工程检查失败时返回非零；腾讯文档和 GitHub 发布显示为
+`EXTERNAL_ACTION_REQUIRED`，不会被错误写成代码测试失败，也不会被假装已完成。
 
-Checks completed successfully:
+## 最终回归结果
 
-- Python syntax compilation for all `scripts/*.py` and `baselines/*.py`.
-- CPU CMake configure and build.
-- CPU CTest.
-- CUDA CMake configure and build.
-- CUDA CTest, with no-device behavior on this local machine.
-- Tiny TPC-H Q5 fixture validation.
-- Tiny end-to-end experiment pipeline with `cpu,python`.
+- 基础 CPU preset：干净构建，CTest 5/5 通过。
+- Arrow CPU CI：干净 Release 构建，CTest 14/14；Python 79 passed、2 skipped；
+  specialized 和 Acero 均通过 tiny oracle。
+- Arrow+CUDA：重新编译成功，CTest 21 项、0 failed；当前沙箱没有
+  `/dev/nvidia*`，7 项 CUDA runtime 测试按返回码 77 跳过。V4 同一代码主线已有
+  真实 RTX 4090 21/21 和 compute-sanitizer 零错误记录，V5 正式矩阵也全部成功。
+- RAPIDS/PyArrow：Python 3.11 环境 14/14 通过。
+- 论文：3 页 A4 PDF；无 Overfull、未定义引用或 LaTeX error；文本包含正式 hash
+  和 61.414/222.832 ms，第一页人工检查无重叠。
+- 提交包：687 个文件，内部 manifest 与外部 SHA256 通过。全新解压目录再次通过
+  release audit、Arrow 14/14 CTest、Python 79 passed/2 skipped 和 tiny oracle。
+- 打包复验曾发现中文路径被 Git 转义、解压目录没有 `.git` 两个问题；均先复现、
+  再加回归测试并修复，最终包不再缺 process/learning 文件。
+- Dockerfile 已通过发布文件静态检查；本机 Docker socket 无访问权限，因此没有
+  把“镜像实际构建成功”列入完成证据。Conda/CMake 是已实测的主复现路径。
+- 论文构建生成 `paper.provenance.json`，将当前源稿、自动导入结果和 PDF 的
+  SHA256 绑定；release audit 会拒绝任一文件在构建后发生变化的情况。
+- 独立最终审阅发现并关闭三项发布审计问题：缺失 archive payload 曾触发
+  traceback、同名目录可冒充必需文件、`.dockerignore` 未进入 release audit。
 
-The GPU validation run completed:
+## 当前限制
 
-- `cmake -S . -B build-cuda -DMEMQ5_ENABLE_CUDA=ON -DMEMQ5_ENABLE_TESTS=ON -DCMAKE_CUDA_ARCHITECTURES=89`
-- `cmake --build build-cuda`
-- `CUDA_VISIBLE_DEVICES=0 ctest --test-dir build-cuda --output-on-failure`
-- `tiny_gpu_modes` with `cpu,gpu-copy,gpu-managed,gpu-mapped,python`
-- `synthetic_gpu_modes` with `cpu,gpu-copy,gpu-managed,gpu-mapped,python`
-- official TPC-H SF1 `tpch_sf1_gpu_modes` with
-  `cpu,gpu-copy,gpu-managed,gpu-mapped`
-- official TPC-H SF1 `tpch_sf1_with_cudf` with
-  `cpu,gpu-copy,gpu-managed,gpu-mapped,cudf`
-- official TPC-H SF1 `tpch_sf1_full_matrix_arrow_cudf` with
-  `cpu,arrow,gpu-copy,gpu-managed,gpu-mapped,cudf`
-
-GPU validation hashes:
-
-- tiny fixture: `1e07d78fa8eededb`
-- synthetic development data: `d5ffe393223a207e`
-- official TPC-H SF1: `9f1f5f7578dd816e`
-- official TPC-H SF1 with cuDF: `9f1f5f7578dd816e`
-- official TPC-H SF1 full matrix with PyArrow and cuDF:
-  `9f1f5f7578dd816e`
-
-The machine-readable report is:
-
-```text
-results/self_check_logs/self_check_report.json
-```
-
-The final source archive was created with:
-
-```bash
-python3 scripts/package_submission.py --output dist/memq5_submission.tar.gz
-```
-
-Current archive:
-
-```text
-dist/memq5_submission.tar.gz
-```
-
-Archive inspection confirms it includes source, docs, scripts, tests, baselines,
-and the tiny fixture, and does not include generated `build/`, `build-cuda/`,
-`data/`, or `results/` directories.
-
-## Remaining Limitations
-
-No larger official TPC-H scale factors were run. The delivered evidence covers
-the tiny fixture, deterministic synthetic data, and official TPC-H SF1.
-
-## Packaging Rule
-
-The submission archive should be created with:
-
-```bash
-python3 scripts/package_submission.py --output dist/memq5_submission.tar.gz
-```
-
-The archive intentionally includes source, scripts, baselines, tests, and docs,
-and excludes generated `build/`, `build-cuda/`, `data/`, and `results/`
-directories.
+- 正式性能数据只有 SF1、冷进程和一台 RTX 4090。
+- 未实现真正 resident session、NVML 峰值显存采样和 SF10。
+- 没有 Nsight/NVTX 时间线，因此只报告 host duration overlap，不声称 kernel overlap。
+- GPU 路径没有完成整个六表查询，前半段仍由 CPU 准备。
+- 旧实验和旧报告保留在 Git 历史或仓库历史目录，但不用于 V6 论文结论。
