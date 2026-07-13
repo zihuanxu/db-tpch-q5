@@ -185,7 +185,9 @@ def run_one(args: argparse.Namespace, engine: str, run_id: int, threads: int) ->
 def write_rows(path: Path, rows: list[dict[str, str]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=OUTPUT_FIELDS, extrasaction="ignore")
+        writer = csv.DictWriter(
+            handle, fieldnames=OUTPUT_FIELDS, extrasaction="ignore", lineterminator="\n"
+        )
         writer.writeheader()
         for row in rows:
             normalized = {field: row.get(field, "") for field in OUTPUT_FIELDS}
@@ -431,8 +433,8 @@ def _record_base(
         "cpu_peak_rss_bytes": 0,
         "gpu_peak_memory_bytes": 0,
         "throughput_rows_per_second": 0.0,
-        "stdout_log": str(stdout_path),
-        "stderr_log": str(stderr_path),
+        "stdout_log": stdout_path.relative_to(args.output.parent).as_posix(),
+        "stderr_log": stderr_path.relative_to(args.output.parent).as_posix(),
         "started_at_utc": "1970-01-01T00:00:00Z",
         "finished_at_utc": "1970-01-01T00:00:00Z",
     }
@@ -603,7 +605,7 @@ def run_v5_one(
 def write_v5_records(path: Path, records: list[BenchmarkRecord]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=RAW_FIELDS)
+        writer = csv.DictWriter(handle, fieldnames=RAW_FIELDS, lineterminator="\n")
         writer.writeheader()
         for record in records:
             writer.writerow(record.as_dict())

@@ -1,0 +1,2 @@
+engine,region,date,threads,result_rows,result_hash,build_ms,h2d_ms,kernel_ms,d2h_ms,scan_ms,total_ms,cpu_ms,gpu_ms,overlap_ms,input_lineitem_rows,matched_lineitem_rows,cpu_input_rows,gpu_input_rows,h2d_bytes,d2h_bytes,mapped_remote_read_bytes
+gpu-mapped,ASIA,1994-01-01,1,5,542abf4003633c7c,187.535,0,2.67971,0.04272,2.72243,403.583,0,0,0,6001215,7243,0,6001215,0,212,96106356

@@ -15,7 +15,7 @@ acceptance checks pass. User-owned legacy drafts in `docs/FINAL_REPORT.md` and
 | V2 | Canonical Arrow IPC data and Arrow-native C++ CPU queries | COMPLETED (`submission-v2-arrow-cpu`) |
 | V3 | Arrow-native `gpu-copy`, `gpu-managed`, and `gpu-mapped` | COMPLETED (`submission-v3-arrow-cuda`) |
 | V4 | Concurrent CPU-GPU hybrid query and canonical Arrow cuDF baseline | COMPLETED |
-| V5 | Reproducible benchmark/evidence pipeline and formal experiment bundle | PENDING |
+| V5 | Reproducible benchmark/evidence pipeline and formal experiment bundle | COMPLETED |
 | V6 | Claim-controlled paper, takeover material, CI, package, and release audit | PENDING |
 
 ## V2 - Arrow Data And CPU
@@ -169,7 +169,7 @@ Evidence recorded on 2026-07-14:
   resident measurement instead of substituting cold processes.
 - [x] Preserve stdout, stderr, failures, environment, CPU memory, and checksums.
 - [x] Add hash correctness gating, explicit statistics, and a frozen SF1 matrix.
-- [ ] Run the feasible formal SF1 matrix and preserve honest failures.
+- [x] Run the feasible formal SF1 matrix and preserve honest failures.
 
 Evidence recorded so far on 2026-07-14:
 
@@ -193,6 +193,31 @@ Evidence recorded so far on 2026-07-14:
   external-log references, non-recomputed summaries, and unhashed matrix
   inputs. Final re-review reported no Critical, Important, or Minor finding and
   approved the V5 evidence tooling for the formal run.
+- Formal SF1 completed all 19 exact configurations with 3 warmups and 10
+  measured cold-process samples per configuration: 57/57 warmups and 190/190
+  measurements succeeded, with zero failures and the only result hash
+  `542abf4003633c7c`.
+- The evidence directory `docs/artifacts/v5_sf1` contains 503 checksummed
+  artifacts, including every command and 494 per-process stdout/stderr logs.
+  Finalize and a fresh audit both passed with no coverage, checksum, matrix,
+  summary, or manifest-digest error. Run records use bundle-relative log paths,
+  so the evidence remains auditable after relocation. The finalized manifest
+  SHA-256 is
+  `e3337842d367b541b10f3ecb425d1ba0c7a0378555a87f6c42669ed831b5e660`.
+- Median internal query times show a valid negative hybrid result: specialized
+  CPU at 16 threads was 61.414 ms, cuDF query time was 116.427 ms, and the best
+  hybrid ratio (75% CPU) was 222.832 ms. The implementation is concurrent and
+  correct but does not outperform the specialized CPU at SF1.
+- Median CUDA-mode internal times were 314.151 ms for explicit copy, 358.158 ms
+  for managed, and 412.264 ms for mapped. Mapped avoided explicit H2D timing but
+  was not transfer-free and was the slowest of the three in this experiment.
+- Final portability hardening first reproduced the absolute-log-path defect,
+  then added a regression test and changed new run records to bundle-relative
+  paths. The migrated bundle passed a fresh 190-record/57-warmup audit. The
+  dependency-free Python suite passed 44/44, while the PyArrow/cuDF suite passed
+  14/14 in the Python 3.11 RAPIDS environment. An attempted all-in-one run in
+  the base interpreter failed collection because optional `pyarrow` and `cudf`
+  packages are intentionally absent there; no product test failed.
 
 ## V6 - Publication And Release
 
@@ -204,5 +229,6 @@ Evidence recorded so far on 2026-07-14:
 
 ## Current Action
 
-Define and validate a versioned benchmark run record, then use it to preserve a
-small but honest formal SF1 matrix before moving directly to V6.
+Import only the newly verified V4/V5 claims into publication and takeover
+materials, add final CI/release metadata, and independently audit the V6 source
+package.

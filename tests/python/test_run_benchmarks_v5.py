@@ -7,6 +7,7 @@ import pytest
 
 from scripts.run_benchmarks import (
     Configuration,
+    _record_base,
     build_command,
     expand_configurations,
     parse_v5_benchmark,
@@ -92,3 +93,23 @@ def test_strict_parser_rejects_missing_counter_fields() -> None:
     )
     with pytest.raises(ValueError, match="missing benchmark fields"):
         parse_v5_benchmark(stdout, Configuration("cpu-specialized", 4, 1.0), args())
+
+
+def test_run_record_uses_bundle_relative_log_paths(tmp_path: Path) -> None:
+    options = args()
+    options.experiment_id = "test"
+    options.scale_factor = 1.0
+    options.output = tmp_path / "raw.csv"
+    record = _record_base(
+        options,
+        Configuration("cpu-specialized", 4, 1.0),
+        "cold",
+        "run-id",
+        0,
+        False,
+        tmp_path / "logs" / "run-id.stdout.txt",
+        tmp_path / "logs" / "run-id.stderr.txt",
+    )
+
+    assert record["stdout_log"] == "logs/run-id.stdout.txt"
+    assert record["stderr_log"] == "logs/run-id.stderr.txt"

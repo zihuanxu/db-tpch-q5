@@ -1,0 +1,15 @@
+{
+  "coverage_errors": [],
+  "expected_hash": "542abf4003633c7c",
+  "failed_records": 0,
+  "measured_records": 190,
+  "observed_hashes": [
+    "542abf4003633c7c"
+  ],
+  "ok": true,
+  "schema_version": 1,
+  "successful_records": 190,
+  "summary_errors": [],
+  "warmup_failures": 0,
+  "warmup_records": 57
+}

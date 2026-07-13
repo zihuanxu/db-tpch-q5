@@ -1,0 +1,2 @@
+engine,region,date,threads,result_rows,result_hash,build_ms,h2d_ms,kernel_ms,d2h_ms,scan_ms,total_ms,cpu_ms,gpu_ms,overlap_ms,input_lineitem_rows,matched_lineitem_rows,cpu_input_rows,gpu_input_rows,h2d_bytes,d2h_bytes,mapped_remote_read_bytes
+hybrid-arrow,ASIA,1994-01-01,8,5,542abf4003633c7c,175.429,3.90861,0.551936,0.043264,251.56,251.605,63.1566,245.775,57.3717,6001215,7243,3000608,3000607,84052148,212,0
