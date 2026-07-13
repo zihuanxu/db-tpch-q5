@@ -1,0 +1,49 @@
+{
+  "actual_rows": [
+    {
+      "nation": "INDONESIA",
+      "revenue": "55502041.17"
+    },
+    {
+      "nation": "VIETNAM",
+      "revenue": "55295087.00"
+    },
+    {
+      "nation": "CHINA",
+      "revenue": "53724494.26"
+    },
+    {
+      "nation": "INDIA",
+      "revenue": "52035512.00"
+    },
+    {
+      "nation": "JAPAN",
+      "revenue": "45410175.70"
+    }
+  ],
+  "matched": true,
+  "oracle_rows": [
+    {
+      "nation": "INDONESIA",
+      "revenue": "55502041.17"
+    },
+    {
+      "nation": "VIETNAM",
+      "revenue": "55295087.00"
+    },
+    {
+      "nation": "CHINA",
+      "revenue": "53724494.26"
+    },
+    {
+      "nation": "INDIA",
+      "revenue": "52035512.00"
+    },
+    {
+      "nation": "JAPAN",
+      "revenue": "45410175.70"
+    }
+  ],
+  "result_hash": "542abf4003633c7c",
+  "row_count": 5
+}

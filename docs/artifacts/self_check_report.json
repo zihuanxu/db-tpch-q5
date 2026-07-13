@@ -1,0 +1,136 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "name": "python_compile",
+      "command": [
+        "/home/xuzihuan/miniconda3/bin/python3",
+        "-m",
+        "py_compile",
+        "scripts/capture_environment.py",
+        "scripts/generate_synthetic_tpch_q5.py",
+        "scripts/make_report_assets.py",
+        "scripts/package_submission.py",
+        "scripts/prepare_arrow_dataset.py",
+        "scripts/prepare_tpch_q5_data.py",
+        "scripts/run_benchmarks.py",
+        "scripts/run_experiment_pipeline.py",
+        "scripts/self_check.py",
+        "scripts/summarize_benchmarks.py",
+        "scripts/sync_final_report_docx.py",
+        "scripts/tpch_arrow_schema.py",
+        "scripts/validate_tpch_q5_data.py",
+        "scripts/verify_benchmark_hashes.py",
+        "scripts/verify_q5_oracle.py",
+        "baselines/arrow_dataset.py",
+        "baselines/arrow_q5.py",
+        "baselines/common.py",
+        "baselines/cudf_q5.py",
+        "baselines/duckdb_q5.py",
+        "baselines/python_q5.py"
+      ],
+      "returncode": 0,
+      "log_path": "/home/xuzihuan/db-tpch-q5/results/self_check_logs/python_compile.log"
+    },
+    {
+      "name": "cmake_configure_cpu",
+      "command": [
+        "cmake",
+        "-S",
+        ".",
+        "-B",
+        "build",
+        "-DMEMQ5_ENABLE_CUDA=OFF",
+        "-DMEMQ5_ENABLE_TESTS=ON"
+      ],
+      "returncode": 0,
+      "log_path": "/home/xuzihuan/db-tpch-q5/results/self_check_logs/cmake_configure_cpu.log"
+    },
+    {
+      "name": "cmake_build_cpu",
+      "command": [
+        "cmake",
+        "--build",
+        "build"
+      ],
+      "returncode": 0,
+      "log_path": "/home/xuzihuan/db-tpch-q5/results/self_check_logs/cmake_build_cpu.log"
+    },
+    {
+      "name": "ctest_cpu",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build",
+        "--output-on-failure"
+      ],
+      "returncode": 0,
+      "log_path": "/home/xuzihuan/db-tpch-q5/results/self_check_logs/ctest_cpu.log"
+    },
+    {
+      "name": "cmake_configure_cuda",
+      "command": [
+        "cmake",
+        "-S",
+        ".",
+        "-B",
+        "build-cuda",
+        "-DMEMQ5_ENABLE_CUDA=ON",
+        "-DMEMQ5_ENABLE_TESTS=ON",
+        "-DCMAKE_CUDA_ARCHITECTURES=75"
+      ],
+      "returncode": 0,
+      "log_path": "/home/xuzihuan/db-tpch-q5/results/self_check_logs/cmake_configure_cuda.log"
+    },
+    {
+      "name": "cmake_build_cuda",
+      "command": [
+        "cmake",
+        "--build",
+        "build-cuda"
+      ],
+      "returncode": 0,
+      "log_path": "/home/xuzihuan/db-tpch-q5/results/self_check_logs/cmake_build_cuda.log"
+    },
+    {
+      "name": "ctest_cuda",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build-cuda",
+        "--output-on-failure"
+      ],
+      "returncode": 0,
+      "log_path": "/home/xuzihuan/db-tpch-q5/results/self_check_logs/ctest_cuda.log"
+    },
+    {
+      "name": "validate_tiny_data",
+      "command": [
+        "/home/xuzihuan/miniconda3/bin/python3",
+        "scripts/validate_tpch_q5_data.py",
+        "--data-dir",
+        "tests/fixtures/tpch_q5_tiny"
+      ],
+      "returncode": 0,
+      "log_path": "/home/xuzihuan/db-tpch-q5/results/self_check_logs/validate_tiny_data.log"
+    },
+    {
+      "name": "tiny_pipeline",
+      "command": [
+        "/home/xuzihuan/miniconda3/bin/python3",
+        "scripts/run_experiment_pipeline.py",
+        "--name",
+        "self_check_tiny",
+        "--data-dir",
+        "tests/fixtures/tpch_q5_tiny",
+        "--engines",
+        "cpu,python",
+        "--repeat",
+        "1",
+        "--force"
+      ],
+      "returncode": 0,
+      "log_path": "/home/xuzihuan/db-tpch-q5/results/self_check_logs/tiny_pipeline.log"
+    }
+  ]
+}

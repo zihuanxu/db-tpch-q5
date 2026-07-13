@@ -1,0 +1,13 @@
+nation,revenue_1e4,revenue
+INDONESIA,555020411697,55502041.17
+VIETNAM,552950869967,55295087.00
+CHINA,537244942566,53724494.26
+INDIA,520355120002,52035512.00
+JAPAN,454101756954,45410175.70
+result_hash,542abf4003633c7c
+timing_build_ms,18.3292
+timing_h2d_ms,0
+timing_kernel_ms,0
+timing_d2h_ms,0
+timing_scan_ms,4.46297
+timing_total_ms,22.7962
