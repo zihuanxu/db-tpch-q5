@@ -122,6 +122,12 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _reserve_swap_path(output_root: Path, suffix: str) -> Path:
+    reserved = Path(mkdtemp(prefix=f".{output_root.name}.{suffix}-", dir=output_root.parent))
+    shutil.rmtree(reserved)
+    return reserved
+
+
 def _iter_tbl_rows(path: Path):
     with path.open("r", encoding="utf-8") as handle:
         for raw_line in handle:
@@ -220,11 +226,11 @@ def prepare_dataset(
     if output_root.exists():
         if not replace:
             raise FileExistsError(f"output already exists: {output_root}")
-        shutil.rmtree(output_root)
 
     parent = output_root.parent
     parent.mkdir(parents=True, exist_ok=True)
     temp_root = Path(mkdtemp(prefix=f".{output_root.name}.tmp-", dir=parent))
+    backup_root: Path | None = None
     manifest: dict[str, object] = {
         "batch_rows": batch_rows,
         "format_version": 1,
@@ -248,9 +254,26 @@ def prepare_dataset(
             json.dumps(manifest, indent=2, sort_keys=True),
             encoding="utf-8",
         )
-        temp_root.replace(output_root)
+
+        if output_root.exists():
+            backup_root = _reserve_swap_path(output_root, "bak")
+            output_root.rename(backup_root)
+
+        try:
+            temp_root.rename(output_root)
+        except Exception:
+            if backup_root is not None and backup_root.exists() and not output_root.exists():
+                backup_root.rename(output_root)
+            raise
+
+        if backup_root is not None and backup_root.exists():
+            shutil.rmtree(backup_root)
     except Exception:
+        if backup_root is not None and backup_root.exists() and not output_root.exists():
+            backup_root.rename(output_root)
         shutil.rmtree(temp_root, ignore_errors=True)
+        if backup_root is not None and backup_root.exists():
+            shutil.rmtree(backup_root, ignore_errors=True)
         raise
 
     return manifest

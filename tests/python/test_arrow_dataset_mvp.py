@@ -61,6 +61,14 @@ def _table_file(dataset_dir: Path, table_name: str) -> Path:
     return dataset_dir / entry["file"]
 
 
+def _dataset_bytes(dataset_dir: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(dataset_dir).as_posix(): path.read_bytes()
+        for path in sorted(dataset_dir.iterdir())
+        if path.is_file()
+    }
+
+
 def test_q5_schemas_match_contract() -> None:
     schemas = q5_schemas()
 
@@ -115,7 +123,8 @@ def test_prepare_dataset_writes_batched_ipc_files_and_dictionary_columns(tmp_pat
     assert tables["lineitem"].num_rows == 6
 
     lineitem_file = ipc.open_file(_table_file(dataset_dir, "lineitem"))
-    assert lineitem_file.num_record_batches >= 3
+    assert lineitem_file.num_record_batches == 3
+    assert [lineitem_file.get_batch(index).num_rows for index in range(lineitem_file.num_record_batches)] == [2, 2, 2]
     assert pa.types.is_dictionary(tables["region"].schema.field("r_name").type)
     assert pa.types.is_dictionary(tables["nation"].schema.field("n_name").type)
 
@@ -244,6 +253,32 @@ def test_prepare_dataset_is_non_destructive_without_replace(tmp_path: Path) -> N
             batch_rows=2,
             source_command="fixture",
         )
+
+
+def test_prepare_dataset_replace_preserves_existing_dataset_on_conversion_failure(tmp_path: Path) -> None:
+    output_dir, _ = _prepare_tiny_dataset(tmp_path)
+    before_bytes = _dataset_bytes(output_dir)
+
+    bad_input_dir = tmp_path / "bad-input"
+    shutil.copytree(FIXTURE_DIR, bad_input_dir)
+    lineitem_path = bad_input_dir / "lineitem.tbl"
+    lines = lineitem_path.read_text(encoding="utf-8").splitlines()
+    lines[0] = lines[0].replace("|100.00|0.10|", "|12.345|0.10|")
+    lineitem_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"lineitem.*l_extendedprice.*scale 2.*12\.345"):
+        prepare_dataset(
+            input_dir=bad_input_dir,
+            output_dir=output_dir,
+            scale_factor="tiny",
+            batch_rows=2,
+            source_command="fixture",
+            replace=True,
+        )
+
+    assert _dataset_bytes(output_dir) == before_bytes
+    dataset = load_arrow_dataset(output_dir)
+    assert dataset["lineitem"].num_rows == 6
 
 
 def test_cli_creates_dataset_compatible_with_loader(tmp_path: Path) -> None:
