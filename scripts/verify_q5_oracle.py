@@ -27,6 +27,9 @@ TIMING_KEYS = {
     "timing_d2h_ms",
     "timing_scan_ms",
     "timing_total_ms",
+    "timing_cpu_ms",
+    "timing_gpu_ms",
+    "timing_overlap_ms",
 }
 COUNTER_KEYS = {
     "input_lineitem_rows",

@@ -86,10 +86,16 @@ replace_prices(const std::shared_ptr<arrow::Table>& lineitem,
 int main() {
   int device_count = 0;
   const cudaError_t status = cudaGetDeviceCount(&device_count);
-  if (status != cudaSuccess || device_count == 0) {
+  if (status == cudaErrorNoDevice ||
+      (status == cudaSuccess && device_count == 0)) {
     std::cout << "Skipping Arrow CUDA runtime test: "
               << cudaGetErrorString(status) << '\n';
-    return 0;
+    return 77;
+  }
+  if (status != cudaSuccess) {
+    std::cerr << "CUDA device discovery failed: "
+              << cudaGetErrorString(status) << '\n';
+    return 1;
   }
 
   const auto loaded =
@@ -120,7 +126,7 @@ int main() {
   assert(managed.counters.h2d_bytes > 0);
   assert(managed.counters.mapped_remote_read_bytes == 0);
   assert(mapped.counters.h2d_bytes == 0);
-  assert(mapped.counters.mapped_remote_read_bytes > 0);
+  assert(mapped.counters.mapped_remote_read_bytes == 120);
 
   memq5::ArrowQ5Dataset empty = loaded;
   empty.lineitem = loaded.lineitem->Slice(0, 0);

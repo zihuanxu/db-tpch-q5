@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
@@ -11,7 +12,10 @@
 #include "io/arrow_q5_loader.hpp"
 
 #ifdef MEMQ5_HAS_ARROW_CUDA
+#include <cuda_runtime.h>
+
 #include "cuda/q5_arrow_cuda.hpp"
+#include "hybrid/q5_hybrid.hpp"
 #endif
 
 namespace {
@@ -23,6 +27,7 @@ struct Options {
   std::string date = "1994-01-01";
   std::string format = "json";
   int threads = 1;
+  double cpu_ratio = 0.5;
   bool verify_checksums = true;
 };
 
@@ -30,10 +35,11 @@ void print_usage(std::ostream& output) {
   output << "usage: memq5_arrow_query --dataset <dir> "
             "--engine cpu-specialized|arrow-acero"
 #ifdef MEMQ5_HAS_ARROW_CUDA
-            "|gpu-copy|gpu-managed|gpu-mapped"
+            "|gpu-copy|gpu-managed|gpu-mapped|hybrid-arrow"
 #endif
             " "
             "[--region ASIA] [--date 1994-01-01] [--threads N] "
+            "[--cpu-ratio 0.5] "
             "[--format json|csv|benchmark] [--skip-checksums]\n";
 }
 
@@ -47,6 +53,21 @@ int parse_positive_integer(const std::string& text, const std::string& option) {
   }
   if (consumed != text.size() || value <= 0) {
     throw std::runtime_error(option + " must be a positive integer");
+  }
+  return value;
+}
+
+double parse_ratio(const std::string& text) {
+  std::size_t consumed = 0;
+  double value = 0.0;
+  try {
+    value = std::stod(text, &consumed);
+  } catch (const std::exception&) {
+    throw std::runtime_error("--cpu-ratio must be between 0 and 1");
+  }
+  if (consumed != text.size() || !std::isfinite(value) || value < 0.0 ||
+      value > 1.0) {
+    throw std::runtime_error("--cpu-ratio must be between 0 and 1");
   }
   return value;
 }
@@ -71,6 +92,8 @@ Options parse_options(int argc, char** argv) {
       options.date = next_value();
     } else if (argument == "--threads") {
       options.threads = parse_positive_integer(next_value(), "--threads");
+    } else if (argument == "--cpu-ratio") {
+      options.cpu_ratio = parse_ratio(next_value());
     } else if (argument == "--format") {
       options.format = next_value();
     } else if (argument == "--skip-checksums") {
@@ -94,7 +117,8 @@ Options parse_options(int argc, char** argv) {
 #ifdef MEMQ5_HAS_ARROW_CUDA
   supported_engine = supported_engine || options.engine == "gpu-copy" ||
                      options.engine == "gpu-managed" ||
-                     options.engine == "gpu-mapped";
+                     options.engine == "gpu-mapped" ||
+                     options.engine == "hybrid-arrow";
 #endif
   if (!supported_engine) {
     throw std::runtime_error("unsupported Arrow engine: " + options.engine);
@@ -107,11 +131,43 @@ Options parse_options(int argc, char** argv) {
   return options;
 }
 
+#ifdef MEMQ5_HAS_ARROW_CUDA
+bool requires_cuda(const std::string& engine) {
+  return engine == "gpu-copy" || engine == "gpu-managed" ||
+         engine == "gpu-mapped" || engine == "hybrid-arrow";
+}
+
+int check_cuda_availability(const std::string& engine) {
+  if (!requires_cuda(engine)) {
+    return 0;
+  }
+  int device_count = 0;
+  const cudaError_t status = cudaGetDeviceCount(&device_count);
+  if (status == cudaErrorNoDevice ||
+      (status == cudaSuccess && device_count == 0)) {
+    std::cerr << "CUDA engine skipped: no CUDA device is available\n";
+    return 77;
+  }
+  if (status != cudaSuccess) {
+    std::cerr << "CUDA device discovery failed: "
+              << cudaGetErrorString(status) << '\n';
+    return 1;
+  }
+  return 0;
+}
+#endif
+
 }  // namespace
 
 int main(int argc, char** argv) {
   try {
     const Options options = parse_options(argc, argv);
+#ifdef MEMQ5_HAS_ARROW_CUDA
+    const int cuda_availability = check_cuda_availability(options.engine);
+    if (cuda_availability != 0) {
+      return cuda_availability;
+    }
+#endif
     auto loaded = memq5::load_arrow_q5_dataset(options.dataset_dir,
                                                options.verify_checksums);
     if (!loaded.ok()) {
@@ -139,6 +195,12 @@ int main(int argc, char** argv) {
       result = memq5::execute_q5_arrow_gpu_managed(dataset, params);
     } else if (options.engine == "gpu-mapped") {
       result = memq5::execute_q5_arrow_gpu_mapped(dataset, params);
+    } else if (options.engine == "hybrid-arrow") {
+      memq5::HybridOptions hybrid_options;
+      hybrid_options.cpu_ratio = options.cpu_ratio;
+      hybrid_options.cpu_threads = options.threads;
+      result =
+          memq5::execute_q5_hybrid(dataset, params, hybrid_options);
     }
 #endif
     if (!result.ok()) {

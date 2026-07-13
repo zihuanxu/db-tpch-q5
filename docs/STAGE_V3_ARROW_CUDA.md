@@ -13,11 +13,16 @@ Arrow CPU 共用 `ArrowQ5Plan`；`lineitem` 可以包含多个 RecordBatch，GPU
 | --- | --- | --- | --- |
 | `gpu-copy` | `cudaMalloc` 显存 | 显式 H2D 后读显存 | `h2d_bytes` 为输入字节 |
 | `gpu-managed` | `cudaMallocManaged` | kernel 前 prefetch 到 GPU | H2D 包含输入和预取的输出缓冲 |
-| `gpu-mapped` | mapped pinned host memory | UVA 指针经 PCIe 远程读取 | `h2d_bytes=0`，输入计入 `mapped_remote_read_bytes` |
+| `gpu-mapped` | mapped pinned host memory | UVA 指针经 PCIe 远程读取 | `h2d_bytes=0`，内核逻辑读取量计入 `mapped_remote_read_bytes` |
 
 `gpu-mapped` 的 0 H2D 只表示没有显式输入传输，不表示数据没有移动；GPU 读取
 主机页时仍经过 PCIe。三个模式的输出收入、命中行数和溢出标志都会复制或迁移
 回 CPU。
+
+`mapped_remote_read_bytes` 按 kernel 分支实际请求的字段宽度计算：每行先读取两个
+外键，只有外键有效时读取两个 nation map 值，只有同 nation 命中时才读取价格和
+折扣。它是可重复的“逻辑读取字节数”，不是 PCIe 总线 transaction 的硬件计数；
+缓存行、重放和协议开销需要 Nsight/CUPTI 才能测量。
 
 ## 构建与运行
 

@@ -88,6 +88,9 @@ void write_rows_csv(std::ostream& out, const Q5Result& result) {
   out << "timing_d2h_ms," << result.timing.d2h_ms << '\n';
   out << "timing_scan_ms," << result.timing.scan_ms << '\n';
   out << "timing_total_ms," << result.timing.total_ms << '\n';
+  out << "timing_cpu_ms," << result.timing.cpu_ms << '\n';
+  out << "timing_gpu_ms," << result.timing.gpu_ms << '\n';
+  out << "timing_overlap_ms," << result.timing.overlap_ms << '\n';
   out << "input_lineitem_rows," << result.counters.input_lineitem_rows << '\n';
   out << "matched_lineitem_rows," << result.counters.matched_lineitem_rows
       << '\n';
@@ -118,7 +121,10 @@ void write_json(std::ostream& out, const Q5Result& result) {
   out << "    \"kernel\": " << result.timing.kernel_ms << ",\n";
   out << "    \"d2h\": " << result.timing.d2h_ms << ",\n";
   out << "    \"scan\": " << result.timing.scan_ms << ",\n";
-  out << "    \"total\": " << result.timing.total_ms << "\n";
+  out << "    \"total\": " << result.timing.total_ms << ",\n";
+  out << "    \"cpu\": " << result.timing.cpu_ms << ",\n";
+  out << "    \"gpu\": " << result.timing.gpu_ms << ",\n";
+  out << "    \"overlap\": " << result.timing.overlap_ms << "\n";
   out << "  },\n";
   out << "  \"counters\": {\n";
   out << "    \"input_lineitem_rows\": "
@@ -141,7 +147,8 @@ void write_benchmark_csv(std::ostream& out, const std::string& engine,
                          const std::string& region, const std::string& date,
                          int threads, const Q5Result& result) {
   out << "engine,region,date,threads,result_rows,result_hash,build_ms,h2d_ms,"
-         "kernel_ms,d2h_ms,scan_ms,total_ms,input_lineitem_rows,"
+         "kernel_ms,d2h_ms,scan_ms,total_ms,cpu_ms,gpu_ms,overlap_ms,"
+         "input_lineitem_rows,"
          "matched_lineitem_rows,cpu_input_rows,gpu_input_rows,h2d_bytes,"
          "d2h_bytes,mapped_remote_read_bytes\n";
   out << engine << ',' << region << ',' << date << ',' << threads << ','
@@ -149,7 +156,8 @@ void write_benchmark_csv(std::ostream& out, const std::string& engine,
       << result.timing.build_ms << ','
       << result.timing.h2d_ms << ',' << result.timing.kernel_ms << ','
       << result.timing.d2h_ms << ',' << result.timing.scan_ms << ','
-      << result.timing.total_ms << ','
+      << result.timing.total_ms << ',' << result.timing.cpu_ms << ','
+      << result.timing.gpu_ms << ',' << result.timing.overlap_ms << ','
       << result.counters.input_lineitem_rows << ','
       << result.counters.matched_lineitem_rows << ','
       << result.counters.cpu_input_rows << ','

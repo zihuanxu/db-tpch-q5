@@ -16,10 +16,16 @@
 int main() {
   int device_count = 0;
   const cudaError_t status = cudaGetDeviceCount(&device_count);
-  if (status != cudaSuccess || device_count == 0) {
+  if (status == cudaErrorNoDevice ||
+      (status == cudaSuccess && device_count == 0)) {
     std::cout << "Skipping CUDA runtime test: " << cudaGetErrorString(status)
               << "\n";
-    return 0;
+    return 77;
+  }
+  if (status != cudaSuccess) {
+    std::cerr << "CUDA device discovery failed: "
+              << cudaGetErrorString(status) << '\n';
+    return 1;
   }
 
   const memq5::TpchDatabase db = memq5::load_tpch(MEMQ5_FIXTURE_DIR);

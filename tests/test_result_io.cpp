@@ -15,6 +15,9 @@ int main() {
   result.timing.d2h_ms = 0.0;
   result.timing.scan_ms = 2.0;
   result.timing.total_ms = 3.0;
+  result.timing.cpu_ms = 1.25;
+  result.timing.gpu_ms = 2.5;
+  result.timing.overlap_ms = 0.75;
   result.counters.input_lineitem_rows = 6;
   result.counters.matched_lineitem_rows = 2;
   result.counters.cpu_input_rows = 6;
@@ -42,6 +45,9 @@ int main() {
   assert(json.str().find("\"matched_lineitem_rows\": 2") !=
          std::string::npos);
   assert(json.str().find("\"cpu_input_rows\": 6") != std::string::npos);
+  assert(json.str().find("\"cpu\": 1.25") != std::string::npos);
+  assert(json.str().find("\"gpu\": 2.5") != std::string::npos);
+  assert(json.str().find("\"overlap\": 0.75") != std::string::npos);
   assert(json.str().find("revenue_cents") == std::string::npos);
 
   std::ostringstream bench;
@@ -50,6 +56,7 @@ int main() {
   assert(bench.str().find("cpu,ASIA,1994-01-01,4,2," + hash) != std::string::npos);
   assert(bench.str().find("input_lineitem_rows,matched_lineitem_rows") !=
          std::string::npos);
+  assert(bench.str().find("cpu_ms,gpu_ms,overlap_ms") != std::string::npos);
 
   return 0;
 }

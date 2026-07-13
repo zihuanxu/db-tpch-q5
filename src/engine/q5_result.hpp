@@ -13,6 +13,9 @@ struct Q5Timing {
   double d2h_ms = 0.0;
   double scan_ms = 0.0;
   double total_ms = 0.0;
+  double cpu_ms = 0.0;
+  double gpu_ms = 0.0;
+  double overlap_ms = 0.0;
 };
 
 struct Q5ResultRow {

@@ -32,6 +32,7 @@ if(MEMQ5_ENABLE_ARROW)
   find_package(nlohmann_json CONFIG REQUIRED)
 
   add_library(memq5_arrow
+    src/hybrid/batch_partition.cpp
     src/cpu/q5_acero.cpp
     src/cpu/q5_arrow_cpu.cpp
     src/io/arrow_q5_loader.cpp
@@ -96,6 +97,7 @@ if(MEMQ5_ENABLE_CUDA)
   if(MEMQ5_ENABLE_ARROW)
     add_library(memq5_arrow_cuda
       src/cuda/q5_arrow_cuda.cu
+      src/hybrid/q5_hybrid.cpp
     )
     target_include_directories(memq5_arrow_cuda PUBLIC
       ${CMAKE_CURRENT_SOURCE_DIR}/src

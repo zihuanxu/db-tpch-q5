@@ -31,10 +31,19 @@ struct ArrowGpuInput {
   double build_ms = 0.0;
 };
 
+class CudaCapacityError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
+
 void check_cuda(cudaError_t status, const char* context) {
   if (status != cudaSuccess) {
-    throw std::runtime_error(std::string(context) + ": " +
-                             cudaGetErrorString(status));
+    const std::string message =
+        std::string(context) + ": " + cudaGetErrorString(status);
+    if (status == cudaErrorMemoryAllocation) {
+      throw CudaCapacityError(message);
+    }
+    throw std::runtime_error(message);
   }
 }
 
@@ -165,8 +174,13 @@ public:
       check_cuda(
           cudaHostAlloc(&host_data_, size_ * sizeof(T), cudaHostAllocMapped),
           "cudaHostAlloc mapped");
-      check_cuda(cudaHostGetDevicePointer(&device_data_, host_data_, 0),
-                 "cudaHostGetDevicePointer");
+      const cudaError_t status =
+          cudaHostGetDevicePointer(&device_data_, host_data_, 0);
+      if (status != cudaSuccess) {
+        cudaFreeHost(host_data_);
+        host_data_ = nullptr;
+        check_cuda(status, "cudaHostGetDevicePointer");
+      }
     }
   }
 
@@ -325,6 +339,35 @@ int64_t input_bytes(const ArrowGpuInput& input) {
   bytes = checked_add(bytes,
                       checked_multiply(input.plan.supplier_nation_by_key.size(),
                                        sizeof(int32_t)));
+  return checked_counter_bytes(bytes);
+}
+
+int64_t logical_mapped_read_bytes(const ArrowGpuInput& input,
+                                  std::size_t nation_count) {
+  std::size_t bytes = 0;
+  for (std::size_t row = 0; row < input.order_keys.size(); ++row) {
+    bytes = checked_add(bytes, 2 * sizeof(int32_t));
+    const int32_t order_key = input.order_keys[row];
+    const int32_t supplier_key = input.supplier_keys[row];
+    if (order_key < 0 ||
+        static_cast<std::size_t>(order_key) >=
+            input.plan.order_nation_by_key.size() ||
+        supplier_key < 0 ||
+        static_cast<std::size_t>(supplier_key) >=
+            input.plan.supplier_nation_by_key.size()) {
+      continue;
+    }
+
+    bytes = checked_add(bytes, 2 * sizeof(int32_t));
+    const int32_t order_nation = input.plan.order_nation_by_key[order_key];
+    const int32_t supplier_nation =
+        input.plan.supplier_nation_by_key[supplier_key];
+    if (order_nation < 0 || order_nation != supplier_nation ||
+        static_cast<std::size_t>(order_nation) >= nation_count) {
+      continue;
+    }
+    bytes = checked_add(bytes, sizeof(int64_t) + sizeof(int32_t));
+  }
   return checked_counter_bytes(bytes);
 }
 
@@ -678,7 +721,8 @@ arrow::Result<Q5Result> execute_mapped(const ArrowQ5Dataset& dataset,
              "cudaEventRecord mapped D2H stop");
   result.timing.d2h_ms = elapsed_ms(d2h_start, d2h_stop);
   result.counters.d2h_bytes = output_bytes(nation_count);
-  result.counters.mapped_remote_read_bytes = input_bytes(input);
+  result.counters.mapped_remote_read_bytes =
+      logical_mapped_read_bytes(input, nation_count);
   return finish_result(input, std::move(host_revenue), host_matched,
                        host_overflow, std::move(result), total_timer);
 }
@@ -695,6 +739,8 @@ arrow::Result<Q5Result> execute_mode(const ArrowQ5Dataset& dataset,
     return execute_mapped(dataset, params);
   } catch (const std::bad_alloc&) {
     return arrow::Status::CapacityError("Arrow CUDA Q5 allocation failed");
+  } catch (const CudaCapacityError& error) {
+    return arrow::Status::CapacityError("Arrow CUDA Q5 failed: ", error.what());
   } catch (const std::overflow_error& error) {
     return arrow::Status::CapacityError("Arrow CUDA Q5 failed: ", error.what());
   } catch (const std::exception& error) {

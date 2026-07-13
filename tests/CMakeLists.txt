@@ -51,6 +51,13 @@ if(MEMQ5_ENABLE_ARROW)
   )
   add_test(NAME test_q5_acero COMMAND test_q5_acero)
 
+  add_executable(test_batch_partition test_batch_partition.cpp)
+  target_link_libraries(test_batch_partition PRIVATE memq5_arrow)
+  target_compile_options(test_batch_partition PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-UNDEBUG>
+  )
+  add_test(NAME test_batch_partition COMMAND test_batch_partition)
+
   add_test(
     NAME test_q5_arrow_cli_specialized
     COMMAND $<TARGET_FILE:memq5_arrow_query>
@@ -109,6 +116,7 @@ if(MEMQ5_ENABLE_CUDA)
     $<$<COMPILE_LANGUAGE:CUDA>:-UNDEBUG>
   )
   add_test(NAME test_q5_cuda COMMAND test_q5_cuda)
+  set_tests_properties(test_q5_cuda PROPERTIES SKIP_RETURN_CODE 77)
 endif()
 
 if(MEMQ5_ENABLE_ARROW AND MEMQ5_ENABLE_CUDA)
@@ -127,6 +135,30 @@ if(MEMQ5_ENABLE_ARROW AND MEMQ5_ENABLE_CUDA)
     $<$<COMPILE_LANGUAGE:CUDA>:-UNDEBUG>
   )
   add_test(NAME test_q5_arrow_cuda COMMAND test_q5_arrow_cuda)
+  set_tests_properties(test_q5_arrow_cuda PROPERTIES SKIP_RETURN_CODE 77)
+
+  add_executable(test_q5_hybrid test_q5_hybrid.cpp)
+  target_link_libraries(test_q5_hybrid PRIVATE memq5_arrow_cuda)
+  target_compile_definitions(test_q5_hybrid PRIVATE
+    MEMQ5_ARROW_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow"
+  )
+  target_compile_options(test_q5_hybrid PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-UNDEBUG>
+  )
+  add_test(NAME test_q5_hybrid COMMAND test_q5_hybrid)
+  set_tests_properties(test_q5_hybrid PROPERTIES SKIP_RETURN_CODE 77)
+
+  add_test(
+    NAME test_q5_arrow_cli_hybrid
+    COMMAND $<TARGET_FILE:memq5_arrow_query>
+      --dataset ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow
+      --engine hybrid-arrow --cpu-ratio 0.5 --region ASIA
+      --date 1994-01-01 --threads 2 --format json
+  )
+  set_tests_properties(test_q5_arrow_cli_hybrid PROPERTIES
+    PASS_REGULAR_EXPRESSION "\"result_hash\": \"248d10b6ee352953\""
+    SKIP_RETURN_CODE 77
+  )
 
   foreach(gpu_engine IN ITEMS gpu-copy gpu-managed gpu-mapped)
     add_test(
@@ -138,6 +170,7 @@ if(MEMQ5_ENABLE_ARROW AND MEMQ5_ENABLE_CUDA)
     )
     set_tests_properties(test_q5_arrow_cli_${gpu_engine} PROPERTIES
       PASS_REGULAR_EXPRESSION "\"result_hash\": \"248d10b6ee352953\""
+      SKIP_RETURN_CODE 77
     )
   endforeach()
 endif()

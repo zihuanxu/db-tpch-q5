@@ -14,7 +14,7 @@ acceptance checks pass. User-owned legacy drafts in `docs/FINAL_REPORT.md` and
 | V1 | Minimal exact Q5 submission and SF1 evidence | FROZEN (`submission-v1-minimal`) |
 | V2 | Canonical Arrow IPC data and Arrow-native C++ CPU queries | COMPLETED (`submission-v2-arrow-cpu`) |
 | V3 | Arrow-native `gpu-copy`, `gpu-managed`, and `gpu-mapped` | COMPLETED (`submission-v3-arrow-cuda`) |
-| V4 | Concurrent CPU-GPU hybrid query and canonical Arrow cuDF baseline | IN PROGRESS |
+| V4 | Concurrent CPU-GPU hybrid query and canonical Arrow cuDF baseline | COMPLETED |
 | V5 | Reproducible benchmark/evidence pipeline and formal experiment bundle | PENDING |
 | V6 | Claim-controlled paper, takeover material, CI, package, and release audit | PENDING |
 
@@ -123,11 +123,44 @@ Evidence recorded on 2026-07-14:
 
 ## V4 - Hybrid And cuDF
 
-- [ ] Partition Arrow batches without dropping or duplicating rows.
-- [ ] Execute CPU and GPU partitions concurrently and merge exact results.
-- [ ] Verify 75/25, 50/50, and 25/75 partitions.
-- [ ] Make cuDF consume the canonical Arrow dataset.
-- [ ] Record overlap evidence or explicitly reject the overlap claim.
+- [x] Partition Arrow batches without dropping or duplicating rows.
+- [x] Execute CPU and GPU partitions concurrently and merge exact results.
+- [x] Verify 75/25, 50/50, and 25/75 partitions.
+- [x] Make cuDF consume the canonical Arrow dataset.
+- [x] Record duration-overlap evidence and explicitly reject the stronger
+  kernel-overlap claim because no Nsight/NVTX timeline has been captured.
+
+Evidence recorded on 2026-07-14:
+
+- A deterministic batch partitioner covers every row once and splits at most
+  one batch boundary; focused partition tests pass.
+- `hybrid-arrow` launches `gpu-copy` asynchronously, executes the CPU prefix in
+  the calling thread, waits for both paths even on a partial error, and merges
+  revenue and counters with checked int64 addition.
+- Tiny correctness passed for CPU ratios 0.25, 0.50, and 0.75. Official SF1
+  runs at all three ratios produced hash `542abf4003633c7c`, matched 7,243 rows,
+  and passed the strengthened official oracle.
+- SF1 partition rows were 1,500,304/4,500,911, 3,000,608/3,000,607, and
+  4,500,911/1,500,304 for CPU/GPU respectively.
+- The cuDF 26.06.0 test observed six Arrow-to-cuDF conversions and passed the
+  tiny oracle. Its official SF1 output passed the same oracle as C++ engines.
+- A separate Python 3.11 pytest target under `/tmp/memq5-pytest311` was used
+  because the RAPIDS environment did not include pytest. Reusing Python 3.13
+  site-packages polluted NumPy and produced an invalid skip, so that method was
+  rejected.
+- Hybrid compute-sanitizer memcheck reported zero errors. The complete
+  Arrow+CUDA Release suite passed 21/21 before the final review-hardening pass.
+- Review follow-up maps CUDA allocation failures to `CapacityError`, releases
+  mapped pinned memory on constructor failure, counts mapped logical reads
+  along the kernel's short-circuit path, and standardizes no-device CTest skips
+  on return code 77. The mapped regression first failed at 556 versus 120
+  bytes, then passed at the expected 120 bytes on the real GPU; all seven GPU
+  tests are cleanly skipped in a no-device environment.
+- The final post-review gate rebuilt successfully and passed Arrow+CUDA CTest
+  21/21, oracle tests 14/14, Arrow/baseline tests 12/12, cuDF test 1/1, and
+  hybrid compute-sanitizer with zero errors. All three hybrid SF1 ratios and
+  the cuDF SF1 output were rerun and passed the official oracle. Independent
+  re-review approved the four CUDA hardening fixes with no remaining finding.
 
 ## V5 - Evidence And Experiments
 
@@ -147,5 +180,5 @@ Evidence recorded on 2026-07-14:
 
 ## Current Action
 
-Implement deterministic Arrow batch partitioning, concurrent CPU/GPU execution,
-and a canonical Arrow-fed cuDF gate before moving directly to V5.
+Define and validate a versioned benchmark run record, then use it to preserve a
+small but honest formal SF1 matrix before moving directly to V6.
