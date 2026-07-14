@@ -17,6 +17,7 @@ acceptance checks pass. User-owned legacy drafts in `docs/FINAL_REPORT.md` and
 | V4 | Concurrent CPU-GPU hybrid query and canonical Arrow cuDF baseline | COMPLETED |
 | V5 | Reproducible benchmark/evidence pipeline and formal experiment bundle | COMPLETED |
 | V6 | Claim-controlled paper, takeover material, CI, package, and release audit | PENDING |
+| V7 | Resident sessions, SF10 evidence, profiling, and hybrid-auto | IN PROGRESS |
 
 ## V2 - Arrow Data And CPU
 
@@ -294,5 +295,13 @@ Evidence recorded so far on 2026-07-14:
 
 ## Current Action
 
-Freeze the verified V6 commit/tag without staging the user's separate report
-edits, then report the two remaining external publication actions.
+Continue V7 from the manifest-validated, resumable SF10 preparation pipeline.
+
+## V7 - SF10 Preparation
+
+- [x] Add a manifest-validated SF10 preparation orchestrator that rejects
+  incomplete, unmanifested, wrong-scale, and SF1-reused data before reuse.
+- [x] Require at least 40 GiB before generation, record each stage command,
+  return code, elapsed time, output bytes, and post-stage free space.
+- [x] Add focused temporary-directory tests and a dry-run that reports only
+  stages whose valid manifests are absent.
