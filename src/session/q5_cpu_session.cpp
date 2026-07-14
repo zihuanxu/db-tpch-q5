@@ -13,6 +13,7 @@
 #include <arrow/array/data.h>
 #include <arrow/buffer.h>
 
+#include "common/nvtx_range.hpp"
 #include "common/timer.hpp"
 #include "cpu/q5_arrow_scan.hpp"
 
@@ -120,6 +121,13 @@ arrow::Result<int64_t> cpu_resident_host_bytes(
   return bytes;
 }
 
+arrow::Result<Q5Result> scan_cpu_session_lineitem(
+    const std::shared_ptr<arrow::Table>& lineitem, const ArrowQ5Plan& plan,
+    int threads) {
+  NvtxRange cpu_scan_range("cpu_scan");
+  return scan_q5_arrow_lineitem(lineitem, plan, threads);
+}
+
 }  // namespace
 
 ArrowCpuQ5Session::ArrowCpuQ5Session(std::shared_ptr<arrow::Table> lineitem,
@@ -138,6 +146,7 @@ arrow::Result<std::unique_ptr<ArrowCpuQ5Session>> ArrowCpuQ5Session::Make(
     if (params.threads <= 0) {
       return arrow::Status::Invalid("Q5 CPU session threads must be positive");
     }
+    NvtxRange session_setup_range("session_setup");
     Stopwatch setup_timer;
     ARROW_ASSIGN_OR_RAISE(ArrowQ5Plan plan, build_arrow_q5_plan(dataset, params));
     Q5SessionSetup setup;
@@ -153,9 +162,10 @@ arrow::Result<std::unique_ptr<ArrowCpuQ5Session>> ArrowCpuQ5Session::Make(
 
 arrow::Result<Q5Result> ArrowCpuQ5Session::Execute() const {
   return arrow_cpu_status_boundary([&]() -> arrow::Result<Q5Result> {
+    NvtxRange request_range("request");
     Stopwatch total_timer;
     ARROW_ASSIGN_OR_RAISE(Q5Result result,
-                          scan_q5_arrow_lineitem(lineitem_, plan_, threads_));
+                          scan_cpu_session_lineitem(lineitem_, plan_, threads_));
     result.timing.build_ms = 0.0;
     result.timing.total_ms = total_timer.elapsed_ms();
     return result;

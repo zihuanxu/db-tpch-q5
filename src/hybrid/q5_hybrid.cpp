@@ -12,6 +12,7 @@
 
 #include <arrow/api.h>
 
+#include "common/nvtx_range.hpp"
 #include "common/timer.hpp"
 #include "cpu/q5_arrow_cpu.hpp"
 #include "cuda/q5_arrow_cuda.hpp"
@@ -82,6 +83,7 @@ arrow::Result<Q5SessionSetup> combine_session_setup(
 arrow::Result<Q5Result> merge_hybrid_results(
     const Q5Result& cpu, const Q5Result& gpu, double execution_wall_ms,
     const Stopwatch& total_timer) {
+  NvtxRange merge_range("merge");
   Q5Result result;
   std::map<std::string, int64_t> revenue_by_nation;
   for (const Q5Result* partial : {&cpu, &gpu}) {
@@ -162,6 +164,7 @@ arrow::Result<std::unique_ptr<HybridQ5Session>> HybridQ5Session::Make(
       return arrow::Status::Invalid("cpu_threads must be positive");
     }
 
+    NvtxRange session_setup_range("session_setup");
     Stopwatch setup_timer;
     ARROW_ASSIGN_OR_RAISE(const auto batch_lengths,
                           lineitem_batch_lengths(dataset.lineitem));
@@ -202,6 +205,7 @@ arrow::Result<std::unique_ptr<HybridQ5Session>> HybridQ5Session::Make(
 
 arrow::Result<Q5Result> HybridQ5Session::Execute() {
   try {
+    NvtxRange request_range("request");
     Stopwatch total_timer;
     Stopwatch execution_timer;
     auto gpu_future = std::async(std::launch::async, [this]() {
@@ -245,6 +249,7 @@ arrow::Result<Q5Result> execute_q5_hybrid(
     if (options.cpu_threads <= 0) {
       return arrow::Status::Invalid("cpu_threads must be positive");
     }
+    NvtxRange request_range("request");
     Stopwatch total_timer;
     ARROW_ASSIGN_OR_RAISE(const auto batch_lengths,
                           lineitem_batch_lengths(dataset.lineitem));

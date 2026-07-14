@@ -5,6 +5,11 @@ project(memq5 LANGUAGES CXX)
 option(MEMQ5_ENABLE_ARROW "Build the Apache Arrow IPC loader" OFF)
 option(MEMQ5_ENABLE_TESTS "Build tests" ON)
 option(MEMQ5_ENABLE_CUDA "Build CUDA engines" OFF)
+option(MEMQ5_ENABLE_NVTX "Enable NVTX ranges" OFF)
+
+if(MEMQ5_ENABLE_NVTX)
+  find_package(CUDAToolkit REQUIRED)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -55,6 +60,11 @@ if(MEMQ5_ENABLE_ARROW)
   target_compile_options(memq5_arrow PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
   )
+
+  if(MEMQ5_ENABLE_NVTX)
+    target_compile_definitions(memq5_arrow PRIVATE MEMQ5_ENABLE_NVTX=1)
+    target_link_libraries(memq5_arrow PRIVATE CUDA::nvtx3)
+  endif()
 
   add_executable(memq5_arrow_check
     src/cli/memq5_arrow_check.cpp
@@ -115,6 +125,10 @@ if(MEMQ5_ENABLE_CUDA)
     target_compile_definitions(memq5_arrow_cuda PUBLIC
       MEMQ5_HAS_ARROW_CUDA=1
     )
+    if(MEMQ5_ENABLE_NVTX)
+      target_compile_definitions(memq5_arrow_cuda PRIVATE MEMQ5_ENABLE_NVTX=1)
+      target_link_libraries(memq5_arrow_cuda PRIVATE CUDA::nvtx3)
+    endif()
     set_target_properties(memq5_arrow_cuda PROPERTIES
       CUDA_STANDARD 17
       CUDA_STANDARD_REQUIRED ON

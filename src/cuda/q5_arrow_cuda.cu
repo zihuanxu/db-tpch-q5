@@ -15,6 +15,7 @@
 
 #include <arrow/api.h>
 
+#include "common/nvtx_range.hpp"
 #include "common/timer.hpp"
 #include "engine/arrow_q5_plan.hpp"
 
@@ -256,6 +257,7 @@ prepare_arrow_gpu_input(const ArrowQ5Dataset& dataset, const Q5Params& params) {
   input.price_cents.reserve(row_count);
   input.discount_hundredths.reserve(row_count);
 
+  NvtxRange host_staging_range("host_staging");
   Stopwatch staging_timer;
   arrow::TableBatchReader reader(dataset.lineitem);
   while (true) {
@@ -457,6 +459,7 @@ double launch_kernel(const ArrowGpuInput& input, const int32_t* order_keys,
                      const int32_t* order_map, const int32_t* supplier_map,
                      unsigned long long* revenue, std::size_t nation_count,
                      unsigned long long* matched, int32_t* overflow) {
+  NvtxRange q5_kernel_range("q5_kernel");
   constexpr int kThreads = 256;
   const int blocks =
       static_cast<int>((input.order_keys.size() + kThreads - 1) / kThreads);
@@ -628,6 +631,7 @@ struct ArrowCudaQ5Session::Impl {
     if (mode != ArrowCudaMemoryMode::kManaged || managed_output_on_device) {
       return {};
     }
+    NvtxRange managed_prefetch_range("managed_prefetch");
     CudaEvent start;
     CudaEvent stop;
     check_cuda(cudaEventRecord(start.get()),
@@ -648,10 +652,12 @@ struct ArrowCudaQ5Session::Impl {
   }
 
   double collect_small_output() {
+    NvtxRange d2h_range("d2h");
     CudaEvent start;
     CudaEvent stop;
     check_cuda(cudaEventRecord(start.get()), "cudaEventRecord D2H start");
     if (mode == ArrowCudaMemoryMode::kManaged) {
+      NvtxRange managed_prefetch_range("managed_prefetch");
       prefetch_managed_outputs(cudaCpuDeviceId);
     } else {
       device_revenue->copy_to_host(host_revenue.data(), host_revenue.size());
@@ -758,6 +764,7 @@ struct ArrowCudaQ5Session::Impl {
   }
 
   void initialize_copy() {
+    NvtxRange initial_h2d_range("initial_h2d");
     CudaEvent start;
     CudaEvent stop;
     check_cuda(cudaEventRecord(start.get()), "cudaEventRecord H2D start");
@@ -780,22 +787,28 @@ struct ArrowCudaQ5Session::Impl {
   }
 
   void initialize_managed() {
-    Stopwatch staging_timer;
-    managed_order_keys->copy_from_host(input.order_keys.data(),
-                                       input.order_keys.size());
-    managed_supplier_keys->copy_from_host(input.supplier_keys.data(),
-                                          input.supplier_keys.size());
-    managed_prices->copy_from_host(input.price_cents.data(),
-                                   input.price_cents.size());
-    managed_discounts->copy_from_host(input.discount_hundredths.data(),
-                                      input.discount_hundredths.size());
-    managed_order_map->copy_from_host(input.plan.order_nation_by_key.data(),
-                                      input.plan.order_nation_by_key.size());
-    managed_supplier_map->copy_from_host(input.plan.supplier_nation_by_key.data(),
-                                         input.plan.supplier_nation_by_key.size());
-    zero_managed_outputs();
-    setup.host_staging_ms += staging_timer.elapsed_ms();
+    {
+      NvtxRange host_staging_range("host_staging");
+      Stopwatch staging_timer;
+      managed_order_keys->copy_from_host(input.order_keys.data(),
+                                         input.order_keys.size());
+      managed_supplier_keys->copy_from_host(input.supplier_keys.data(),
+                                            input.supplier_keys.size());
+      managed_prices->copy_from_host(input.price_cents.data(),
+                                     input.price_cents.size());
+      managed_discounts->copy_from_host(input.discount_hundredths.data(),
+                                        input.discount_hundredths.size());
+      managed_order_map->copy_from_host(input.plan.order_nation_by_key.data(),
+                                        input.plan.order_nation_by_key.size());
+      managed_supplier_map->copy_from_host(
+          input.plan.supplier_nation_by_key.data(),
+          input.plan.supplier_nation_by_key.size());
+      zero_managed_outputs();
+      setup.host_staging_ms += staging_timer.elapsed_ms();
+    }
 
+    NvtxRange initial_h2d_range("initial_h2d");
+    NvtxRange managed_prefetch_range("managed_prefetch");
     CudaEvent start;
     CudaEvent stop;
     check_cuda(cudaEventRecord(start.get()),
@@ -812,6 +825,7 @@ struct ArrowCudaQ5Session::Impl {
   }
 
   void initialize_mapped() {
+    NvtxRange host_staging_range("host_staging");
     Stopwatch staging_timer;
     mapped_order_keys->copy_from_host(input.order_keys.data(),
                                       input.order_keys.size());
@@ -942,6 +956,7 @@ arrow::Result<std::unique_ptr<ArrowCudaQ5Session>> ArrowCudaQ5Session::Make(
     ArrowCudaMemoryMode mode) {
   return arrow_cuda_status_boundary(
       [&]() -> arrow::Result<std::unique_ptr<ArrowCudaQ5Session>> {
+        NvtxRange session_setup_range("session_setup");
         Stopwatch setup_timer;
         ARROW_ASSIGN_OR_RAISE(ArrowGpuInput input,
                               prepare_arrow_gpu_input(dataset, params));
@@ -957,11 +972,15 @@ arrow::Result<std::unique_ptr<ArrowCudaQ5Session>> ArrowCudaQ5Session::Make(
         const int64_t gpu_input_bytes = input_bytes(input);
         const int64_t output_size_bytes = output_bytes(nation_count);
 
-        Stopwatch allocation_timer;
-        auto impl = std::unique_ptr<Impl>(
-            new Impl(std::move(input), nation_count, mode));
-        impl->allocate();
-        setup.allocation_ms = allocation_timer.elapsed_ms();
+        std::unique_ptr<Impl> impl;
+        {
+          NvtxRange allocation_range("allocation");
+          Stopwatch allocation_timer;
+          impl = std::unique_ptr<Impl>(
+              new Impl(std::move(input), nation_count, mode));
+          impl->allocate();
+          setup.allocation_ms = allocation_timer.elapsed_ms();
+        }
 
         impl->setup = setup;
         impl->initialize();
@@ -985,8 +1004,12 @@ arrow::Result<std::unique_ptr<ArrowCudaQ5Session>> ArrowCudaQ5Session::Make(
 arrow::Result<Q5Result> ArrowCudaQ5Session::Execute() {
   return arrow_cuda_status_boundary([&]() -> arrow::Result<Q5Result> {
     std::lock_guard<std::mutex> lock(impl_->execute_mutex);
+    NvtxRange request_range("request");
     Stopwatch total_timer;
-    impl_->reset_output_buffers();
+    {
+      NvtxRange output_reset_range("output_reset");
+      impl_->reset_output_buffers();
+    }
     const Impl::RequestPrefetch prefetch =
         impl_->prefetch_managed_output_to_device_if_needed();
     const double kernel_ms = impl_->launch_existing_kernel();
