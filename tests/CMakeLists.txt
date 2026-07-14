@@ -127,6 +127,7 @@ for request in requests:
   endfunction()
 
   add_memq5_session_cli_test(cpu-specialized)
+  add_memq5_session_cli_test(arrow-acero)
 
   add_test(
     NAME test_q5_arrow_session_requests_alias
@@ -173,7 +174,7 @@ assert "manifest.json" not in completed.stderr, completed.stderr
     duplicate_requests "--requests may be specified only once"
     --requests 1 --requests 1)
   add_memq5_session_invalid_test(
-    bad_engine "unsupported resident Arrow engine" --engine arrow-acero)
+    bad_engine "unsupported resident Arrow engine" --engine not-an-engine)
   add_memq5_session_invalid_test(
     bad_ratio "--cpu-ratio must be between 0 and 1" --cpu-ratio 1.1)
   add_memq5_session_invalid_test(

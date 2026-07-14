@@ -10,9 +10,11 @@
 #include <utility>
 
 #include <arrow/result.h>
+#include <arrow/util/byte_size.h>
 
 #include "common/nvtx_range.hpp"
 #include "common/timer.hpp"
+#include "cpu/q5_acero.hpp"
 #include "engine/q5_params.hpp"
 #include "engine/q5_result.hpp"
 #include "io/arrow_q5_loader.hpp"
@@ -43,7 +45,7 @@ struct Options {
 
 void print_usage(std::ostream& output) {
   output << "usage: memq5_arrow_session --dataset <dir> "
-            "--engine cpu-specialized"
+            "--engine cpu-specialized|arrow-acero"
 #ifdef MEMQ5_HAS_ARROW_CUDA
             "|gpu-copy|gpu-managed|gpu-mapped|hybrid-arrow"
 #endif
@@ -96,7 +98,7 @@ std::string parse_hybrid_selection(const std::string& text) {
 }
 
 bool is_supported_engine(const std::string& engine) {
-  bool supported = engine == "cpu-specialized";
+  bool supported = engine == "cpu-specialized" || engine == "arrow-acero";
 #ifdef MEMQ5_HAS_ARROW_CUDA
   supported = supported || engine == "gpu-copy" || engine == "gpu-managed" ||
               engine == "gpu-mapped" || engine == "hybrid-arrow";
@@ -189,6 +191,29 @@ class ResidentQ5Session {
   }
 };
 
+class AceroResidentQ5Session final : public ResidentQ5Session {
+ public:
+  AceroResidentQ5Session(memq5::ArrowQ5Dataset dataset,
+                         memq5::Q5Params params,
+                         memq5::Q5SessionSetup setup)
+      : dataset_(std::move(dataset)),
+        params_(std::move(params)),
+        setup_(setup) {}
+
+  arrow::Result<memq5::Q5Result> Execute() override {
+    return memq5::execute_q5_acero(dataset_, params_);
+  }
+
+  const memq5::Q5SessionSetup& setup() const override { return setup_; }
+
+  double selected_cpu_ratio() const override { return 1.0; }
+
+ private:
+  memq5::ArrowQ5Dataset dataset_;
+  memq5::Q5Params params_;
+  memq5::Q5SessionSetup setup_;
+};
+
 template <typename Session>
 class ResidentQ5SessionAdapter final : public ResidentQ5Session {
  public:
@@ -276,6 +301,24 @@ arrow::Result<std::unique_ptr<ResidentQ5Session>> make_session(
     ARROW_ASSIGN_OR_RAISE(auto session,
                           memq5::ArrowCpuQ5Session::Make(dataset, params));
     return adapt_session(std::move(session), 1.0);
+  }
+  if (options.engine == "arrow-acero") {
+    memq5::Stopwatch setup_timer;
+    memq5::Q5SessionSetup setup;
+    for (const auto& [name, table] : dataset.tables) {
+      if (table == nullptr) {
+        return arrow::Status::Invalid("missing Arrow table for Acero: ", name);
+      }
+      const int64_t bytes = arrow::util::TotalBufferSize(*table);
+      int64_t total = 0;
+      if (__builtin_add_overflow(setup.resident_host_bytes, bytes, &total)) {
+        return arrow::Status::CapacityError(
+            "Acero resident Arrow buffer bytes overflow");
+      }
+      setup.resident_host_bytes = total;
+    }
+    setup.total_ms = setup_timer.elapsed_ms();
+    return std::make_unique<AceroResidentQ5Session>(dataset, params, setup);
   }
 #ifdef MEMQ5_HAS_ARROW_CUDA
   if (options.engine == "gpu-copy" || options.engine == "gpu-managed" ||
