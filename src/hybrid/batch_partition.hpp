@@ -28,4 +28,8 @@ struct HybridPartition {
 arrow::Result<HybridPartition> partition_batch_lengths(
     const std::vector<int64_t>& batch_lengths, double cpu_ratio);
 
+// Assign whole batches at the nearest cumulative row boundary; ties go lower.
+arrow::Result<HybridPartition> partition_batch_lengths_at_boundary(
+    const std::vector<int64_t>& batch_lengths, double cpu_ratio);
+
 }  // namespace memq5

@@ -18,7 +18,7 @@ namespace {
 
 nlohmann::json setup_json(const std::string& session_id,
                           const Q5SessionSetupRecord& record) {
-  return {
+  nlohmann::json result = {
       {"record_type", "session_setup"},
       {"session_id", session_id},
       {"lifecycle", "resident"},
@@ -44,6 +44,23 @@ nlohmann::json setup_json(const std::string& session_id,
       {"selected_cpu_ratio", record.selected_cpu_ratio},
       {"predicted_cpu_ratio", record.predicted_cpu_ratio},
   };
+  if (!record.hybrid_model_version.empty()) {
+    result["hybrid_model_version"] = record.hybrid_model_version;
+    result["calibration_rows"] = record.calibration_rows;
+    result["cpu_calibration_requests"] = record.cpu_calibration_requests;
+    result["gpu_calibration_requests"] = record.gpu_calibration_requests;
+    result["cpu_calibration_ms"] = record.cpu_calibration_ms;
+    result["gpu_calibration_ms"] = record.gpu_calibration_ms;
+    result["gpu_kernel_calibration_ms"] =
+        record.gpu_kernel_calibration_ms;
+    result["cpu_rows_per_ms"] = record.cpu_rows_per_ms;
+    result["gpu_rows_per_ms"] = record.gpu_rows_per_ms;
+    result["gpu_fixed_ms"] = record.gpu_fixed_ms;
+    result["selected_batch_boundary_rows"] =
+        record.selected_batch_boundary_rows;
+    result["realized_cpu_ratio"] = record.realized_cpu_ratio;
+  }
+  return result;
 }
 
 nlohmann::json request_rows(const Q5Result* result) {

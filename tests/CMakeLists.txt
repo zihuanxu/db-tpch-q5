@@ -198,6 +198,16 @@ assert "manifest.json" not in completed.stderr, completed.stderr
   )
   add_test(NAME test_batch_partition COMMAND test_batch_partition)
 
+  add_executable(test_q5_hybrid_auto test_q5_hybrid_auto.cpp)
+  target_link_libraries(test_q5_hybrid_auto PRIVATE
+    memq5_arrow
+    nlohmann_json::nlohmann_json
+  )
+  target_compile_options(test_q5_hybrid_auto PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-UNDEBUG>
+  )
+  add_test(NAME test_q5_hybrid_auto COMMAND test_q5_hybrid_auto)
+
   add_executable(test_hybrid_cost_model test_hybrid_cost_model.cpp)
   target_link_libraries(test_hybrid_cost_model PRIVATE memq5_arrow)
   target_compile_options(test_hybrid_cost_model PRIVATE
@@ -332,6 +342,90 @@ if(MEMQ5_ENABLE_ARROW AND MEMQ5_ENABLE_CUDA)
   )
   add_test(NAME test_q5_hybrid_session COMMAND test_q5_hybrid_session)
   set_tests_properties(test_q5_hybrid_session PROPERTIES SKIP_RETURN_CODE 77)
+
+  add_executable(test_q5_hybrid_auto_cuda test_q5_hybrid_auto.cpp)
+  target_link_libraries(test_q5_hybrid_auto_cuda PRIVATE
+    memq5_arrow_cuda
+    nlohmann_json::nlohmann_json
+  )
+  target_compile_definitions(test_q5_hybrid_auto_cuda PRIVATE
+    MEMQ5_ARROW_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow"
+    MEMQ5_TEST_HYBRID_AUTO_CUDA=1
+  )
+  target_compile_options(test_q5_hybrid_auto_cuda PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-UNDEBUG>
+  )
+  add_test(NAME test_q5_hybrid_auto_cuda COMMAND test_q5_hybrid_auto_cuda)
+  set_tests_properties(test_q5_hybrid_auto_cuda PROPERTIES SKIP_RETURN_CODE 77)
+
+  set(MEMQ5_HYBRID_AUTO_SESSION_VALIDATOR [=[
+import json
+import subprocess
+import sys
+
+completed = subprocess.run(sys.argv[1:], capture_output=True, text=True)
+if completed.returncode == 77:
+    print(completed.stderr, file=sys.stderr)
+    sys.exit(77)
+if completed.returncode != 0:
+    print(completed.stderr, file=sys.stderr)
+    sys.exit(completed.returncode)
+
+records = [json.loads(line) for line in completed.stdout.splitlines()]
+setup, requests = records[0], records[1:]
+assert setup["record_type"] == "session_setup"
+assert setup["engine"] == "hybrid-arrow"
+assert setup["hybrid_model_version"] == "hybrid-cost-v1-batch-v1"
+assert setup["calibration_rows"] == 6
+assert setup["cpu_calibration_requests"] == 1
+assert setup["gpu_calibration_requests"] == 1
+assert setup["cpu_calibration_ms"] > 0.0
+assert setup["gpu_calibration_ms"] > 0.0
+assert setup["gpu_kernel_calibration_ms"] > 0.0
+assert setup["cpu_rows_per_ms"] > 0.0
+assert setup["gpu_rows_per_ms"] > 0.0
+assert setup["gpu_fixed_ms"] >= 0.0
+assert 0.0 <= setup["predicted_cpu_ratio"] <= 1.0
+assert 0 <= setup["selected_batch_boundary_rows"] <= 6
+assert setup["realized_cpu_ratio"] == setup["selected_cpu_ratio"]
+assert setup["tune_ms"] >= 0.0
+assert len(requests) == 2
+
+setup_only = {
+    "hybrid_model_version",
+    "calibration_rows",
+    "cpu_calibration_requests",
+    "gpu_calibration_requests",
+    "cpu_calibration_ms",
+    "gpu_calibration_ms",
+    "gpu_kernel_calibration_ms",
+    "cpu_rows_per_ms",
+    "gpu_rows_per_ms",
+    "gpu_fixed_ms",
+    "predicted_cpu_ratio",
+    "selected_batch_boundary_rows",
+    "realized_cpu_ratio",
+    "tune_ms",
+}
+for request in requests:
+    assert request["record_type"] == "request"
+    assert request["status"] == "ok"
+    assert request["result_hash"] == "248d10b6ee352953"
+    assert request["selected_cpu_ratio"] == setup["selected_cpu_ratio"]
+    assert setup_only.isdisjoint(request)
+]=])
+
+  add_test(
+    NAME test_q5_arrow_session_hybrid_auto
+    COMMAND ${Python3_EXECUTABLE} -c "${MEMQ5_HYBRID_AUTO_SESSION_VALIDATOR}"
+      $<TARGET_FILE:memq5_arrow_session>
+      --dataset ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow
+      --engine hybrid-arrow --hybrid-selection auto
+      --region ASIA --date 1994-01-01 --threads 2 --warmup 0 --repeat 2
+  )
+  set_tests_properties(test_q5_arrow_session_hybrid_auto PROPERTIES
+    SKIP_RETURN_CODE 77
+  )
 
   add_test(
     NAME test_q5_arrow_cli_hybrid

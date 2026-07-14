@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
+#include <string>
 
 #include <arrow/result.h>
 
@@ -13,7 +15,28 @@ namespace memq5 {
 
 class ArrowCudaQ5Session;
 
+enum class HybridSelection { kFixed, kAuto };
+
+struct HybridAutoTuning {
+  bool enabled = false;
+  std::string model_version;
+  int64_t calibration_rows = 0;
+  int cpu_calibration_requests = 0;
+  int gpu_calibration_requests = 0;
+  double cpu_calibration_ms = 0.0;
+  double gpu_calibration_ms = 0.0;
+  double gpu_kernel_calibration_ms = 0.0;
+  double cpu_rows_per_ms = 0.0;
+  double gpu_rows_per_ms = 0.0;
+  double gpu_fixed_ms = 0.0;
+  double predicted_cpu_ratio = 0.0;
+  int64_t selected_batch_boundary_rows = 0;
+  double realized_cpu_ratio = 0.0;
+  double tune_ms = 0.0;
+};
+
 struct HybridOptions {
+  HybridSelection selection = HybridSelection::kFixed;
   double cpu_ratio = 0.5;
   int cpu_threads = 1;
 };
@@ -28,16 +51,19 @@ class HybridQ5Session {
   arrow::Result<Q5Result> Execute();
   const Q5SessionSetup& setup() const;
   double cpu_ratio() const;
+  const HybridAutoTuning& auto_tuning() const;
 
  private:
   HybridQ5Session(std::unique_ptr<ArrowCpuQ5Session> cpu_session,
                   std::unique_ptr<ArrowCudaQ5Session> gpu_session,
-                  Q5SessionSetup setup, double cpu_ratio);
+                  Q5SessionSetup setup, double cpu_ratio,
+                  HybridAutoTuning auto_tuning);
 
   std::unique_ptr<ArrowCpuQ5Session> cpu_session_;
   std::unique_ptr<ArrowCudaQ5Session> gpu_session_;
   const Q5SessionSetup setup_;
   const double cpu_ratio_;
+  const HybridAutoTuning auto_tuning_;
 };
 
 arrow::Result<Q5Result> execute_q5_hybrid(

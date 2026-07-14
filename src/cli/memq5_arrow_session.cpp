@@ -34,6 +34,7 @@ struct Options {
   std::string date = "1994-01-01";
   int threads = 1;
   double cpu_ratio = 0.5;
+  std::string hybrid_selection = "fixed";
   int warmup = 3;
   int repeat = 10;
   bool verify_checksums = true;
@@ -46,7 +47,8 @@ void print_usage(std::ostream& output) {
             "|gpu-copy|gpu-managed|gpu-mapped|hybrid-arrow"
 #endif
             " [--region ASIA] [--date 1994-01-01] [--threads N] "
-            "[--cpu-ratio 0.5] [--warmup 3] [--repeat 10] "
+            "[--cpu-ratio 0.5] [--hybrid-selection fixed|auto] "
+            "[--warmup 3] [--repeat 10] "
             "[--requests 1] "
             "[--skip-checksums]\n";
 }
@@ -85,6 +87,13 @@ double parse_ratio(const std::string& text) {
   return value;
 }
 
+std::string parse_hybrid_selection(const std::string& text) {
+  if (text != "fixed" && text != "auto") {
+    throw std::runtime_error("--hybrid-selection must be fixed or auto");
+  }
+  return text;
+}
+
 bool is_supported_engine(const std::string& engine) {
   bool supported = engine == "cpu-specialized";
 #ifdef MEMQ5_HAS_ARROW_CUDA
@@ -119,6 +128,8 @@ Options parse_options(int argc, char** argv) {
       options.threads = parse_integer(next_value(), "--threads", false);
     } else if (argument == "--cpu-ratio") {
       options.cpu_ratio = parse_ratio(next_value());
+    } else if (argument == "--hybrid-selection") {
+      options.hybrid_selection = parse_hybrid_selection(next_value());
     } else if (argument == "--warmup") {
       options.warmup = parse_integer(next_value(), "--warmup", true);
       warmup_was_set = true;
@@ -146,6 +157,11 @@ Options parse_options(int argc, char** argv) {
     throw std::runtime_error("unsupported resident Arrow engine: " +
                              options.engine);
   }
+  if (options.hybrid_selection == "auto" &&
+      options.engine != "hybrid-arrow") {
+    throw std::runtime_error(
+        "--hybrid-selection auto requires --engine hybrid-arrow");
+  }
   if (profiling_requests.has_value()) {
     if (warmup_was_set || repeat_was_set) {
       throw std::runtime_error(
@@ -166,6 +182,10 @@ class ResidentQ5Session {
   virtual arrow::Result<memq5::Q5Result> Execute() = 0;
   virtual const memq5::Q5SessionSetup& setup() const = 0;
   virtual double selected_cpu_ratio() const = 0;
+  virtual void populate_setup_record(
+      memq5::Q5SessionSetupRecord* record) const {
+    static_cast<void>(record);
+  }
 };
 
 template <typename Session>
@@ -200,6 +220,54 @@ std::unique_ptr<ResidentQ5Session> adapt_session(
       std::move(session), selected_cpu_ratio);
 }
 
+#ifdef MEMQ5_HAS_ARROW_CUDA
+class HybridResidentQ5SessionAdapter final : public ResidentQ5Session {
+ public:
+  explicit HybridResidentQ5SessionAdapter(
+      std::unique_ptr<memq5::HybridQ5Session> session)
+      : session_(std::move(session)) {}
+
+  arrow::Result<memq5::Q5Result> Execute() override {
+    return session_->Execute();
+  }
+
+  const memq5::Q5SessionSetup& setup() const override {
+    return session_->setup();
+  }
+
+  double selected_cpu_ratio() const override {
+    return session_->cpu_ratio();
+  }
+
+  void populate_setup_record(
+      memq5::Q5SessionSetupRecord* record) const override {
+    const memq5::HybridAutoTuning& tuning = session_->auto_tuning();
+    if (!tuning.enabled) {
+      return;
+    }
+    record->tune_ms = tuning.tune_ms;
+    record->predicted_cpu_ratio = tuning.predicted_cpu_ratio;
+    record->hybrid_model_version = tuning.model_version;
+    record->calibration_rows = tuning.calibration_rows;
+    record->cpu_calibration_requests = tuning.cpu_calibration_requests;
+    record->gpu_calibration_requests = tuning.gpu_calibration_requests;
+    record->cpu_calibration_ms = tuning.cpu_calibration_ms;
+    record->gpu_calibration_ms = tuning.gpu_calibration_ms;
+    record->gpu_kernel_calibration_ms =
+        tuning.gpu_kernel_calibration_ms;
+    record->cpu_rows_per_ms = tuning.cpu_rows_per_ms;
+    record->gpu_rows_per_ms = tuning.gpu_rows_per_ms;
+    record->gpu_fixed_ms = tuning.gpu_fixed_ms;
+    record->selected_batch_boundary_rows =
+        tuning.selected_batch_boundary_rows;
+    record->realized_cpu_ratio = tuning.realized_cpu_ratio;
+  }
+
+ private:
+  std::unique_ptr<memq5::HybridQ5Session> session_;
+};
+#endif
+
 arrow::Result<std::unique_ptr<ResidentQ5Session>> make_session(
     const memq5::ArrowQ5Dataset& dataset, const memq5::Q5Params& params,
     const Options& options) {
@@ -224,13 +292,16 @@ arrow::Result<std::unique_ptr<ResidentQ5Session>> make_session(
   }
   if (options.engine == "hybrid-arrow") {
     memq5::HybridOptions hybrid_options;
+    hybrid_options.selection = options.hybrid_selection == "auto"
+                                   ? memq5::HybridSelection::kAuto
+                                   : memq5::HybridSelection::kFixed;
     hybrid_options.cpu_ratio = options.cpu_ratio;
     hybrid_options.cpu_threads = options.threads;
     ARROW_ASSIGN_OR_RAISE(
         auto session,
         memq5::HybridQ5Session::Make(dataset, params, hybrid_options));
-    const double selected_cpu_ratio = session->cpu_ratio();
-    return adapt_session(std::move(session), selected_cpu_ratio);
+    return std::make_unique<HybridResidentQ5SessionAdapter>(
+        std::move(session));
   }
 #endif
   return arrow::Status::Invalid("unsupported resident Arrow engine: ",
@@ -277,6 +348,7 @@ memq5::Q5SessionSetupRecord make_setup_record(
   record.dataset_load_ms = dataset_load_ms;
   record.setup = session.setup();
   record.selected_cpu_ratio = session.selected_cpu_ratio();
+  session.populate_setup_record(&record);
   return record;
 }
 

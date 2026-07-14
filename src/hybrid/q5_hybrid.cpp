@@ -17,6 +17,7 @@
 #include "cpu/q5_arrow_cpu.hpp"
 #include "cuda/q5_arrow_cuda.hpp"
 #include "hybrid/batch_partition.hpp"
+#include "hybrid/hybrid_cost_model.hpp"
 
 namespace memq5 {
 namespace {
@@ -78,6 +79,77 @@ arrow::Result<Q5SessionSetup> combine_session_setup(
                                   "hybrid resident pinned bytes"));
   setup.total_ms = setup_timer.elapsed_ms();
   return setup;
+}
+
+struct CalibratedPartition {
+  HybridPartition partition;
+  HybridAutoTuning tuning;
+};
+
+arrow::Result<CalibratedPartition> calibrate_auto_partition(
+    const ArrowQ5Dataset& dataset, const Q5Params& params, int cpu_threads,
+    const std::vector<int64_t>& batch_lengths) {
+  if (dataset.lineitem == nullptr || dataset.lineitem->num_rows() <= 0) {
+    return arrow::Status::Invalid(
+        "hybrid auto calibration requires positive lineitem rows");
+  }
+
+  Stopwatch tune_timer;
+  HybridAutoTuning tuning;
+  tuning.enabled = true;
+  tuning.model_version = "hybrid-cost-v1-batch-v1";
+  tuning.calibration_rows = dataset.lineitem->num_rows();
+
+  Q5Params cpu_params = params;
+  cpu_params.threads = cpu_threads;
+  ARROW_ASSIGN_OR_RAISE(auto cpu_calibration_session,
+                        ArrowCpuQ5Session::Make(dataset, cpu_params));
+  ARROW_ASSIGN_OR_RAISE(Q5Result cpu_calibration,
+                        cpu_calibration_session->Execute());
+  tuning.cpu_calibration_requests = 1;
+  tuning.cpu_calibration_ms = cpu_calibration.timing.total_ms;
+  cpu_calibration_session.reset();
+
+  ARROW_ASSIGN_OR_RAISE(
+      auto gpu_calibration_session,
+      ArrowCudaQ5Session::Make(dataset, params, ArrowCudaMemoryMode::kCopy));
+  ARROW_ASSIGN_OR_RAISE(Q5Result gpu_calibration,
+                        gpu_calibration_session->Execute());
+  tuning.gpu_calibration_requests = 1;
+  tuning.gpu_calibration_ms = gpu_calibration.timing.total_ms;
+  tuning.gpu_kernel_calibration_ms = gpu_calibration.timing.kernel_ms;
+  tuning.gpu_fixed_ms =
+      std::max(0.0, tuning.gpu_calibration_ms -
+                        tuning.gpu_kernel_calibration_ms);
+  gpu_calibration_session.reset();
+
+  const HybridCalibration calibration{
+      tuning.calibration_rows,
+      tuning.cpu_calibration_ms,
+      tuning.gpu_kernel_calibration_ms,
+      tuning.gpu_fixed_ms,
+  };
+  ARROW_ASSIGN_OR_RAISE(const HybridPrediction prediction,
+                        predict_hybrid_ratio(calibration));
+  tuning.cpu_rows_per_ms =
+      static_cast<double>(tuning.calibration_rows) / tuning.cpu_calibration_ms;
+  tuning.gpu_rows_per_ms = static_cast<double>(tuning.calibration_rows) /
+                           tuning.gpu_kernel_calibration_ms;
+  tuning.predicted_cpu_ratio = prediction.predicted_cpu_ratio;
+
+  ARROW_ASSIGN_OR_RAISE(
+      HybridPartition partition,
+      partition_batch_lengths_at_boundary(batch_lengths,
+                                          tuning.predicted_cpu_ratio));
+  if (partition.cpu_rows + partition.gpu_rows != tuning.calibration_rows) {
+    return arrow::Status::Invalid(
+        "hybrid auto calibration row count does not match Arrow batches");
+  }
+  tuning.selected_batch_boundary_rows = partition.cpu_rows;
+  tuning.realized_cpu_ratio =
+      static_cast<double>(partition.cpu_rows) / tuning.calibration_rows;
+  tuning.tune_ms = tune_timer.elapsed_ms();
+  return CalibratedPartition{std::move(partition), std::move(tuning)};
 }
 
 arrow::Result<Q5Result> merge_hybrid_results(
@@ -144,11 +216,12 @@ arrow::Result<Q5Result> merge_hybrid_results(
 HybridQ5Session::HybridQ5Session(
     std::unique_ptr<ArrowCpuQ5Session> cpu_session,
     std::unique_ptr<ArrowCudaQ5Session> gpu_session, Q5SessionSetup setup,
-    double cpu_ratio)
+    double cpu_ratio, HybridAutoTuning auto_tuning)
     : cpu_session_(std::move(cpu_session)),
       gpu_session_(std::move(gpu_session)),
       setup_(setup),
-      cpu_ratio_(cpu_ratio) {}
+      cpu_ratio_(cpu_ratio),
+      auto_tuning_(std::move(auto_tuning)) {}
 
 HybridQ5Session::~HybridQ5Session() = default;
 
@@ -156,8 +229,13 @@ arrow::Result<std::unique_ptr<HybridQ5Session>> HybridQ5Session::Make(
     const ArrowQ5Dataset& dataset, const Q5Params& params,
     const HybridOptions& options) {
   try {
-    if (!std::isfinite(options.cpu_ratio) || options.cpu_ratio < 0.0 ||
-        options.cpu_ratio > 1.0) {
+    if (options.selection != HybridSelection::kFixed &&
+        options.selection != HybridSelection::kAuto) {
+      return arrow::Status::Invalid("unknown hybrid selection mode");
+    }
+    if (options.selection == HybridSelection::kFixed &&
+        (!std::isfinite(options.cpu_ratio) || options.cpu_ratio < 0.0 ||
+         options.cpu_ratio > 1.0)) {
       return arrow::Status::Invalid("cpu_ratio must be between 0 and 1");
     }
     if (options.cpu_threads <= 0) {
@@ -168,9 +246,23 @@ arrow::Result<std::unique_ptr<HybridQ5Session>> HybridQ5Session::Make(
     Stopwatch setup_timer;
     ARROW_ASSIGN_OR_RAISE(const auto batch_lengths,
                           lineitem_batch_lengths(dataset.lineitem));
-    ARROW_ASSIGN_OR_RAISE(
-        const HybridPartition partition,
-        partition_batch_lengths(batch_lengths, options.cpu_ratio));
+
+    HybridPartition partition;
+    HybridAutoTuning auto_tuning;
+    double selected_cpu_ratio = options.cpu_ratio;
+    if (options.selection == HybridSelection::kAuto) {
+      ARROW_ASSIGN_OR_RAISE(
+          CalibratedPartition calibrated,
+          calibrate_auto_partition(dataset, params, options.cpu_threads,
+                                   batch_lengths));
+      partition = std::move(calibrated.partition);
+      auto_tuning = std::move(calibrated.tuning);
+      selected_cpu_ratio = auto_tuning.realized_cpu_ratio;
+    } else {
+      ARROW_ASSIGN_OR_RAISE(
+          partition,
+          partition_batch_lengths(batch_lengths, options.cpu_ratio));
+    }
 
     ArrowQ5Dataset cpu_dataset = dataset;
     cpu_dataset.lineitem = dataset.lineitem->Slice(0, partition.cpu_rows);
@@ -194,7 +286,7 @@ arrow::Result<std::unique_ptr<HybridQ5Session>> HybridQ5Session::Make(
                               setup_timer));
     return std::unique_ptr<HybridQ5Session>(new HybridQ5Session(
         std::move(cpu_session), std::move(gpu_session), setup,
-        options.cpu_ratio));
+        selected_cpu_ratio, std::move(auto_tuning)));
   } catch (const std::bad_alloc&) {
     return arrow::Status::CapacityError("hybrid Q5 session allocation failed");
   } catch (const std::exception& error) {
@@ -238,10 +330,18 @@ const Q5SessionSetup& HybridQ5Session::setup() const { return setup_; }
 
 double HybridQ5Session::cpu_ratio() const { return cpu_ratio_; }
 
+const HybridAutoTuning& HybridQ5Session::auto_tuning() const {
+  return auto_tuning_;
+}
+
 arrow::Result<Q5Result> execute_q5_hybrid(
     const ArrowQ5Dataset& dataset, const Q5Params& params,
     const HybridOptions& options) {
   try {
+    if (options.selection != HybridSelection::kFixed) {
+      return arrow::Status::Invalid(
+          "hybrid auto selection requires a resident session");
+    }
     if (!std::isfinite(options.cpu_ratio) || options.cpu_ratio < 0.0 ||
         options.cpu_ratio > 1.0) {
       return arrow::Status::Invalid("cpu_ratio must be between 0 and 1");
