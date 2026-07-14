@@ -133,7 +133,8 @@ int main() {
     assert(request.at("scan_ms") == 0.75);
     assert(request.at("cpu_ms") == 0.8);
     assert(request.at("gpu_ms") == 0.9);
-    assert(request.at("overlap_ms") == 0.45);
+    assert(request.at("overlap_wall_ms") == 0.45);
+    assert(!request.contains("overlap_ms"));
     assert(request.at("input_lineitem_rows") == 6);
     assert(request.at("matched_lineitem_rows") == 2);
     assert(request.at("cpu_input_rows") == 3);
