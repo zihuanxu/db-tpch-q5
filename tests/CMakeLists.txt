@@ -76,7 +76,6 @@ if completed.returncode != 0:
     print(completed.stderr, file=sys.stderr)
     sys.exit(completed.returncode)
 records = [json.loads(line) for line in completed.stdout.splitlines()]
-assert len(records) == 4, records
 setup, requests = records[0], records[1:]
 assert setup["record_type"] == "session_setup"
 assert setup["engine"] == expected_engine
@@ -84,8 +83,12 @@ assert setup["lifecycle"] == "resident"
 assert setup["status"] == "ok"
 session_id = setup["session_id"]
 assert session_id
-assert [record["request_index"] for record in requests] == [0, 1, 2]
-assert [record["is_warmup"] for record in requests] == [True, False, False]
+request_count = setup["warmup"] + setup["repeat"]
+assert len(records) == 1 + request_count, records
+assert [record["request_index"] for record in requests] == list(range(request_count))
+assert [record["is_warmup"] for record in requests] == [
+    index < setup["warmup"] for index in range(request_count)
+]
 
 def update_byte(value, byte):
     return ((value ^ byte) * 1099511628211) & ((1 << 64) - 1)
@@ -125,6 +128,16 @@ for request in requests:
 
   add_memq5_session_cli_test(cpu-specialized)
 
+  add_test(
+    NAME test_q5_arrow_session_requests_alias
+    COMMAND ${Python3_EXECUTABLE} -c "${MEMQ5_SESSION_VALIDATOR}"
+      248d10b6ee352953 cpu-specialized
+      $<TARGET_FILE:memq5_arrow_session>
+      --dataset ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow
+      --engine cpu-specialized --region ASIA --date 1994-01-01
+      --threads 2 --requests 1
+  )
+
   set(MEMQ5_SESSION_INVALID_VALIDATOR [=[
 import subprocess
 import sys
@@ -152,6 +165,13 @@ assert "manifest.json" not in completed.stderr, completed.stderr
     bad_warmup "--warmup must be a nonnegative integer" --warmup -1)
   add_memq5_session_invalid_test(
     bad_repeat "--repeat must be a positive integer" --repeat 0)
+  add_memq5_session_invalid_test(
+    bad_requests "--requests must be a positive integer" --requests 0)
+  add_memq5_session_invalid_test(
+    mixed_requests "--requests cannot be combined" --requests 1 --repeat 1)
+  add_memq5_session_invalid_test(
+    duplicate_requests "--requests may be specified only once"
+    --requests 1 --requests 1)
   add_memq5_session_invalid_test(
     bad_engine "unsupported resident Arrow engine" --engine arrow-acero)
   add_memq5_session_invalid_test(

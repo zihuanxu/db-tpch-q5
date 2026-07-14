@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -46,6 +47,7 @@ void print_usage(std::ostream& output) {
 #endif
             " [--region ASIA] [--date 1994-01-01] [--threads N] "
             "[--cpu-ratio 0.5] [--warmup 3] [--repeat 10] "
+            "[--requests 1] "
             "[--skip-checksums]\n";
 }
 
@@ -94,6 +96,9 @@ bool is_supported_engine(const std::string& engine) {
 
 Options parse_options(int argc, char** argv) {
   Options options;
+  bool warmup_was_set = false;
+  bool repeat_was_set = false;
+  std::optional<int> profiling_requests;
   for (int index = 1; index < argc; ++index) {
     const std::string argument = argv[index];
     const auto next_value = [&]() -> std::string {
@@ -116,8 +121,15 @@ Options parse_options(int argc, char** argv) {
       options.cpu_ratio = parse_ratio(next_value());
     } else if (argument == "--warmup") {
       options.warmup = parse_integer(next_value(), "--warmup", true);
+      warmup_was_set = true;
     } else if (argument == "--repeat") {
       options.repeat = parse_integer(next_value(), "--repeat", false);
+      repeat_was_set = true;
+    } else if (argument == "--requests") {
+      if (profiling_requests.has_value()) {
+        throw std::runtime_error("--requests may be specified only once");
+      }
+      profiling_requests = parse_integer(next_value(), "--requests", false);
     } else if (argument == "--skip-checksums") {
       options.verify_checksums = false;
     } else if (argument == "--help") {
@@ -133,6 +145,14 @@ Options parse_options(int argc, char** argv) {
   if (!is_supported_engine(options.engine)) {
     throw std::runtime_error("unsupported resident Arrow engine: " +
                              options.engine);
+  }
+  if (profiling_requests.has_value()) {
+    if (warmup_was_set || repeat_was_set) {
+      throw std::runtime_error(
+          "--requests cannot be combined with --warmup or --repeat");
+    }
+    options.warmup = 0;
+    options.repeat = *profiling_requests;
   }
   const memq5::CivilDate start_date = memq5::parse_date(options.date);
   static_cast<void>(memq5::date_to_days(start_date));
