@@ -338,6 +338,14 @@ Audited SF10 evidence recorded on 2026-07-14:
 - Resident cuDF verification ran on GPU 0 with no device skips: all 14 focused
   tests passed, including one-time six-table conversion, synchronized setup and
   request timing, stable repeated hashes, strict dates, and no-device handling.
+- One non-formal SF10 cold correctness smoke covered specialized CPU, Acero,
+  `gpu-copy`, `gpu-managed`, `gpu-mapped`, fixed 50/50 hybrid, and cuDF. Every
+  backend returned the five exact DuckDB rows and hash `b1351a421ba8dcfd`.
+  The smoke retained diagnostic counters: copy moved 1,440,121,048 input bytes,
+  managed reported 1,440,121,260 H2D bytes including managed output movement,
+  mapped reported zero H2D and 960,652,652 logical remote-read bytes, and the
+  50/50 hybrid conserved 29,993,026 CPU plus 29,993,026 GPU rows. These
+  single-run timings are not formal performance claims.
 
 - [x] Add a manifest-validated SF10 preparation orchestrator that rejects
   incomplete, unmanifested, wrong-scale, and SF1-reused data before reuse.
