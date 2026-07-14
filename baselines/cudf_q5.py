@@ -26,12 +26,32 @@ class CudfBenchmarkResult:
     resident_gpu_bytes: int = 0
 
 
-def add_year(value: str) -> str:
-    parsed = date.fromisoformat(value)
+@dataclass(frozen=True)
+class CudfQ5Prepared:
+    tables: dict[str, object]
+    start: object
+    end: object
+
+
+def q5_date_bounds(value: str) -> tuple[str, str]:
     try:
-        return parsed.replace(year=parsed.year + 1).isoformat()
-    except ValueError:
-        return parsed.replace(year=parsed.year + 1, day=28).isoformat()
+        parsed = date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError("date must be a real ISO calendar date in YYYY-MM-DD form") from exc
+    if parsed.isoformat() != value:
+        raise ValueError("date must be a real ISO calendar date in YYYY-MM-DD form")
+    try:
+        end = parsed.replace(year=parsed.year + 1)
+    except ValueError as exc:
+        if parsed.month == 2 and parsed.day == 29:
+            end = parsed.replace(year=parsed.year + 1, day=28)
+        else:
+            raise ValueError("date must have a representable one-year upper bound") from exc
+    return parsed.isoformat(), end.isoformat()
+
+
+def add_year(value: str) -> str:
+    return q5_date_bounds(value)[1]
 
 
 def _replace_column(table: pa.Table, column_name: str, column: pa.Array | pa.ChunkedArray) -> pa.Table:
@@ -80,7 +100,23 @@ def _cudf_from_arrow(cudf, table: pa.Table):
     return cudf.DataFrame.from_arrow(table)
 
 
-def _execute_q5(tables, cudf, region_name: str, start_date: str) -> tuple[list[ResultRow], int]:
+def _prepare_cudf_q5(
+    tables: dict[str, object],
+    cudf,
+    start_date: str,
+    end_date: str,
+) -> CudfQ5Prepared:
+    orders = tables["orders"]
+    orders["o_orderdate"] = cudf.to_datetime(orders["o_orderdate"])
+    return CudfQ5Prepared(
+        tables=tables,
+        start=cudf.to_datetime(start_date),
+        end=cudf.to_datetime(end_date),
+    )
+
+
+def _execute_q5(prepared: CudfQ5Prepared, region_name: str) -> tuple[list[ResultRow], int]:
+    tables = prepared.tables
     region = tables["region"]
     nation = tables["nation"]
     supplier = tables["supplier"]
@@ -103,10 +139,10 @@ def _execute_q5(tables, cudf, region_name: str, start_date: str) -> tuple[list[R
         right_on="n_nationkey",
     )[["c_custkey", "c_nationkey"]]
 
-    start = cudf.to_datetime(start_date)
-    end = cudf.to_datetime(add_year(start_date))
-    orders["o_orderdate"] = cudf.to_datetime(orders["o_orderdate"])
-    orders = orders[(orders["o_orderdate"] >= start) & (orders["o_orderdate"] < end)]
+    orders = orders[
+        (orders["o_orderdate"] >= prepared.start)
+        & (orders["o_orderdate"] < prepared.end)
+    ]
 
     customer_orders = customer.merge(orders, left_on="c_custkey", right_on="o_custkey")
     joined = lineitem.merge(

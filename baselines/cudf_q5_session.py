@@ -11,13 +11,20 @@ from pathlib import Path
 from typing import Sequence
 
 from common import result_hash
-from cudf_q5 import CudfBenchmarkResult, _execute_q5, _load_cudf_tables
+from cudf_q5 import (
+    CudfBenchmarkResult,
+    _execute_q5,
+    _load_cudf_tables,
+    _prepare_cudf_q5,
+    q5_date_bounds,
+)
 
 
 class CudfQ5Session:
     """Keeps the six Q5 tables on the GPU for repeated fixed-parameter queries."""
 
     def __init__(self, dataset: Path, region: str, start_date: str) -> None:
+        self._start_date_bound, self._end_date_bound = q5_date_bounds(start_date)
         try:
             import cudf
         except ImportError as exc:
@@ -26,7 +33,6 @@ class CudfQ5Session:
         self.dataset = Path(dataset)
         self.region = region
         self.start_date = start_date
-        self._cudf = cudf
         self.dataset_load_ms = 0.0
         setup_started = time.perf_counter()
 
@@ -36,6 +42,13 @@ class CudfQ5Session:
         self._tables = _load_cudf_tables(
             self.dataset, cudf, on_arrow_tables_prepared=record_dataset_load
         )
+        self._prepared = _prepare_cudf_q5(
+            self._tables,
+            cudf,
+            self._start_date_bound,
+            self._end_date_bound,
+        )
+        _synchronize_cuda_device()
         total_setup_ms = (time.perf_counter() - setup_started) * 1000.0
         self.session_setup_ms = total_setup_ms - self.dataset_load_ms
         self.resident_host_bytes = 0
@@ -46,15 +59,14 @@ class CudfQ5Session:
 
     def execute(self) -> CudfBenchmarkResult:
         query_started = time.perf_counter()
-        rows, matched_lineitem_rows = _execute_q5(
-            self._tables, self._cudf, self.region, self.start_date
-        )
+        rows, matched_lineitem_rows = _execute_q5(self._prepared, self.region)
+        _synchronize_cuda_device()
         query_ms = (time.perf_counter() - query_started) * 1000.0
         return CudfBenchmarkResult(
             rows=rows,
             load_ms=0.0,
             query_ms=query_ms,
-            input_lineitem_rows=len(self._tables["lineitem"]),
+            input_lineitem_rows=len(self._prepared.tables["lineitem"]),
             matched_lineitem_rows=matched_lineitem_rows,
             resident_gpu_bytes=self.resident_gpu_bytes,
         )
@@ -72,6 +84,12 @@ def _cuda_is_available() -> bool:
         return bool(cuda.is_available())
     except Exception:
         return False
+
+
+def _synchronize_cuda_device() -> None:
+    from numba import cuda
+
+    cuda.synchronize()
 
 
 def _nonnegative_int(value: str) -> int:
@@ -94,11 +112,19 @@ def _positive_int(value: str) -> int:
     return parsed
 
 
+def _query_date(value: str) -> str:
+    try:
+        q5_date_bounds(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+    return value
+
+
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Resident RAPIDS cuDF TPC-H Q5 runner")
     parser.add_argument("--dataset", required=True, type=Path)
     parser.add_argument("--region", default="ASIA")
-    parser.add_argument("--date", default="1994-01-01")
+    parser.add_argument("--date", type=_query_date, default="1994-01-01")
     parser.add_argument("--warmup", type=_nonnegative_int, default=3)
     parser.add_argument("--repeat", type=_positive_int, default=10)
     return parser.parse_args(argv)
