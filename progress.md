@@ -295,9 +295,49 @@ Evidence recorded so far on 2026-07-14:
 
 ## Current Action
 
-Continue V7 from the manifest-validated, resumable SF10 preparation pipeline.
+Continue V7 from the audited SF10 dataset and resident hybrid implementation;
+finish the session CLI, real cross-backend correctness smoke, profiler captures,
+hybrid-auto integration, formal evidence, and publication update.
 
 ## V7 - SF10 Preparation
+
+- [x] Generate official TPC-H SF10 source tables with the bundled dbgen.
+- [x] Project the six Q5 tables and convert them to canonical Arrow IPC.
+- [x] Validate source foreign keys, exact row counts, Arrow schemas, batches,
+  file sizes, and checksums.
+- [x] Generate an independent exact DuckDB Q5 oracle.
+- [ ] Complete all V7 resident/profiler/formal evidence and publication tasks.
+
+Audited SF10 evidence recorded on 2026-07-14:
+
+- Source validation passed with 5 regions, 25 nations, 100,000 suppliers,
+  1,500,000 customers, 15,000,000 orders, and 59,986,052 lineitems. The Q5
+  date window contains 2,275,919 orders.
+- Generation produced 11,232,137,500 bytes of raw `.tbl` data in 108.167 s;
+  Q5 projection produced 9,783,951,987 bytes in 130.260 s; Arrow conversion
+  produced 2,592,337,190 bytes in 308.414 s. Final free space was
+  300,731,887,616 bytes.
+- The Arrow manifest SHA-256 is
+  `44ddfec1e929264542ce28276a900b0dac3968ee102cae3475574a933e7af8ea`.
+  It records 229 lineitem batches and 58 orders batches at 262,144 rows per
+  batch. `memq5_arrow_check` re-read every table and verified all six file
+  checksums.
+- A full preparation rerun returned all three stages as `complete` with an
+  empty command list, proving that the resumable pipeline did not regenerate or
+  reconvert already audited data.
+- DuckDB 1.4.5 produced exact ordered hash `b1351a421ba8dcfd`; oracle file
+  SHA-256 is
+  `a397078a8896f22ce16d41ad17f1de0dc04fd1ef1de26ed78f8b01de62a351ec`.
+  Revenue values in scale-4 integer units are INDIA 5,368,625,879,995;
+  CHINA 5,353,508,299,282; VIETNAM 5,322,693,887,176; JAPAN
+  5,267,668,371,444; and INDONESIA 5,231,768,523,189.
+- The correctness gate now recomputes hashes from exact rows, binds every run
+  to the SF10 Arrow manifest/query identity, rejects extra retry records, and
+  classifies unavailable GPU-backed hybrid sessions without treating them as
+  valid evidence. Formal collection still requires every backend to pass.
+- Resident cuDF verification ran on GPU 0 with no device skips: all 14 focused
+  tests passed, including one-time six-table conversion, synchronized setup and
+  request timing, stable repeated hashes, strict dates, and no-device handling.
 
 - [x] Add a manifest-validated SF10 preparation orchestrator that rejects
   incomplete, unmanifested, wrong-scale, and SF1-reused data before reuse.

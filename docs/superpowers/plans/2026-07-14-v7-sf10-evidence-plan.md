@@ -55,8 +55,8 @@ The command accepts explicit `--dbgen`, `--raw-dir`, `--q5-dir`, `--arrow-dir`, 
 
 ```text
 dbgen -s 10 -f
-python scripts/prepare_tpch_q5_data.py --source-dir data/tpch_sf10 --output-dir data/tpch_sf10_q5 --scale-factor 10
-python scripts/prepare_arrow_dataset.py --input data/tpch_sf10_q5 --output data/tpch_sf10_q5_arrow --scale-factor 10 --batch-rows 1048576 --source-command "dbgen -s 10 -f"
+python scripts/prepare_tpch_q5_data.py --source-dir data/tpch_sf10_raw --output-dir data/tpch_sf10 --scale-factor 10
+python scripts/prepare_arrow_dataset.py --input data/tpch_sf10 --output data/tpch_sf10_arrow --scale-factor 10 --batch-rows 262144 --source-command "TPC-H V3.0.1 dbgen -s 10 -f"
 ```
 
 Do not infer completion from directory existence; require valid manifests and six expected tables. Capture command, return code, elapsed time, byte counts, and free space.
@@ -119,8 +119,8 @@ git commit -m "feat: add scalable DuckDB Q5 oracle"
 
 **Files:**
 - Modify: `progress.md`
-- Runtime output only: `data/tpch_sf10`, `data/tpch_sf10_q5`, `data/tpch_sf10_q5_arrow`
-- Runtime output only: `data/tpch_sf10_q5/oracle.json`
+- Runtime output only: `data/tpch_sf10_raw`, `data/tpch_sf10`, `data/tpch_sf10_arrow`
+- Runtime output only: `data/tpch_sf10/oracle.json`
 
 - [ ] **Step 1: Record the preflight**
 
@@ -130,7 +130,7 @@ Expected: at least 40 GiB free; record dbgen digest and version source.
 
 - [ ] **Step 2: Run the preparation pipeline**
 
-Run: `python scripts/prepare_v7_sf10.py --dbgen 'data/tpch_tools/TPC-H V3.0.1/dbgen/dbgen' --raw-dir data/tpch_sf10 --q5-dir data/tpch_sf10_q5 --arrow-dir data/tpch_sf10_q5_arrow`
+Run: `python scripts/prepare_v7_sf10.py --dbgen 'data/tpch_tools/TPC-H V3.0.1/dbgen/dbgen' --raw-dir data/tpch_sf10_raw --q5-dir data/tpch_sf10 --arrow-dir data/tpch_sf10_arrow`
 Expected: all three stages `complete`, six Arrow files and manifest.
 
 - [ ] **Step 3: Validate source and Arrow manifests**
@@ -139,7 +139,7 @@ Run existing source and Arrow validators with scale factor 10. Check exact expec
 
 - [ ] **Step 4: Generate the independent SF10 oracle**
 
-Run: `python scripts/write_q5_oracle.py --data-dir data/tpch_sf10_q5 --output data/tpch_sf10_q5/oracle.json`
+Run: `python scripts/write_q5_oracle.py --data-dir data/tpch_sf10 --output data/tpch_sf10/oracle.json`
 Expected: five ordered rows and a stable nonempty result hash.
 
 - [ ] **Step 5: Rerun preparation to prove idempotence**
@@ -184,7 +184,7 @@ Use one warmup and two measured requests per backend. Pin one GPU UUID. Preserve
 
 - [ ] **Step 4: Audit against DuckDB**
 
-Run: `python scripts/v7_correctness_gate.py --runs docs/artifacts/v7_sf10_correctness --matrix experiments/v7_sf10_correctness.yml --oracle data/tpch_sf10_q5/oracle.json`
+Run: `python scripts/v7_correctness_gate.py --runs docs/artifacts/v7_sf10_correctness --matrix experiments/v7_sf10_correctness.yml --oracle data/tpch_sf10/oracle.json`
 Expected: `ok=true`, one observed result hash, no skip.
 
 - [ ] **Step 5: Commit Task 4**
