@@ -33,7 +33,11 @@ mapped memory 是映射到 GPU 地址空间的锁页主机内存。三者不能�
 managed 是不是“GPU 用到哪一页才从 CPU 内存传过去”？可能按需迁移，也可以像
 本项目一样预取。核心是 runtime 管理位置，不是永远保留一份 CPU 副本供远程读。
 
+Nsight 为什么显示 mapped 的 device DRAM 读取很少？因为mapped主要从映射主机
+页经PCIe读取，不能把“device DRAM少”解释成“总数据访问少”。
+
 ## 一分钟复述
 
-copy 显式搬到显存，managed 由 runtime 迁移并预取，mapped 让 GPU 远程读 pinned
-host memory。SF1 查询中位数依次是 314.151、358.158、412.264 ms。
+copy 在setup显式搬到显存，managed 由runtime迁移并预取，mapped让GPU远程读
+pinned host memory。常驻请求中SF1三者为1.267、1.440、22.971 ms；SF10为
+15.416、15.066、358.582 ms。copy和managed接近，mapped在本机明显较慢。

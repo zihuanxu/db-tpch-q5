@@ -4,7 +4,12 @@ from pathlib import Path
 import subprocess
 import sys
 
-from scripts.release_audit import check_required_paths, run_release_audit
+from scripts.release_audit import (
+    REQUIRED_PATHS,
+    check_profiler_checksums,
+    check_required_paths,
+    run_release_audit,
+)
 
 
 def test_missing_release_metadata_is_a_failure(tmp_path: Path) -> None:
@@ -18,6 +23,29 @@ def test_release_metadata_requires_regular_files(tmp_path: Path) -> None:
     (tmp_path / "LICENSE").mkdir()
     failures = check_required_paths(tmp_path)
     assert any("LICENSE" in failure for failure in failures)
+
+
+def test_release_requires_v7_evidence_paths() -> None:
+    assert "docs/artifacts/v7_sf1_resident/manifest.json" in REQUIRED_PATHS
+    assert "docs/artifacts/v7_sf10_resident/manifest.json" in REQUIRED_PATHS
+    assert "docs/artifacts/v7_profiler/checksums.sha256" in REQUIRED_PATHS
+
+
+def test_compact_profiler_checksums_detect_tampering(tmp_path: Path) -> None:
+    compact = tmp_path / "compact"
+    compact.mkdir()
+    summary = compact / "summary.json"
+    summary.write_text("{}\n", encoding="utf-8")
+    import hashlib
+
+    digest = hashlib.sha256(summary.read_bytes()).hexdigest()
+    (compact / "checksums.sha256").write_text(
+        f"{digest}  summary.json\n", encoding="ascii"
+    )
+    assert check_profiler_checksums(compact) == []
+
+    summary.write_text('{"tampered":true}\n', encoding="utf-8")
+    assert any("checksum mismatch" in error for error in check_profiler_checksums(compact))
 
 
 def test_repository_release_has_no_engineering_failure() -> None:

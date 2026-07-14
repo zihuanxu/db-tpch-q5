@@ -1,8 +1,8 @@
 # GPU Server Runbook
 
-V6 runbook，最后核对 2026-07-14。正式环境为 GPU 0 RTX 4090、compute
+V7 runbook，最后核对 2026-07-14。正式环境为 GPU 0 RTX 4090、compute
 capability 8.9、driver 595.71.05、nvcc 12.6、Arrow 23.0.1、cuDF 26.06.00。
-正式 SF1 hash 为 `542abf4003633c7c`。
+正式 SF1 hash 为 `542abf4003633c7c`，SF10 hash 为 `b1351a421ba8dcfd`。
 
 ## 1. 检查环境
 
@@ -37,7 +37,7 @@ CUDA_VISIBLE_DEVICES=0 ctest \
   --output-on-failure
 ```
 
-真实 GPU 上应通过 21/21。无 GPU 环境中 GPU runtime tests 返回 77，由 CTest
+真实 GPU 上当前应通过 45/45。无 GPU 环境中 GPU runtime tests 返回 77，由 CTest
 标成 skipped；不能把 skipped 说成真实运行通过。
 
 cuDF/PyArrow Python 3.11 测试：
@@ -94,43 +94,85 @@ conda run -n memq5-cudf python scripts/prepare_arrow_dataset.py \
   --replace
 ```
 
-## 7. 正式 V5 矩阵
+## 7. 正式 V7 常驻矩阵
 
-矩阵由 `experiments/v5_formal_sf1.yml` 冻结，不手工修改 engine/thread 组合：
-
-```bash
-CUDA_VISIBLE_DEVICES=0 python3 scripts/run_benchmarks.py \
-  --matrix experiments/v5_formal_sf1.yml \
-  --arrow-cli build-arrow-cuda-release/memq5_arrow_query \
-  --arrow-dataset data/tpch_sf1_arrow \
-  --output results/v5_sf1/raw.csv
-```
-
-运行结束后生成 summary/environment，再 finalize。已冻结结果在
-`docs/artifacts/v5_sf1`，通常只需审计：
+SF1、SF10矩阵分别由 `experiments/v7_formal_sf1.yml` 和
+`experiments/v7_formal_sf10.yml` 冻结。runner会为每个配置启动一次进程，先完成
+setup，再在同一常驻会话内执行3次warmup和10次measured request。不要把setup
+时间混入request延迟。
 
 ```bash
-python3 scripts/benchmark_schema.py validate docs/artifacts/v5_sf1/raw.csv
-python3 scripts/evidence_bundle.py audit --directory docs/artifacts/v5_sf1
+CUDA_VISIBLE_DEVICES=0 python3 scripts/run_v7_benchmarks.py \
+  --matrix experiments/v7_formal_sf1.yml \
+  --session-cli build-arrow-cuda-release/memq5_arrow_session \
+  --cudf-env memq5-cudf --gpu-index 0 \
+  --output-dir results/v7_sf1_resident
+
+CUDA_VISIBLE_DEVICES=0 python3 scripts/run_v7_benchmarks.py \
+  --matrix experiments/v7_formal_sf10.yml \
+  --session-cli build-arrow-cuda-release/memq5_arrow_session \
+  --cudf-env memq5-cudf --gpu-index 0 \
+  --output-dir results/v7_sf10_resident
 ```
 
-预期：190 measured、57 warmups、checksum/matrix/coverage/summary 全部无错误。
-
-## 8. profiler 边界
-
-当前只证明 hybrid backend duration overlap，没有 Nsight timeline。若新增 profiler：
+对两个目录分别生成独立oracle核对记录并finalize。下面以SF1为例，SF10只需替换
+目录、矩阵、数据manifest和oracle路径：
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 nsys profile \
-  -o results/profiles/hybrid_sf1 \
-  ./build-arrow-cuda-release/memq5_arrow_query \
-  --engine hybrid-arrow --cpu-ratio 0.75 \
-  --dataset data/tpch_sf1_arrow \
-  --region ASIA --date 1994-01-01 --format benchmark
+python3 scripts/materialize_v7_correctness.py \
+  --bundle results/v7_sf1_resident \
+  --matrix experiments/v7_formal_sf1.yml \
+  --oracle experiments/oracles/v7_sf1_q5.json \
+  --output results/v7_sf1_resident/correctness.json
+
+python3 scripts/v7_evidence_bundle.py finalize \
+  --directory results/v7_sf1_resident \
+  --matrix experiments/v7_formal_sf1.yml \
+  --dataset-manifest data/tpch_sf1_arrow/manifest.json \
+  --oracle experiments/oracles/v7_sf1_q5.json \
+  --correctness results/v7_sf1_resident/correctness.json
+
+python3 scripts/v7_evidence_bundle.py audit \
+  --directory results/v7_sf1_resident
 ```
 
-只有 timeline 能定位 CPU scan 与 CUDA kernel 是否重叠。生成的 `.nsys-rep` 不放
-入最小源码包，报告图应带 profiler 版本、命令和 checksum。
+每个规模预期为18个配置、54次warmup、180次measured request，且8类正确性
+后端全部通过。仓库冻结副本位于 `docs/artifacts/v7_sf1_resident` 和
+`docs/artifacts/v7_sf10_resident`。
+
+## 8. hybrid模型与profiler
+
+固定比例与auto模型的比较由正式结果自动生成：
+
+```bash
+python3 scripts/evaluate_hybrid_model.py \
+  results/v7_sf1_resident results/v7_sf10_resident \
+  --json-out results/v7_hybrid_model/model.json \
+  --csv-out results/v7_hybrid_model/model.csv \
+  --markdown-out results/v7_hybrid_model/model.md
+```
+
+正式剖析使用编排器采集SF1/SF10的copy、managed、mapped、hybrid-fixed，共10个
+NSYS/NCU profile。参数必须引用已经通过审计的两个V7证据包；GPU UUID可由
+`nvidia-smi -L` 获取。仓库的精简、可校验副本位于
+`docs/artifacts/v7_profiler`，原始完整bundle不放进最小交付包。
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python3 scripts/run_v7_profilers.py \
+  --output-dir results/v7_profiler \
+  --session-cli build-arrow-cuda-release/memq5_arrow_session \
+  --sf1-evidence results/v7_sf1_resident \
+  --sf10-evidence results/v7_sf10_resident \
+  --sf1-data data/tpch_sf1_arrow \
+  --sf10-data data/tpch_sf10_arrow \
+  --gpu-index 0 --gpu-uuid GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e \
+  --sf1-hybrid-fixed-ratio 0.5 \
+  --sf10-hybrid-fixed-ratio 0.5
+
+python3 scripts/v7_profiler_bundle.py audit --directory results/v7_profiler
+```
+
+profiler数据只用于解释kernel、内存访问和阶段重叠，不与普通请求延迟混算。
 
 ## 9. 失败分类
 

@@ -1,111 +1,103 @@
 # 答辩速查表
 
-> V6 正式口径。讲稿见 `docs/defense/`，证据见 `docs/artifacts/v5_sf1`。
+> V7 口径。证据见 `v7_sf1_resident`、`v7_sf10_resident`、
+> `v7_hybrid_model` 和 `v7_profiler`。
 
-## 30 秒版本
+## 30秒版本
 
-我实现了一个固定 TPC-H Q5 Arrow 查询执行器，比较 specialized CPU、Arrow
-Acero、CUDA copy/managed/mapped、cuDF 和 batch 级 CPU--GPU hybrid。所有
-19 组 SF1 配置、190 次正式运行都通过官方 oracle。16 线程 specialized CPU
-查询中位数 61.414 ms 最快；CUDA 中 copy 最好；hybrid 正确但没有超过纯 CPU。
-结论只覆盖固定 Q5、SF1、RTX 4090 和 cold process。
+我实现的是固定TPC-H Q5的Arrow CPU--GPU执行器。SF1和SF10各18组配置、180次
+resident请求全部通过oracle。copy和managed接近，mapped因远程PCIe访问明显
+较慢；fixed hybrid稳态请求在两个规模都比专用CPU低，但setup很高；auto能跟随
+规模改变比例，却有33.89%和9.21% regret。结论只覆盖固定Q5、两个规模和本机
+RTX 4090。
 
 ## 必画数据流
 
 ```text
 Arrow six tables
-   -> region/nation filter
-   -> supplier_nation[] + customer_nation[] + order_nation[]
-   -> lineitem scan
-   -> exact revenue_1e4 by nation
-   -> sort + result hash + official oracle
+  -> CPU region/nation/date filter propagation
+  -> supplier_nation[] + customer_nation[] + order_nation[]
+  -> resident setup: indexes + CPU/GPU buffers
+  -> repeated lineitem request: CPU / GPU / hybrid
+  -> exact revenue_1e4 + sort + result hash + oracle
 ```
-
-hybrid 在 `lineitem scan` 前按 Arrow batch 切成不重叠 CPU/GPU 行区间。
 
 ## 必记数字
 
-| 项 | V5 正式值 |
-| --- | ---: |
-| lineitem rows | 6,001,215 |
-| result rows | 5 |
-| result hash | `542abf4003633c7c` |
-| 配置/预热/测量 | 19 / 57 / 190 |
-| specialized CPU 16t query | 61.414 ms |
-| Acero 32t query | 321.535 ms |
-| cuDF query / process | 116.427 / 3682.381 ms |
-| gpu-copy query | 314.151 ms |
-| gpu-managed query | 358.158 ms |
-| gpu-mapped query | 412.264 ms |
-| hybrid 25/50/75% CPU | 295.435 / 254.478 / 222.832 ms |
+| 项 | SF1 | SF10 |
+| --- | ---: | ---: |
+| 配置 / warmup / measured | 18 / 54 / 180 | 18 / 54 / 180 |
+| 结果hash | `542abf4003633c7c` | `b1351a421ba8dcfd` |
+| specialized CPU | 3.201 ms (16t) | 14.955 ms (32t) |
+| Acero | 311.461 ms | 3124.388 ms |
+| cuDF | 12.773 ms | 27.906 ms |
+| copy / managed / mapped | 1.267 / 1.440 / 22.971 | 15.416 / 15.066 / 358.582 |
+| best fixed hybrid | 1.160 ms，CPU=0.125 | 10.054 ms，CPU=0.375 |
+| auto / regret | 1.553 ms / 33.89% | 10.980 ms / 9.21% |
 
-## 三种 GPU 模式
+## 三种GPU模式
 
-| 模式 | 数据位置与移动 |
+| 模式 | setup与request中的数据位置 |
 | --- | --- |
-| copy | host staging 后显式 H2D 到 device memory |
-| managed | unified allocation，runtime 管理迁移，本项目先 prefetch |
-| mapped | pinned host pages 映射进 UVA，GPU 经 PCIe 远程读 |
+| copy | setup显式H2D到device，request读显存 |
+| managed | unified allocation，runtime迁移，本项目request前prefetch |
+| mapped | pinned host pages映射进UVA，kernel经PCIe远程读 |
 
-不能说 mapped “没有传输”。它只是没有大块显式输入 H2D，Arrow 列仍要准备到
-pinned buffer，kernel load 仍可能产生 PCIe 事务。
+mapped不是“没有传输”；它只是没有大块显式输入H2D。SF10 NCU kernel约130 ms，
+而device DRAM读取只有约2.89 MB，说明主要输入不在显存。
 
-## 两种时间
+## 四种时间
 
-- `query_total_ms`：后端内部查询阶段。
-- `process_elapsed_ms`：外部冷进程时间，包含启动、加载和退出。
-- cuDF 另有 `load_ms` 记录 Arrow 读取与 DataFrame 转换。
-
-不能拿一个后端的 query 和另一个后端的 process 比排名。
+- V5 cold process：启动、加载、准备、查询、退出；
+- V7 setup：一次性加载、计划、分配、首次传输或校准；
+- V7 request：复用session后的查询；
+- profiler时间：插桩/重放后的机制证据，不参加普通排名。
 
 ## 五个危险问题
 
 ### 为什么客户和供应商必须同国家
 
-Q5 要统计目标地区内每个国家内部客户与供应商产生的收入。只要求两者都在 ASIA
-还会包含跨国供应，国家归属就不符合查询语义。
+这是Q5语义，用来统计地区内各国家的国内供应收入；只要求都在ASIA会混入跨国
+供应。
 
-### managed 是什么
+### hybrid到底有没有加速
 
-一块统一虚拟地址的 CUDA allocation，页面位置由 runtime 管理，可按需迁移或
-prefetch。不是“永远在 CPU 留一份副本，GPU 每用一次就整块复制”。
+稳态request有，但第一次查询不一定有。SF10 fixed request 10.054 ms低于CPU
+14.955 ms，可setup约4997 ms，100次摊销仍约60 ms，高于CPU约50 ms。
 
-### 为什么 GPU 和 hybrid 没有加速
+### auto为什么不是最佳
 
-每个 cold sample 都重新准备计划、分配和 staging；hybrid 两侧还有重复准备。
-SF1 没有摊薄这些固定成本。这个解释与实现一致，但没有 profiler 就不能说每个
-原因的占比已经被证明。
+只用一次简单CPU/GPU校准，没有建模缓存、PCIe、batch边界和干扰。方向大致对，
+精度不够。
 
-### hash 一样是否足够
+### hash一样是否足够
 
-不够。hash 证明后端精确结果一致；`raw.csv.oracle_status` 和
-`correctness.json` 还证明五行结果通过官方 q5.out 十进制比较。
+不够。hash检查后端一致，独立oracle再按定点整数逐行检查标准答案。
 
-### overlap 是否证明 kernel overlap
+### profiler证明了什么
 
-不证明。当前只有 backend duration overlap。CPU scan 与 CUDA kernel 的精确
-重叠需要 Nsight timeline。
+证明NVTX阶段、内存操作、kernel duration、DRAM指标和hybrid阶段重叠。profiler
+会扰动时间，因此不证明普通request就是profile中的墙钟。
 
 ## 必须主动承认的限制
 
-- 固定 Q5，不是 DBMS；
-- GPU 只扫描 lineitem；
-- 正式结果只有 SF1 cold process；
-- 没有 resident、SF10、并发、GPU 峰值显存和 Nsight timeline；
-- specialized 牺牲通用性，不能据此否定 Acero；
-- hybrid speedup 假设在当前实验中被拒绝。
+- 固定Q5，不是DBMS；GPU只扫描聚合lineitem；
+- 只有SF1/SF10、单机RTX 4090，无并发和NUMA；
+- Arrow统一输入，但各后端内部准备不完全相同；
+- setup每配置只建立一次；
+- auto在SF1的regret较大。
 
-## AI 参与的诚实表述
+## AI参与的诚实表述
 
-> 代码初稿主要由 AI 辅助生成。我接手后按源码、测试和实验日志重新核对，修复了
-> decimal 语义，补齐 Arrow CPU/CUDA/hybrid、正式证据审计和论文数值导入。现在
-> 我能沿函数解释数据流，也能说明哪些结论没有证据。
+> 项目代码和早期文档主要由AI辅助生成。我现在按源码、测试、证据bundle和这套
+> 接手材料重新学习，不把自己没做过的过程说成亲手完成。答辩时我负责解释最终
+> 数据流、实验门禁、结果和限制。
 
 ## 上台前自检
 
-- [ ] 能从六表条件讲到三个 nation 映射和 lineitem scan。
-- [ ] 能区分 Arrow、UVA、managed 和 mapped。
-- [ ] 能解释 query time 与 cold process time。
-- [ ] 能说出 copy/managed/mapped 和 hybrid 的正式结果顺序。
-- [ ] 能说明为什么负结果仍然有效。
-- [ ] 能列出至少四项未完成范围。
+- [ ] 能从六表条件讲到三个nation映射和lineitem scan；
+- [ ] 能区分Arrow、UVA、managed和mapped；
+- [ ] 能区分cold、setup、request和profiler；
+- [ ] 能说出两规模三种内存和hybrid结果；
+- [ ] 能解释auto regret和setup成本；
+- [ ] 能主动列出至少四项限制。

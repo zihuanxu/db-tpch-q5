@@ -6,4 +6,5 @@
 - 画系统图：看 `final-architecture.md`。
 - 临场查数字：看 `docs/DEFENSE_CHEATSHEET.md`。
 
-正式数字来自 `docs/artifacts/v5_sf1`，不是早期 `mvp_sf1` 结果。
+正式数字来自两组 V7 resident bundle、hybrid model 和 compact profiler。V5
+只用于回答 cold 与 resident 的区别。

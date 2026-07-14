@@ -410,7 +410,8 @@ Audited SF10 evidence recorded on 2026-07-14:
 - [x] Freeze and independently audit the SF10 18-configuration resident matrix.
 - [x] Recompute every warmup and measured result against the canonical oracle.
 - [x] Evaluate hybrid-auto against the seven-point fixed-ratio sweep.
-- [ ] Complete the ten-profile NSYS/NCU matrix and publication refresh.
+- [x] Complete the ten-profile NSYS/NCU matrix.
+- [x] Complete the V7 publication, learning, and release refresh.
 
 The formal source commit is `021becd1b10f84aaed87858e45eb15a915cf6adc`.
 Both bundles use one RTX 4090 (`GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e`),
@@ -440,3 +441,68 @@ configuration and left one truncated Acero JSON line. Its partial directory
 was not finalized or used. A new empty directory was run to completion in one
 persistent terminal session; only that rerun is copied into the audited
 artifact tree.
+
+## V7 - Formal Profiler Evidence (2026-07-14)
+
+- [x] Capture SF1/SF10 copy, managed, mapped, fixed 0.5 hybrid, and hybrid-auto.
+- [x] Preserve NSYS raw reports, exports, application JSONL, and tool output.
+- [x] Preserve NCU selected metrics, replay mode, report CSV, and GPU provenance.
+- [x] Finalize and audit the complete 10-profile bundle with `ok=true`.
+- [x] Export a 4.3 MiB compact publication copy with 183 checksum-covered files.
+
+The complete bundle is `/tmp/memq5-v7-profiler-80dba7a-rerun2`; its source
+manifest SHA-256 is
+`fb24875ef52cd00c80cc94985018290d32fbe1b6d8af2eb05d7bfaccbea186a7`.
+The collector run exposed two trust-boundary bugs after all ten captures were
+already present. NSYS progress text was mixed with the profiled application's
+JSONL, and NSYS replay rewrote `profile.sqlite` beside the original report.
+Both bugs received failing regressions before the fixes. Application JSONL and
+tool stdout are now separate, and replay occurs from a temporary copy so an
+audit cannot modify captured evidence.
+
+The compact copy is `docs/artifacts/v7_profiler`. It intentionally omits the
+2.7 GiB dataset hard links, SQLite sidecars, the large supported-metric
+universe, and huge collector metadata. It retains source identity, commands,
+tool versions, raw NSYS reports, four NSYS CSV exports, selected NCU reports,
+parsed observations, and deterministic checksums. It is a publication copy,
+not a replacement for full-bundle audit.
+
+Selected profiler observations are kept separate from ordinary latency:
+
+- SF10 NSYS Q5-kernel totals were 15.34 ms (copy), 15.59 ms (managed), and
+  135.25 ms (mapped). NCU durations were 16.72, 16.93, and 129.81 ms.
+- Copy and managed reported about 545 MB of device-DRAM reads at SF10; mapped
+  reported only 2.89 MB because most input traffic came remotely from mapped
+  host pages rather than device DRAM.
+- The SF10 fixed-0.5 hybrid NCU kernel was 8.16 ms with about 273 MB of DRAM
+  reads. NSYS placed a 12.31 ms CPU scan and 8.27 ms GPU request inside a
+  12.51 ms measured request, supporting overlap without treating profiler
+  wall time as benchmark latency.
+
+The compact exporter received a separate trust-boundary review. It now rejects
+unsafe profile identifiers and symlink output escapes, verifies
+`orchestration.json` and profile identities against the source manifest,
+hashes the exact bytes it parses or copies, allows only named optional logs,
+and publishes directories as 0755 and files as 0644. Its 19 focused tests and
+148 profiler regressions passed. A fresh export from the real complete bundle
+produced 183 files; every line in `checksums.sha256` verified.
+
+## V7 - Final Publication Verification (2026-07-14)
+
+- [x] Rebuild the four-page CjC paper with evidence-bound provenance.
+- [x] Validate the 21-claim ledger, process records, and learning links.
+- [x] Pass the default Python suite excluding environment-specific modules:
+  395 passed and 6 skipped.
+- [x] Pass the Arrow/cuDF Python 3.11 suite: 22 passed.
+- [x] Pass all 45 CTest entries with zero failures in the current environment;
+  15 CUDA runtime entries were explicitly skipped because the final shell no
+  longer exposed a CUDA device.
+- [x] Build `/tmp/memq5-v7-final.tar.gz` with 1034 files, verify its external
+  SHA-256, extract it into a new directory, and pass release audit there.
+
+The first final CTest exposed one missing no-device guard in
+`test_q5_hybrid_auto_cuda`: it attempted GPU setup before reaching its local
+skip check and aborted. The guard was moved to the CUDA test entry point, the
+target was rebuilt, and both the focused test and the complete 45-test CTest
+run then passed. This affects only test behavior without a visible GPU; it does
+not alter the formal benchmark implementation or evidence.

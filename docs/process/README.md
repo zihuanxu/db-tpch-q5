@@ -12,4 +12,5 @@
 7. `07-最终完成情况.md`：完成、排除和外部待办。
 8. `TENCENT_DOCS.md`：腾讯文档同步状态。
 
-当前正式证据锚点为 `docs/artifacts/v5_sf1/manifest.sha256`。
+当前正式锚点为两组 V7 resident manifest、`v7_hybrid_model` 和
+`v7_profiler/checksums.sha256`。V5 manifest 保留为 cold-process 阶段记录。

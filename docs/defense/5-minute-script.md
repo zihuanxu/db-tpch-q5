@@ -2,40 +2,40 @@
 
 ## 0:00-0:40 研究问题
 
-我的项目不是通用数据库，而是固定实现 TPC-H Q5。Q5 会连接 region、nation、
-customer、orders、supplier 和 lineitem 六表，统计 ASIA 地区 1994 年、客户与
-供应商同国家的收入。我想比较同一查询在 CPU、GPU 和 CPU--GPU 混合执行下的
-数据组织与移动成本。
+我的项目不是通用数据库，而是固定实现TPC-H Q5。Q5连接六张表，统计ASIA地区
+1994年、客户与供应商同国家的收入。我想比较同一Arrow输入下CPU、三种GPU内存
+模式和CPU--GPU混合执行，并区分一次准备成本和重复请求成本。
 
-## 0:40-1:30 数据与正确性
+## 0:40-1:20 数据与正确性
 
-所有正式后端都读取同一 Arrow IPC 数据集。CPU 先把维表条件传播成按 key 的
-直接索引，最后扫描 6,001,215 条 lineitem。收入使用 `revenue_1e4` 整数累加，
-避免旧版本逐行截断。19 组配置的 190 次正式运行都得到
-`542abf4003633c7c`，并通过官方五行答案核对。<!-- C001 C002 -->
+六表转换为Arrow IPC，manifest记录schema、batch和SHA256。CPU先把维表条件
+传播成按key直接索引，最后扫描lineitem。收入用`revenue_1e4`定点整数聚合，
+避免旧版逐行截断。SF1和SF10各18组配置、180次正式请求，全部通过独立oracle；
+结果hash分别为`542abf4003633c7c`和`b1351a421ba8dcfd`。<!-- C011 C012 C017 -->
 
-## 1:30-2:40 执行路径
+## 1:20-2:15 执行路径
 
-CPU 有 specialized 和 Arrow Acero 两条路径。GPU 使用同一个 kernel，只改变
-内存方式：copy 显式传到显存；managed 使用统一地址并预取，仍然会迁移；mapped
-让 GPU 经 PCIe 读 pinned host memory。cuDF 是通用算子库对照。hybrid 按 Arrow
-batch 把 lineitem 分给 CPU 和 GPU 并发处理，再精确合并。<!-- C003 C004 C005 -->
+CPU有specialized和Acero两条路径。GPU使用同一个kernel：copy在setup显式搬到
+显存；managed由runtime迁移并预取；mapped让GPU经PCIe远程读pinned host
+memory。cuDF是通用GPU算子库对照。hybrid按Arrow batch把lineitem分给CPU和
+GPU并发处理，再精确合并。<!-- C013 C016 C018 C021 -->
 
-## 2:40-4:10 实验结果
+## 2:15-3:50 实验结果
 
-正式矩阵每组 3 次预热、10 次冷进程测量。specialized CPU 16 线程查询中位数
-61.414 ms，Acero 最佳 321.535 ms。cuDF 查询阶段是 116.427 ms，但冷进程是
-3682.381 ms，说明库加载和转换不能忽略。三种 CUDA 查询中位数依次是 copy
-314.151、managed 358.158、mapped 412.264 ms。mapped 没有显式大块 H2D，
-但 kernel 远程读 PCIe，所以不是“没有传输”。<!-- C003 C004 C005 C006 -->
+V7每组建立一个resident session，3次warmup后测10次request。copy、managed、
+mapped在SF1是1.267、1.440、22.971 ms，在SF10是15.416、15.066、358.582 ms。
+copy和managed很接近，mapped明显慢。Nsight显示mapped没有显式输入H2D，但
+SF10核函数约130 ms，device DRAM读取很少，因为主要数据来自映射主机页。
+<!-- C013 C018 -->
 
-hybrid 从 25% CPU 到 75% CPU 越来越快，最好是 222.832 ms，但仍慢于纯 CPU。
-所以“混合一定加速”的假设在 SF1 上被否定。我们记录到并发时段，但没有 Nsight
-时间线，不能声称 CPU scan 和 kernel 本身重叠。<!-- C007 C008 -->
+fixed hybrid在SF1最佳CPU比例0.125、1.160 ms；SF10最佳比例0.375、10.054 ms，
+都低于专用CPU request。auto能随规模调比例，但为1.553和10.980 ms，相对离线
+最佳点仍有33.89%和9.21% regret。这个负结果没有从报告里删掉。
+<!-- C014 C015 C019 C020 -->
 
-## 4:10-5:00 限制与结论
+## 3:50-5:00 setup、限制与结论
 
-目前只有固定 Q5、SF1 和 cold process；GPU 只负责 lineitem 扫描，没有 resident、
-SF10、并发查询和完整 profiler 证据。我的结论是：内存模式会改变 PCIe 传输发生
-的位置；并行执行本身不等于端到端优化，计划和缓冲区复用可能比继续微调单次
-kernel 更重要。<!-- C009 -->
+最快request不等于最快第一次查询。SF10最佳hybrid setup约4997 ms，100次请求
+摊销仍约60 ms；专用CPU约50 ms。项目也只有固定Q5、SF1/SF10、一台RTX 4090，
+没有并发和完整GPU六表计划。我的结论是：内存模式会改变PCIe访问位置；常驻
+复用后CPU--GPU分片有收益，但比例选择和setup同样重要，不能只看一个kernel。

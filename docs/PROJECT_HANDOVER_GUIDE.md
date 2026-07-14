@@ -2,10 +2,10 @@
 
 > 最后核对日期：2026-07-14；适用仓库：`db-tpch-q5`；目的：让一个没有参与原始实现的人，能够看懂、复现、修改并诚实地讲清这个项目。
 
-> V6 已验证状态：旧 hash `9f1f...` 和“逐行截断”只属于历史审计。当前
-> 19 组 Arrow 正式配置的 hash 均为 `542abf4003633c7c`，与官方 `q5.out`
-> 完全一致。最终结果只以 `docs/artifacts/v5_sf1/`、
-> `docs/research/CLAIM_LEDGER.md` 和 `docs/paper/paper.pdf` 为准。
+> V7 已验证状态：V5 的 19 组 SF1 cold-process 结果保留为历史对照。当前正式
+> 口径是 SF1/SF10 resident session、hybrid model 和 10 组 profiler 证据。
+> `docs/CURRENT_STATUS.md`、`docs/artifacts/v7_*`、claim ledger 和论文优先于
+> 本手册中明确标成“V5 历史”的旧计时段落。
 
 ## 0. 先记住这几个结论
 
@@ -14,13 +14,26 @@
    - `hashjoin-cpu/`：基于 ETH Zurich 2013 年内存哈希连接代码扩展的前期实验。
 2. 顶层项目不是数据库，也不是通用 SQL 引擎。它只接受固定的 Q5 参数，并执行手写好的固定查询计划。
 3. CPU 和三个 CUDA 模式使用同一个 CPU 端预处理计划。GPU 只负责最后的 `lineitem` 扫描和分组累加。
-4. 正式 SF1 的 190 次 measured run 和 57 次 warmup 全部通过 oracle，唯一哈希为 `542abf4003633c7c`。
+4. V7 的 SF1/SF10 各有 18 组配置、54 次 warmup、180 次 measured request，全部通过 oracle；哈希分别为 `542abf4003633c7c` 和 `b1351a421ba8dcfd`。
 5. 当前实现使用 `revenue_1e4` 先精确聚合、最后舍入，已经修复逐明细截断问题。
-6. V5 矩阵只为每个 GPU 模式保留一组 `threads=1` 元数据；真正 CUDA 并行度由 block 和输入行数决定。
+6. resident session 把一次 setup 和重复 request 分开。fixed hybrid 的最佳 CPU 比例在 SF1/SF10 为 0.125/0.375；auto 有 33.89%/9.21% regret。
 7. `hashjoin-cpu` 中的 VJ 是 direct-address vector index，不是 SIMD 向量指令。
 8. `hashjoin-cpu` 的 star join `pro` 模式并没有调用原版 radix PRO，而是两阶段、会物化中间结果的开放寻址哈希连接。报告里的命名比实际实现更强。
 9. 当前顶层 CPU 项目可直接构建并通过测试。`hashjoin-cpu` 也能构建，但老式 Autoconf 有两个容易踩中的构建问题，后文给出可靠命令。
 10. Git 历史、Codex 会话和用户说明都表明实现主要由 AI 生成。接手的目标不是背报告，而是能沿代码路径解释，并能亲自做一次小修改和复验。
+
+### 0.1 当前必须会讲的 V7 数字
+
+| 项目 | SF1 resident | SF10 resident |
+| --- | ---: | ---: |
+| specialized CPU | 3.201 ms | 14.955 ms |
+| copy / managed / mapped | 1.267 / 1.440 / 22.971 ms | 15.416 / 15.066 / 358.582 ms |
+| fixed hybrid 最佳 | 1.160 ms，CPU=0.125 | 10.054 ms，CPU=0.375 |
+| hybrid-auto | 1.553 ms，regret 33.89% | 10.980 ms，regret 9.21% |
+
+这张表只比较已经常驻后的 request。第一次查询还要加 setup；例如 SF10 最佳
+fixed hybrid setup 约 4997 ms，100 次摊销仍约 60 ms。profiler 时间是另一种
+口径，只用来解释 mapped 远程读取和 CPU/GPU 阶段重叠。
 
 ## 1. 怎样使用这份手册
 
@@ -427,7 +440,7 @@ V5 正式运行时 `nvcc` 为 12.6，GPU 0 为 RTX 4090，driver 595.71.05，cuD
 | orders | 1,500,000 |
 | lineitem | 6,001,215 |
 
-### 12.2 正式环境
+### 12.2 V5 cold-process 历史环境
 
 - CPU：AMD EPYC 9654，2 sockets，384 logical CPUs。
 - GPU：NVIDIA RTX 4090 24 GiB。
@@ -446,7 +459,7 @@ cuDF = 1
 总计 19
 ```
 
-### 12.3 报告中的中位数
+### 12.3 V5 历史中位数（不要当成 V7 request）
 
 | 引擎 | 代表参数 | internal total median | external elapsed median | 正确解释 |
 | --- | --- | ---: | ---: | --- |
@@ -755,7 +768,9 @@ radix partition 先按低位把数据分组，每个分区再建较小的 direct
 
 ### Q13：这个项目最大的改进空间是什么？
 
-第一优先修正官方 Q5 精度；第二是把数据改成预处理二进制列格式，分离 I/O 和查询；第三是让 GPU 缓冲区常驻并重复查询；第四是补公平的 warmup、统计和 memory metrics。
+decimal、Arrow、resident、warmup和profiler已经完成。现在第一优先是减少hybrid
+两侧重复setup并多次测量setup分布；第二是改进auto模型；第三是增加并发、NUMA
+和多硬件；第四才是继续优化当前原子聚合kernel。
 
 ### Q14：哪些工作是你能亲自说明的？
 
@@ -777,11 +792,13 @@ radix partition 先按低位把数据分组，每个分区再建较小的 direct
 
 完成标准：能解释每个过滤条件排除了什么。
 
-### 练习 3：修正官方精度
+### 练习 3：追踪一次正确性证明
 
-不要立即改正式分支。先建实验分支，把每条收入保留到更高尺度，例如 price cents 乘 basis-point 后先不除 10000，聚合后再统一格式化。同步修改 Python 基线和测试，目标是匹配 `q5.out`。
+从 `v7_sf1_resident/raw.csv` 找一条request，沿result hash追到
+`correctness.json`、oracle和manifest。再故意复制bundle并改一个金额，确认审计
+或correctness materializer拒绝它。
 
-完成标准：理解“跨引擎一致”和“官方语义正确”为什么是两件事。
+完成标准：理解“跨引擎一致”“官方语义正确”和“证据未被修改”是三件事。
 
 ### 练习 4：重新设计一个公平 benchmark
 
@@ -800,15 +817,14 @@ radix partition 先按低位把数据分组，每个分区再建较小的 direct
 
 | 优先级 | 工作 | 原因 |
 | --- | --- | --- |
-| P0 | 修正或明确 Q5 decimal 语义 | 直接影响标准正确性 |
-| P0 | 在报告中区分历史 GPU 验证和当前可复验状态 | 避免证据混淆 |
-| P1 | 修复 benchmark 的 GPU thread 冗余和 warmup/statistics | 影响性能结论可信度 |
-| P1 | 统一 internal/external timing 定义 | 影响跨引擎公平性 |
+| P0 | 减少 hybrid 两侧重复 setup | 决定少量请求能否真正受益 |
+| P0 | 重复测量 setup 分布 | 当前每配置只有一次 setup |
+| P1 | 改进 auto 特征和校准 | SF1 regret 为 33.89% |
+| P1 | 增加并发、NUMA 和多硬件 | 当前结论只有单机两个规模 |
 | P1 | 修复 `hashjoin-cpu` 构建系统和缺失可选依赖 | 影响他人复现 |
 | P1 | 更正 starjoin `pro`、sort-merge 和 bitmap 说法 | 影响算法讲解准确性 |
-| P2 | 增加真正 FK 校验和官方结果 oracle | 提高数据/结果完整性 |
-| P2 | GPU block-local aggregation、buffer reuse、resident data | 才能评价优化后的 GPU 路径 |
-| P2 | 二进制列格式或 Arrow IPC/Parquet 输入 | 去掉重复文本解析瓶颈 |
+| P2 | GPU block-local aggregation | 当前仍使用全局原子聚合 |
+| P2 | 扩展到其他 TPC-H 查询 | 检查结论是否只属于 Q5 |
 
 ## 24. 最后的讲解主线
 

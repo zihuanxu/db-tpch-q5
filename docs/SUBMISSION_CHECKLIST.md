@@ -1,37 +1,32 @@
-# V6 提交检查单
+# V7 提交检查单
 
-最后更新：2026-07-14。正式证据目录为 `docs/artifacts/v5_sf1/`，实验 hash 为
-`542abf4003633c7c`。早期 `mvp_sf1` 仅用于历史审计，不进入论文和提交包。
+最后更新：2026-07-14。
 
-## 工程与测试
+## 工程与证据
 
-- [x] V2 Arrow CPU specialized/Acero 实现与 oracle 验证。
-- [x] V3 Arrow 输入的 copy/managed/mapped CUDA 三模式。
-- [x] V4 hybrid 三比例、cuDF 与真实 GPU sanitizer 验证。
-- [x] V5 冻结 19 配置矩阵并完成 57 次预热、190 次测量。
-- [x] V5 evidence bundle 校验 checksum、coverage、matrix 和 summary。
-- [x] V6 主张、论文导入、过程文档和学习材料测试。
-- [x] 最终 CPU CI：14/14 CTest、79 项 Python 通过，2 项设备测试跳过。
-- [x] 最终 Arrow+CUDA 编译和 21 项 CTest：0 失败；本轮沙箱没有设备节点，
-  7 项 CUDA runtime 测试跳过，真实 GPU 21/21 结果保存在 V4/V5 记录中。
-- [x] RAPIDS/PyArrow：真实 GPU 验证 14/14 通过；当前无设备复验为
-  12 passed、2 个 cuDF runtime 测试明确跳过。
+- [x] Arrow specialized/Acero、三种 CUDA、cuDF 和 hybrid 实现；
+- [x] resident session 分离 setup、request 和 1/10/100 次摊销值；
+- [x] SF1/SF10 各 18 配置、54 warmups、180 measured；
+- [x] 两组正式 evidence bundle 独立审计 `ok=true`；
+- [x] fixed 比例曲线和 hybrid-auto regret 评估；
+- [x] 10 组 NSYS/NCU 完整 bundle 审计 `ok=true`；
+- [x] compact profiler 183 个文件通过 `checksums.sha256`；
+- [x] 全部正式请求通过独立 oracle；
+- [x] 真实 RTX 4090 CTest 45/45 和 sanitizer 零错误。
 
 ## 论文与讲解
 
-- [x] `docs/paper/paper.tex` 读取 `generated/results.tex`，没有手抄正式数字。
-- [x] `docs/paper/paper.pdf` 编译为 3 页并通过文本、版面和错误日志检查。
-- [x] `docs/research/CLAIM_LEDGER.md` 明确保留 hybrid 负结果。
-- [x] 七节接手材料、答辩讲稿和高风险问题齐全。
-- [x] SF1、冷进程、计时边界、Arrow CUDA 扩展等限制已写明。
+- [x] `paper.tex` 同时引用 SF1/SF10 resident 和模型证据；
+- [x] `paper.pdf` 由 CjC 模板编译并写入 provenance；
+- [x] 冷进程、setup、resident request、profiler 时间明确分开；
+- [x] auto regret、setup 成本和系统限制没有隐藏；
+- [ ] 学习、答辩和过程文档全部复核到 V7；
 
-## 发布与打包
+## 发布
 
-- [x] `LICENSE`、`NOTICE`、`CITATION.cff`、贡献说明和 changelog。
-- [x] CPU GitHub Actions、Conda 环境、CMake presets 和 Dockerfile。
-- [x] `scripts/release_audit.py --json` 区分工程失败和外部操作。
-- [x] 生成并解压复验 `dist/memory-db-tpch-q5-v6.tar.gz`。
-- [ ] 创建/推送 GitHub 最终 tag 与公开 release（外部操作）。
-- [ ] 创建腾讯共享文档、同步 `docs/process/` 并确认老师权限（外部操作）。
+- [x] `LICENSE`、`CITATION.cff`、贡献说明和 changelog；
+- [ ] V7 release audit 通过且生成最终压缩包；
+- [ ] 创建/推送 GitHub tag 与公开 release（外部操作）；
+- [ ] 同步腾讯共享文档并确认老师权限（外部操作）。
 
-所有工程复验完成后，把上面三个工程项勾选；两项外部操作不能由离线仓库伪造。
+外部账号操作不能由离线仓库伪造成已完成。

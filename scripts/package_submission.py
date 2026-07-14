@@ -40,8 +40,14 @@ REQUIRED_SUBMISSION_PATHS = (
     Path("docs/paper/paper.pdf"),
     Path("docs/paper/paper.provenance.json"),
     Path("docs/paper/paper.tex"),
-    Path("docs/artifacts/v5_sf1/manifest.json"),
-    Path("docs/artifacts/v5_sf1/manifest.sha256"),
+    Path("docs/paper/generated/results.tex"),
+    Path("docs/artifacts/v7_sf1_resident/manifest.json"),
+    Path("docs/artifacts/v7_sf1_resident/manifest.sha256"),
+    Path("docs/artifacts/v7_sf10_resident/manifest.json"),
+    Path("docs/artifacts/v7_sf10_resident/manifest.sha256"),
+    Path("docs/artifacts/v7_hybrid_model/memq5-v7-hybrid-model.json"),
+    Path("docs/artifacts/v7_profiler/summary.json"),
+    Path("docs/artifacts/v7_profiler/checksums.sha256"),
     Path("docs/research/CLAIM_LEDGER.md"),
     Path("scripts/release_audit.py"),
 )
@@ -193,8 +199,8 @@ def audit_archive(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Create an auditable MEMQ5 V6 archive")
-    parser.add_argument("--output", type=Path, default=Path("dist/memory-db-tpch-q5-v6.tar.gz"))
+    parser = argparse.ArgumentParser(description="Create an auditable MEMQ5 V7 archive")
+    parser.add_argument("--output", type=Path, default=Path("dist/memory-db-tpch-q5-v7.tar.gz"))
     parser.add_argument("--root-name", default="memory-db-tpch-q5")
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     args = parser.parse_args()

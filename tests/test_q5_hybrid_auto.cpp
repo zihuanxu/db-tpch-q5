@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <iostream>
 #include <limits>
 #include <sstream>
 #include <string>
@@ -185,6 +186,23 @@ void assert_auto_provenance_is_setup_only() {
 }
 
 #ifdef MEMQ5_TEST_HYBRID_AUTO_CUDA
+int require_cuda_device() {
+  int device_count = 0;
+  const cudaError_t status = cudaGetDeviceCount(&device_count);
+  if (status == cudaErrorNoDevice ||
+      (status == cudaSuccess && device_count == 0)) {
+    std::cout << "Skipping hybrid-auto CUDA runtime test: "
+              << cudaGetErrorString(status) << '\n';
+    return 77;
+  }
+  if (status != cudaSuccess) {
+    std::cerr << "CUDA device discovery failed: "
+              << cudaGetErrorString(status) << '\n';
+    return 1;
+  }
+  return 0;
+}
+
 void assert_calibration_results_must_match_exactly() {
   memq5::Q5Result cpu;
   cpu.rows = {{"CHINA", 100}, {"INDIA", 50}};
@@ -318,14 +336,6 @@ void assert_first_gpu_request_uses_steady_state_reset() {
 }
 
 void assert_auto_calibrates_once_and_requests_are_stable() {
-  int device_count = 0;
-  const cudaError_t cuda_status = cudaGetDeviceCount(&device_count);
-  if (cuda_status == cudaErrorNoDevice ||
-      (cuda_status == cudaSuccess && device_count == 0)) {
-    std::exit(77);
-  }
-  assert(cuda_status == cudaSuccess);
-
   const auto dataset =
       memq5::load_arrow_q5_dataset(MEMQ5_ARROW_FIXTURE_DIR).ValueOrDie();
   memq5::Q5Params params;
@@ -392,6 +402,12 @@ void assert_auto_calibrates_once_and_requests_are_stable() {
 }  // namespace
 
 int main() {
+#ifdef MEMQ5_TEST_HYBRID_AUTO_CUDA
+  const int cuda_status = require_cuda_device();
+  if (cuda_status != 0) {
+    return cuda_status;
+  }
+#endif
   assert_boundary_partition();
   assert_ties_choose_lower_boundary();
   assert_rows_are_conserved();

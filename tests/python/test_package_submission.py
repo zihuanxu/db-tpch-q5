@@ -7,6 +7,7 @@ import io
 from pathlib import Path
 
 from scripts.package_submission import (
+    REQUIRED_SUBMISSION_PATHS,
     audit_archive,
     create_archive,
     excluded_from_submission,
@@ -25,6 +26,18 @@ def test_submission_filter_rejects_generated_and_unfinished_files() -> None:
     )
     assert all(excluded_from_submission(path) for path in rejected)
     assert not excluded_from_submission(Path("docs/artifacts/v5_sf1/raw.csv"))
+    assert not excluded_from_submission(
+        Path("docs/artifacts/v7_profiler/captures/sf10-copy/nsys/profile.nsys-rep")
+    )
+
+
+def test_v7_submission_requires_resident_model_and_profiler_evidence() -> None:
+    required = {path.as_posix() for path in REQUIRED_SUBMISSION_PATHS}
+    assert "docs/artifacts/v7_sf1_resident/manifest.json" in required
+    assert "docs/artifacts/v7_sf10_resident/manifest.json" in required
+    assert "docs/artifacts/v7_hybrid_model/memq5-v7-hybrid-model.json" in required
+    assert "docs/artifacts/v7_profiler/summary.json" in required
+    assert "docs/artifacts/v7_profiler/checksums.sha256" in required
 
 
 def test_archive_contains_internal_manifest_and_sidecar(tmp_path: Path) -> None:

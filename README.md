@@ -7,7 +7,7 @@ Arrow/PyArrow、三种 CUDA 内存模式和 RAPIDS cuDF。它不是通用数据�
 
 | 目录 | 内容 |
 |---|---|
-| `src/` | 专用 C++ CPU/CUDA Q5 执行器 |
+| `src/` | 专用 CPU、Acero、CUDA、hybrid 和 resident session 执行器 |
 | `baselines/` | Python、PyArrow、DuckDB 和 cuDF 对照 |
 | `scripts/` | 数据准备、Arrow IPC、实验、校验和打包工具 |
 | `docs/` | TPC-H Q5/GPU 项目文档、图表和最终报告 |
@@ -22,7 +22,8 @@ Arrow/PyArrow、三种 CUDA 内存模式和 RAPIDS cuDF。它不是通用数据�
 |---|---|
 | 最小交付说明（从这里开始） | `docs/DELIVERY_GUIDE.md` |
 | 计算机学报模板期末论文 | `docs/paper/paper.pdf` / `docs/paper/paper.tex` |
-| 正式 SF1 证据 | `docs/artifacts/v5_sf1/` |
+| 正式 SF1/SF10 常驻证据 | `docs/artifacts/v7_sf1_resident/` / `v7_sf10_resident/` |
+| CUDA profiler 证据 | `docs/artifacts/v7_profiler/` |
 | 答辩速查 | `docs/DEFENSE_CHEATSHEET.md` |
 | 从原理到讲解的学习材料 | `docs/learning/README.md` |
 | 实验过程记录 | `docs/process/README.md` |
@@ -46,10 +47,14 @@ Arrow/PyArrow、三种 CUDA 内存模式和 RAPIDS cuDF。它不是通用数据�
 - V3 让 `gpu-copy`、`gpu-managed`、`gpu-mapped` 从同一 Arrow dataset 读取，
   共用精确 CUDA kernel，并记录 H2D、D2H 和 mapped 远程读取字节。
 - V4 增加 cuDF 与按比例切分的 CPU-GPU hybrid 路径，并统一结果校验协议。
-- V5 在 RTX 4090 上完成冻结的 SF1 正式矩阵，共 19 个配置、3 次预热和
-  10 次计时，原始记录和环境信息保存在 `docs/artifacts/v5_sf1/`。
-- V6 将正式证据接入论文、主张台账、过程文档、学习材料、CPU CI 和发布审计。
-  正式实验没有证明 hybrid 比最优单设备更快，这个负结果也如实保留。
+- V5 冻结了 SF1 cold-process 历史矩阵；它只作为冷启动对照，不与常驻请求
+  延迟直接混排。
+- V7 实现真正的 resident session，分别冻结 SF1 和 SF10 的 18 组配置。每个
+  规模包含 54 次预热和 180 次正式请求，8 类后端全部通过 oracle。
+- V7 固定比例 hybrid 在 SF1/SF10 的最佳常驻中位数为 1.160/10.054 ms；
+  hybrid-auto 能跟随规模改变比例，但相对最佳 fixed 仍有 33.89%/9.21% regret。
+- 完成 SF1/SF10 × copy/managed/mapped/hybrid-fixed/hybrid-auto 共 10 组
+  Nsight Systems/Compute 采集；完整 bundle 通过严格审计，仓库保存轻量发布副本。
 
 ## TPC-H Q5/GPU 复现
 
@@ -125,18 +130,21 @@ C++ Arrow loader 的独立构建与验证见
 
 ## 证据审计与发布
 
-正式结果不是从论文正文手工抄写的。`scripts/import_paper_evidence.py` 从 V5
-证据包生成 `docs/paper/generated/results.tex`，主张状态记录在
+正式结果不是从论文正文手工抄写的。`scripts/import_paper_evidence.py` 从两组
+V7 resident 证据和 hybrid 模型生成 `docs/paper/generated/results.tex`，主张状态记录在
 `docs/research/CLAIM_LEDGER.md`。交付前运行：
 
 ```bash
-python3 scripts/audit_evidence_bundle.py docs/artifacts/v5_sf1
+python3 scripts/v7_evidence_bundle.py audit --directory docs/artifacts/v7_sf1_resident
+python3 scripts/v7_evidence_bundle.py audit --directory docs/artifacts/v7_sf10_resident
+python3 scripts/validate_claim_ledger.py docs/research/CLAIM_LEDGER.md
+python3 scripts/check_paper.py
 python3 scripts/release_audit.py --json
 python3 scripts/package_submission.py
 ```
 
-CPU 路径由 `.github/workflows/cpu-ci.yml` 自动构建和测试；CUDA、cuDF 和正式
-SF1 性能仍必须在 NVIDIA GPU 机器上按 `docs/GPU_SERVER_RUNBOOK.md` 复验。
+CPU 路径由 `.github/workflows/cpu-ci.yml` 自动构建和测试；CUDA、cuDF、SF10
+和 profiler 仍必须在 NVIDIA GPU 机器上按 `docs/GPU_SERVER_RUNBOOK.md` 复验。
 
 ## 许可与引用
 
@@ -146,7 +154,8 @@ SF1 性能仍必须在 NVIDIA GPU 机器上按 `docs/GPU_SERVER_RUNBOOK.md` 复�
 
 ## 版本控制说明
 
-V6 提交包包含源码、脚本、tiny 数据、论文和可审计的 V5 SF1 证据，以下
+V7 提交包包含源码、脚本、tiny 数据、论文、两组 resident 证据和 compact
+profiler 证据，以下
 内容不放入压缩包：
 
 - CMake/autotools 构建目录。

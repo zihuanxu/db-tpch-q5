@@ -52,6 +52,8 @@ def test_readme_has_public_reproduction_and_release_entries() -> None:
         "CITATION.cff",
         "scripts/ci_cpu.sh",
         "scripts/release_audit.py",
-        "docs/artifacts/v5_sf1",
+        "docs/artifacts/v7_sf1_resident",
+        "docs/artifacts/v7_sf10_resident",
+        "docs/artifacts/v7_profiler",
     ):
         assert phrase in text
