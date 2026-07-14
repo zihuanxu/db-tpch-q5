@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Collect reproducible Nsight Systems evidence around one command."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+REPORTS = ["cuda_api_sum", "cuda_gpu_kern_sum", "cuda_gpu_mem_time_sum", "nvtx_sum"]
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+
+
+def _nsys_version() -> str:
+    try:
+        result = _run(["nsys", "--version"])
+    except OSError as exc:
+        return f"unavailable: {exc}"
+    return (result.stdout or result.stderr).strip()
+
+
+def _files(output_dir: Path) -> dict[str, dict[str, object]]:
+    return {
+        path.name: {"bytes": path.stat().st_size, "sha256": _sha256(path)}
+        for path in sorted(output_dir.iterdir())
+        if path.is_file() and path.name != "metadata.json"
+    }
+
+
+def collect_nsys(command: list[str], output_dir: Path, metadata: dict) -> dict:
+    """Profile `command`, export stats on success, and write a provenance manifest."""
+    if not command:
+        raise ValueError("command must not be empty")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    prefix = output_dir / "profile"
+    profile_command = [
+        "nsys",
+        "profile",
+        "--force-overwrite=true",
+        "--trace=cuda,nvtx,osrt",
+        "--sample=none",
+        "--output",
+        str(prefix),
+        *command,
+    ]
+    started_at = _utc_now()
+    try:
+        profile = _run(profile_command)
+    except OSError as exc:
+        profile = subprocess.CompletedProcess(profile_command, 127, "", f"launch failed: {exc}")
+    (output_dir / "profile.stdout.log").write_text(profile.stdout or "", encoding="utf-8")
+    (output_dir / "profile.stderr.log").write_text(profile.stderr or "", encoding="utf-8")
+
+    stats_commands: list[list[str]] = []
+    stats_results: list[dict[str, object]] = []
+    report_path = prefix.with_suffix(".nsys-rep")
+    if profile.returncode == 0 and report_path.exists():
+        stats_command = [
+            "nsys", "stats", "--force-export=true", "--report", ",".join(REPORTS),
+            "--format", "csv", "--output", str(output_dir / "stats"), str(report_path),
+        ]
+        stats_commands.append(stats_command)
+        try:
+            stats = _run(stats_command)
+        except OSError as exc:
+            stats = subprocess.CompletedProcess(stats_command, 127, "", f"launch failed: {exc}")
+        (output_dir / "stats.stdout.log").write_text(stats.stdout or "", encoding="utf-8")
+        (output_dir / "stats.stderr.log").write_text(stats.stderr or "", encoding="utf-8")
+        stats_results.append({"return_code": stats.returncode})
+
+    result: dict[str, object] = {
+        "metadata": metadata,
+        "started_at_utc": started_at,
+        "finished_at_utc": _utc_now(),
+        "profile_command": profile_command,
+        "stats_commands": stats_commands,
+        "return_code": profile.returncode,
+        "stats": stats_results,
+        "tool_versions": {"nsys": _nsys_version()},
+        "files": _files(output_dir),
+    }
+    (output_dir / "metadata.json").write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
+    return result
