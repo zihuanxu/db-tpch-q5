@@ -56,3 +56,48 @@ def test_write_oracle_preserves_existing_output_when_source_is_missing(tmp_path:
         write_oracle(tmp_path / "missing", output, "ASIA", "1994-01-01")
 
     assert output.read_text(encoding="utf-8") == '{"existing": true}\n'
+
+
+def test_source_hashing_reads_all_tables_in_fixed_size_chunks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from duckdb_q5 import TABLE_SPECS
+    from write_q5_oracle import _source_table_hashes
+
+    chunk_reads: list[tuple[str, int]] = []
+    original_open = Path.open
+
+    class RecordingReader:
+        def __init__(self, path: Path, handle) -> None:
+            self.path = path
+            self.handle = handle
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            self.handle.close()
+
+        def read(self, size: int = -1) -> bytes:
+            chunk_reads.append((self.path.name, size))
+            return self.handle.read(size)
+
+    def tracked_open(path: Path, *args, **kwargs):
+        handle = original_open(path, *args, **kwargs)
+        if path.parent == FIXTURE_DIR and path.suffix == ".tbl":
+            return RecordingReader(path, handle)
+        return handle
+
+    def fail_on_full_buffer_read(self: Path) -> bytes:
+        raise AssertionError(f"full-buffer read attempted for {self}")
+
+    monkeypatch.setattr(Path, "open", tracked_open)
+    monkeypatch.setattr(Path, "read_bytes", fail_on_full_buffer_read)
+
+    _source_table_hashes(FIXTURE_DIR)
+
+    assert {name for name, _ in chunk_reads} == {
+        f"{name}.tbl" for name in TABLE_SPECS
+    }
+    assert chunk_reads
+    assert all(size == 1024 * 1024 for _, size in chunk_reads)

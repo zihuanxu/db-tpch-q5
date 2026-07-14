@@ -18,6 +18,16 @@ if str(BASELINES_DIR) not in sys.path:
 from common import ResultRow, result_hash
 from duckdb_q5 import Q5_SQL, QUERY_VERSION, TABLE_SPECS, run_q5
 
+HASH_CHUNK_SIZE = 1024 * 1024
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(HASH_CHUNK_SIZE), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
 
 def _source_table_hashes(data_dir: Path) -> dict[str, str]:
     hashes: dict[str, str] = {}
@@ -25,7 +35,7 @@ def _source_table_hashes(data_dir: Path) -> dict[str, str]:
         path = data_dir / f"{name}.tbl"
         if not path.is_file():
             raise FileNotFoundError(path)
-        hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+        hashes[name] = _sha256_file(path)
     return hashes
 
 
