@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "required_backends": [
+    "cpu-specialized",
+    "arrow-acero",
+    "gpu-copy",
+    "gpu-managed",
+    "gpu-mapped",
+    "hybrid-fixed",
+    "cudf"
+  ],
+  "hybrid_auto": {
+    "enabled": false,
+    "reason": "hybrid-auto session CLI is not implemented yet"
+  }
+}
