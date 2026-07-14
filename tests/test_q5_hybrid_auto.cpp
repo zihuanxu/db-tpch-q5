@@ -5,6 +5,7 @@
 #include <limits>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -15,6 +16,7 @@
 #ifdef MEMQ5_TEST_HYBRID_AUTO_CUDA
 #include <cuda_runtime.h>
 
+#include "cuda/q5_arrow_cuda.hpp"
 #include "engine/q5_params.hpp"
 #include "engine/q5_result_io.hpp"
 #include "hybrid/q5_hybrid.hpp"
@@ -123,7 +125,7 @@ void assert_auto_provenance_is_setup_only() {
   setup_record.gpu_calibration_ms = 3.0;
   setup_record.gpu_kernel_calibration_ms = 2.0;
   setup_record.cpu_rows_per_ms = 2.5;
-  setup_record.gpu_rows_per_ms = 5.0;
+  setup_record.gpu_kernel_rows_per_ms = 5.0;
   setup_record.gpu_fixed_ms = 1.0;
   setup_record.predicted_cpu_ratio = 0.6;
   setup_record.selected_batch_boundary_rows = 7;
@@ -152,7 +154,8 @@ void assert_auto_provenance_is_setup_only() {
   assert(setup.at("gpu_calibration_ms") == 3.0);
   assert(setup.at("gpu_kernel_calibration_ms") == 2.0);
   assert(setup.at("cpu_rows_per_ms") == 2.5);
-  assert(setup.at("gpu_rows_per_ms") == 5.0);
+  assert(setup.at("gpu_kernel_rows_per_ms") == 5.0);
+  assert(!setup.contains("gpu_rows_per_ms"));
   assert(setup.at("gpu_fixed_ms") == 1.0);
   assert(setup.at("predicted_cpu_ratio") == 0.6);
   assert(setup.at("selected_batch_boundary_rows") == 7);
@@ -170,7 +173,7 @@ void assert_auto_provenance_is_setup_only() {
            "gpu_calibration_ms",
            "gpu_kernel_calibration_ms",
            "cpu_rows_per_ms",
-           "gpu_rows_per_ms",
+           "gpu_kernel_rows_per_ms",
            "gpu_fixed_ms",
            "predicted_cpu_ratio",
            "selected_batch_boundary_rows",
@@ -182,6 +185,138 @@ void assert_auto_provenance_is_setup_only() {
 }
 
 #ifdef MEMQ5_TEST_HYBRID_AUTO_CUDA
+void assert_calibration_results_must_match_exactly() {
+  memq5::Q5Result cpu;
+  cpu.rows = {{"CHINA", 100}, {"INDIA", 50}};
+  cpu.counters.input_lineitem_rows = 10;
+  cpu.counters.matched_lineitem_rows = 3;
+  cpu.counters.cpu_input_rows = 10;
+
+  memq5::Q5Result gpu = cpu;
+  gpu.counters.cpu_input_rows = 0;
+  gpu.counters.gpu_input_rows = 10;
+  assert(memq5::validate_hybrid_calibration_results(cpu, gpu, 10).ok());
+
+  memq5::Q5Result different_rows = gpu;
+  different_rows.rows[0].revenue_1e4 += 1;
+  assert(!memq5::validate_hybrid_calibration_results(cpu, different_rows, 10)
+              .ok());
+
+  memq5::Q5Result different_order = gpu;
+  std::swap(different_order.rows[0], different_order.rows[1]);
+  assert(!memq5::validate_hybrid_calibration_results(cpu, different_order, 10)
+              .ok());
+
+  memq5::Q5Result different_matched = gpu;
+  ++different_matched.counters.matched_lineitem_rows;
+  assert(!memq5::validate_hybrid_calibration_results(cpu, different_matched,
+                                                      10)
+              .ok());
+
+  memq5::Q5Result wrong_gpu_ownership = gpu;
+  wrong_gpu_ownership.counters.gpu_input_rows = 9;
+  assert(!memq5::validate_hybrid_calibration_results(cpu,
+                                                      wrong_gpu_ownership, 10)
+              .ok());
+}
+
+void assert_fixed_endpoints_do_not_use_idle_children() {
+  const auto dataset =
+      memq5::load_arrow_q5_dataset(MEMQ5_ARROW_FIXTURE_DIR).ValueOrDie();
+  memq5::Q5Params params;
+  params.region_name = "ASIA";
+  memq5::set_q5_date(&params, "1994-01-01");
+  params.threads = 2;
+
+  for (const double ratio : {0.0, 1.0}) {
+    memq5::HybridOptions options;
+    options.cpu_ratio = ratio;
+    options.cpu_threads = 2;
+    auto session =
+        memq5::HybridQ5Session::Make(dataset, params, options).ValueOrDie();
+    const auto resident = session->Execute().ValueOrDie();
+    const auto cold =
+        memq5::execute_q5_hybrid(dataset, params, options).ValueOrDie();
+
+    assert(memq5::result_hash_hex(resident) == "248d10b6ee352953");
+    assert(memq5::result_hash_hex(cold) == "248d10b6ee352953");
+    if (ratio == 0.0) {
+      assert(resident.counters.cpu_input_rows == 0);
+      assert(resident.timing.cpu_ms == 0.0);
+      assert(resident.timing.overlap_ms == 0.0);
+      assert(cold.counters.cpu_input_rows == 0);
+      assert(cold.timing.cpu_ms == 0.0);
+      assert(cold.timing.overlap_ms == 0.0);
+    } else {
+      assert(session->setup().resident_gpu_bytes == 0);
+      assert(session->setup().initial_h2d_ms == 0.0);
+      assert(resident.counters.gpu_input_rows == 0);
+      assert(resident.counters.d2h_bytes == 0);
+      assert(resident.timing.d2h_ms == 0.0);
+      assert(resident.timing.gpu_ms == 0.0);
+      assert(resident.timing.overlap_ms == 0.0);
+      assert(cold.counters.gpu_input_rows == 0);
+      assert(cold.counters.h2d_bytes == 0);
+      assert(cold.counters.d2h_bytes == 0);
+      assert(cold.timing.h2d_ms == 0.0);
+      assert(cold.timing.d2h_ms == 0.0);
+      assert(cold.timing.gpu_ms == 0.0);
+      assert(cold.timing.overlap_ms == 0.0);
+    }
+  }
+}
+
+void assert_fixed_empty_input_needs_no_children() {
+  auto dataset =
+      memq5::load_arrow_q5_dataset(MEMQ5_ARROW_FIXTURE_DIR).ValueOrDie();
+  dataset.lineitem = dataset.lineitem->Slice(0, 0);
+  dataset.tables["lineitem"] = dataset.lineitem;
+  memq5::Q5Params params;
+  params.region_name = "ASIA";
+  memq5::set_q5_date(&params, "1994-01-01");
+  params.threads = 2;
+  memq5::HybridOptions options;
+  options.cpu_ratio = 0.5;
+  options.cpu_threads = 2;
+
+  auto session =
+      memq5::HybridQ5Session::Make(dataset, params, options).ValueOrDie();
+  const auto result = session->Execute().ValueOrDie();
+  const auto cold =
+      memq5::execute_q5_hybrid(dataset, params, options).ValueOrDie();
+  assert(session->setup().resident_host_bytes == 0);
+  assert(session->setup().resident_gpu_bytes == 0);
+  assert(result.rows.empty());
+  assert(result.counters.input_lineitem_rows == 0);
+  assert(result.counters.cpu_input_rows == 0);
+  assert(result.counters.gpu_input_rows == 0);
+  assert(result.timing.cpu_ms == 0.0);
+  assert(result.timing.gpu_ms == 0.0);
+  assert(result.timing.overlap_ms == 0.0);
+  assert(cold.rows.empty());
+  assert(cold.counters.input_lineitem_rows == 0);
+  assert(cold.timing.cpu_ms == 0.0);
+  assert(cold.timing.gpu_ms == 0.0);
+}
+
+void assert_first_gpu_request_uses_steady_state_reset() {
+  const auto dataset =
+      memq5::load_arrow_q5_dataset(MEMQ5_ARROW_FIXTURE_DIR).ValueOrDie();
+  memq5::Q5Params params;
+  params.region_name = "ASIA";
+  memq5::set_q5_date(&params, "1994-01-01");
+  params.threads = 2;
+  auto session = memq5::ArrowCudaQ5Session::Make(
+                     dataset, params, memq5::ArrowCudaMemoryMode::kManaged)
+                     .ValueOrDie();
+
+  const auto first = session->Execute().ValueOrDie();
+  const auto second = session->Execute().ValueOrDie();
+  assert(first.counters.h2d_bytes == first.counters.d2h_bytes);
+  assert(second.counters.h2d_bytes == first.counters.d2h_bytes);
+  assert(memq5::result_hash_hex(first) == memq5::result_hash_hex(second));
+}
+
 void assert_auto_calibrates_once_and_requests_are_stable() {
   int device_count = 0;
   const cudaError_t cuda_status = cudaGetDeviceCount(&device_count);
@@ -222,7 +357,7 @@ void assert_auto_calibrates_once_and_requests_are_stable() {
   assert(tuning.gpu_calibration_ms > 0.0);
   assert(tuning.gpu_kernel_calibration_ms > 0.0);
   assert(tuning.cpu_rows_per_ms > 0.0);
-  assert(tuning.gpu_rows_per_ms > 0.0);
+  assert(tuning.gpu_kernel_rows_per_ms > 0.0);
   assert(tuning.gpu_fixed_ms >= 0.0);
   assert(tuning.predicted_cpu_ratio >= 0.0);
   assert(tuning.predicted_cpu_ratio <= 1.0);
@@ -265,6 +400,10 @@ int main() {
   assert_fixed_partition_semantics_are_unchanged();
   assert_auto_provenance_is_setup_only();
 #ifdef MEMQ5_TEST_HYBRID_AUTO_CUDA
+  assert_calibration_results_must_match_exactly();
+  assert_fixed_endpoints_do_not_use_idle_children();
+  assert_fixed_empty_input_needs_no_children();
+  assert_first_gpu_request_uses_steady_state_reset();
   assert_auto_calibrates_once_and_requests_are_stable();
 #endif
   return 0;

@@ -556,7 +556,7 @@ struct ArrowCudaQ5Session::Impl {
   int device = 0;
   Q5SessionSetup setup;
   int64_t initial_h2d_bytes = 0;
-  bool outputs_clean = true;
+  bool outputs_clean = false;
   bool managed_output_on_device = false;
 
   std::unique_ptr<DeviceBuffer<int32_t>> copy_order_keys;

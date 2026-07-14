@@ -148,7 +148,7 @@ int main() {
       assert(first.timing.h2d_ms == 0.0);
       assert(second.counters.h2d_bytes == 0);
     } else if (mode == memq5::ArrowCudaMemoryMode::kManaged) {
-      assert(first.counters.h2d_bytes == 0);
+      assert(first.counters.h2d_bytes == first.counters.d2h_bytes);
       assert(second.counters.h2d_bytes == first.counters.d2h_bytes);
       assert(second.timing.h2d_ms >= 0.0);
     }

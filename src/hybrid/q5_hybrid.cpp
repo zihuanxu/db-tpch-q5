@@ -16,6 +16,7 @@
 #include "common/timer.hpp"
 #include "cpu/q5_arrow_cpu.hpp"
 #include "cuda/q5_arrow_cuda.hpp"
+#include "engine/q5_result_io.hpp"
 #include "hybrid/batch_partition.hpp"
 #include "hybrid/hybrid_cost_model.hpp"
 
@@ -115,6 +116,8 @@ arrow::Result<CalibratedPartition> calibrate_auto_partition(
       ArrowCudaQ5Session::Make(dataset, params, ArrowCudaMemoryMode::kCopy));
   ARROW_ASSIGN_OR_RAISE(Q5Result gpu_calibration,
                         gpu_calibration_session->Execute());
+  ARROW_RETURN_NOT_OK(validate_hybrid_calibration_results(
+      cpu_calibration, gpu_calibration, tuning.calibration_rows));
   tuning.gpu_calibration_requests = 1;
   tuning.gpu_calibration_ms = gpu_calibration.timing.total_ms;
   tuning.gpu_kernel_calibration_ms = gpu_calibration.timing.kernel_ms;
@@ -133,8 +136,9 @@ arrow::Result<CalibratedPartition> calibrate_auto_partition(
                         predict_hybrid_ratio(calibration));
   tuning.cpu_rows_per_ms =
       static_cast<double>(tuning.calibration_rows) / tuning.cpu_calibration_ms;
-  tuning.gpu_rows_per_ms = static_cast<double>(tuning.calibration_rows) /
-                           tuning.gpu_kernel_calibration_ms;
+  tuning.gpu_kernel_rows_per_ms =
+      static_cast<double>(tuning.calibration_rows) /
+      tuning.gpu_kernel_calibration_ms;
   tuning.predicted_cpu_ratio = prediction.predicted_cpu_ratio;
 
   ARROW_ASSIGN_OR_RAISE(
@@ -211,7 +215,63 @@ arrow::Result<Q5Result> merge_hybrid_results(
   return result;
 }
 
+Q5Result finish_endpoint_result(Q5Result result, bool cpu_endpoint,
+                                const Stopwatch& total_timer) {
+  result.timing.cpu_ms = cpu_endpoint ? result.timing.total_ms : 0.0;
+  result.timing.gpu_ms = cpu_endpoint ? 0.0 : result.timing.total_ms;
+  result.timing.overlap_ms = 0.0;
+  result.timing.total_ms = total_timer.elapsed_ms();
+  return result;
+}
+
+Q5Result finish_empty_result(const Stopwatch& total_timer) {
+  Q5Result result;
+  result.timing.total_ms = total_timer.elapsed_ms();
+  return result;
+}
+
 }  // namespace
+
+arrow::Status validate_hybrid_calibration_results(
+    const Q5Result& cpu, const Q5Result& gpu, int64_t calibration_rows) {
+  if (calibration_rows <= 0) {
+    return arrow::Status::Invalid(
+        "hybrid calibration requires a positive row count");
+  }
+  if (cpu.counters.input_lineitem_rows != calibration_rows ||
+      cpu.counters.cpu_input_rows != calibration_rows ||
+      cpu.counters.gpu_input_rows != 0) {
+    return arrow::Status::Invalid(
+        "CPU calibration did not process the exact calibration rows");
+  }
+  if (gpu.counters.input_lineitem_rows != calibration_rows ||
+      gpu.counters.cpu_input_rows != 0 ||
+      gpu.counters.gpu_input_rows != calibration_rows) {
+    return arrow::Status::Invalid(
+        "GPU calibration did not process the exact calibration rows");
+  }
+  if (cpu.counters.matched_lineitem_rows !=
+      gpu.counters.matched_lineitem_rows) {
+    return arrow::Status::Invalid(
+        "CPU and GPU calibration matched-row counts differ");
+  }
+  if (cpu.rows.size() != gpu.rows.size()) {
+    return arrow::Status::Invalid(
+        "CPU and GPU calibration result row counts differ");
+  }
+  for (std::size_t index = 0; index < cpu.rows.size(); ++index) {
+    if (cpu.rows[index].nation_name != gpu.rows[index].nation_name ||
+        cpu.rows[index].revenue_1e4 != gpu.rows[index].revenue_1e4) {
+      return arrow::Status::Invalid(
+          "CPU and GPU calibration result rows differ");
+    }
+  }
+  if (result_hash_hex(cpu) != result_hash_hex(gpu)) {
+    return arrow::Status::Invalid(
+        "CPU and GPU calibration result hashes differ");
+  }
+  return arrow::Status::OK();
+}
 
 HybridQ5Session::HybridQ5Session(
     std::unique_ptr<ArrowCpuQ5Session> cpu_session,
@@ -264,26 +324,36 @@ arrow::Result<std::unique_ptr<HybridQ5Session>> HybridQ5Session::Make(
           partition_batch_lengths(batch_lengths, options.cpu_ratio));
     }
 
-    ArrowQ5Dataset cpu_dataset = dataset;
-    cpu_dataset.lineitem = dataset.lineitem->Slice(0, partition.cpu_rows);
-    cpu_dataset.tables["lineitem"] = cpu_dataset.lineitem;
-    ArrowQ5Dataset gpu_dataset = dataset;
-    gpu_dataset.lineitem =
-        dataset.lineitem->Slice(partition.cpu_rows, partition.gpu_rows);
-    gpu_dataset.tables["lineitem"] = gpu_dataset.lineitem;
+    std::unique_ptr<ArrowCpuQ5Session> cpu_session;
+    if (partition.cpu_rows > 0) {
+      ArrowQ5Dataset cpu_dataset = dataset;
+      cpu_dataset.lineitem = dataset.lineitem->Slice(0, partition.cpu_rows);
+      cpu_dataset.tables["lineitem"] = cpu_dataset.lineitem;
+      Q5Params cpu_params = params;
+      cpu_params.threads = options.cpu_threads;
+      ARROW_ASSIGN_OR_RAISE(cpu_session,
+                            ArrowCpuQ5Session::Make(cpu_dataset, cpu_params));
+    }
 
-    Q5Params cpu_params = params;
-    cpu_params.threads = options.cpu_threads;
-    ARROW_ASSIGN_OR_RAISE(auto cpu_session,
-                          ArrowCpuQ5Session::Make(cpu_dataset, cpu_params));
+    std::unique_ptr<ArrowCudaQ5Session> gpu_session;
+    if (partition.gpu_rows > 0) {
+      ArrowQ5Dataset gpu_dataset = dataset;
+      gpu_dataset.lineitem =
+          dataset.lineitem->Slice(partition.cpu_rows, partition.gpu_rows);
+      gpu_dataset.tables["lineitem"] = gpu_dataset.lineitem;
+      ARROW_ASSIGN_OR_RAISE(
+          gpu_session,
+          ArrowCudaQ5Session::Make(gpu_dataset, params,
+                                   ArrowCudaMemoryMode::kCopy));
+    }
+
+    const Q5SessionSetup cpu_setup =
+        cpu_session == nullptr ? Q5SessionSetup{} : cpu_session->setup();
+    const Q5SessionSetup gpu_setup =
+        gpu_session == nullptr ? Q5SessionSetup{} : gpu_session->setup();
     ARROW_ASSIGN_OR_RAISE(
-        auto gpu_session,
-        ArrowCudaQ5Session::Make(gpu_dataset, params,
-                                 ArrowCudaMemoryMode::kCopy));
-    ARROW_ASSIGN_OR_RAISE(
-        Q5SessionSetup setup,
-        combine_session_setup(cpu_session->setup(), gpu_session->setup(),
-                              setup_timer));
+        Q5SessionSetup setup, combine_session_setup(cpu_setup, gpu_setup,
+                                                    setup_timer));
     return std::unique_ptr<HybridQ5Session>(new HybridQ5Session(
         std::move(cpu_session), std::move(gpu_session), setup,
         selected_cpu_ratio, std::move(auto_tuning)));
@@ -299,6 +369,18 @@ arrow::Result<Q5Result> HybridQ5Session::Execute() {
   try {
     NvtxRange request_range("request");
     Stopwatch total_timer;
+    if (cpu_session_ == nullptr && gpu_session_ == nullptr) {
+      return finish_empty_result(total_timer);
+    }
+    if (cpu_session_ == nullptr) {
+      ARROW_ASSIGN_OR_RAISE(Q5Result gpu_result, gpu_session_->Execute());
+      return finish_endpoint_result(std::move(gpu_result), false, total_timer);
+    }
+    if (gpu_session_ == nullptr) {
+      ARROW_ASSIGN_OR_RAISE(Q5Result cpu_result, cpu_session_->Execute());
+      return finish_endpoint_result(std::move(cpu_result), true, total_timer);
+    }
+
     Stopwatch execution_timer;
     auto gpu_future = std::async(std::launch::async, [this]() {
       return gpu_session_->Execute();
@@ -356,6 +438,30 @@ arrow::Result<Q5Result> execute_q5_hybrid(
     ARROW_ASSIGN_OR_RAISE(
         const HybridPartition partition,
         partition_batch_lengths(batch_lengths, options.cpu_ratio));
+
+    if (partition.cpu_rows == 0 && partition.gpu_rows == 0) {
+      return finish_empty_result(total_timer);
+    }
+    if (partition.gpu_rows == 0) {
+      ArrowQ5Dataset cpu_dataset = dataset;
+      cpu_dataset.lineitem = dataset.lineitem->Slice(0, partition.cpu_rows);
+      cpu_dataset.tables["lineitem"] = cpu_dataset.lineitem;
+      Q5Params cpu_params = params;
+      cpu_params.threads = options.cpu_threads;
+      ARROW_ASSIGN_OR_RAISE(
+          Q5Result cpu_result,
+          execute_q5_arrow_cpu(cpu_dataset, cpu_params));
+      return finish_endpoint_result(std::move(cpu_result), true, total_timer);
+    }
+    if (partition.cpu_rows == 0) {
+      ArrowQ5Dataset gpu_dataset = dataset;
+      gpu_dataset.lineitem = dataset.lineitem->Slice(0, partition.gpu_rows);
+      gpu_dataset.tables["lineitem"] = gpu_dataset.lineitem;
+      ARROW_ASSIGN_OR_RAISE(
+          Q5Result gpu_result,
+          execute_q5_arrow_gpu_copy(gpu_dataset, params));
+      return finish_endpoint_result(std::move(gpu_result), false, total_timer);
+    }
 
     ArrowQ5Dataset cpu_dataset = dataset;
     cpu_dataset.lineitem = dataset.lineitem->Slice(0, partition.cpu_rows);

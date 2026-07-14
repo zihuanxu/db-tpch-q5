@@ -383,13 +383,16 @@ assert setup["cpu_calibration_ms"] > 0.0
 assert setup["gpu_calibration_ms"] > 0.0
 assert setup["gpu_kernel_calibration_ms"] > 0.0
 assert setup["cpu_rows_per_ms"] > 0.0
-assert setup["gpu_rows_per_ms"] > 0.0
+assert setup["gpu_kernel_rows_per_ms"] > 0.0
+assert "gpu_rows_per_ms" not in setup
 assert setup["gpu_fixed_ms"] >= 0.0
 assert 0.0 <= setup["predicted_cpu_ratio"] <= 1.0
 assert 0 <= setup["selected_batch_boundary_rows"] <= 6
 assert setup["realized_cpu_ratio"] == setup["selected_cpu_ratio"]
 assert setup["tune_ms"] >= 0.0
+assert setup["tune_ms"] <= setup["session_setup_ms"]
 assert len(requests) == 2
+assert [request["is_warmup"] for request in requests] == [True, False]
 
 setup_only = {
     "hybrid_model_version",
@@ -400,7 +403,7 @@ setup_only = {
     "gpu_calibration_ms",
     "gpu_kernel_calibration_ms",
     "cpu_rows_per_ms",
-    "gpu_rows_per_ms",
+    "gpu_kernel_rows_per_ms",
     "gpu_fixed_ms",
     "predicted_cpu_ratio",
     "selected_batch_boundary_rows",
@@ -421,7 +424,7 @@ for request in requests:
       $<TARGET_FILE:memq5_arrow_session>
       --dataset ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow
       --engine hybrid-arrow --hybrid-selection auto
-      --region ASIA --date 1994-01-01 --threads 2 --warmup 0 --repeat 2
+      --region ASIA --date 1994-01-01 --threads 2 --warmup 1 --repeat 1
   )
   set_tests_properties(test_q5_arrow_session_hybrid_auto PROPERTIES
     SKIP_RETURN_CODE 77

@@ -19,6 +19,7 @@ struct Q5SessionSetupRecord {
   int repeat = 10;
   double dataset_load_ms = 0.0;
   Q5SessionSetup setup;
+  // Calibration and model selection time, included in setup.total_ms.
   double tune_ms = 0.0;
   double selected_cpu_ratio = 0.0;
   double predicted_cpu_ratio = 0.0;
@@ -30,7 +31,7 @@ struct Q5SessionSetupRecord {
   double gpu_calibration_ms = 0.0;
   double gpu_kernel_calibration_ms = 0.0;
   double cpu_rows_per_ms = 0.0;
-  double gpu_rows_per_ms = 0.0;
+  double gpu_kernel_rows_per_ms = 0.0;
   double gpu_fixed_ms = 0.0;
   int64_t selected_batch_boundary_rows = 0;
   double realized_cpu_ratio = 0.0;

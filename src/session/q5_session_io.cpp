@@ -54,7 +54,7 @@ nlohmann::json setup_json(const std::string& session_id,
     result["gpu_kernel_calibration_ms"] =
         record.gpu_kernel_calibration_ms;
     result["cpu_rows_per_ms"] = record.cpu_rows_per_ms;
-    result["gpu_rows_per_ms"] = record.gpu_rows_per_ms;
+    result["gpu_kernel_rows_per_ms"] = record.gpu_kernel_rows_per_ms;
     result["gpu_fixed_ms"] = record.gpu_fixed_ms;
     result["selected_batch_boundary_rows"] =
         record.selected_batch_boundary_rows;

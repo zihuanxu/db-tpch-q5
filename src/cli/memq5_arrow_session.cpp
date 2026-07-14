@@ -11,6 +11,7 @@
 
 #include <arrow/result.h>
 
+#include "common/nvtx_range.hpp"
 #include "common/timer.hpp"
 #include "engine/q5_params.hpp"
 #include "engine/q5_result.hpp"
@@ -256,7 +257,7 @@ class HybridResidentQ5SessionAdapter final : public ResidentQ5Session {
     record->gpu_kernel_calibration_ms =
         tuning.gpu_kernel_calibration_ms;
     record->cpu_rows_per_ms = tuning.cpu_rows_per_ms;
-    record->gpu_rows_per_ms = tuning.gpu_rows_per_ms;
+    record->gpu_kernel_rows_per_ms = tuning.gpu_kernel_rows_per_ms;
     record->gpu_fixed_ms = tuning.gpu_fixed_ms;
     record->selected_batch_boundary_rows =
         tuning.selected_batch_boundary_rows;
@@ -399,7 +400,11 @@ int main(int argc, char** argv) {
       request.is_warmup = request_index < options.warmup;
       request.selected_cpu_ratio = session->selected_cpu_ratio();
 
-      auto result = session->Execute();
+      auto result = [&]() {
+        memq5::NvtxRange capture_range(
+            request.is_warmup ? "warmup_request" : "measured_request");
+        return session->Execute();
+      }();
       if (!result.ok()) {
         request.status = "error";
         request.error_class = "ExecutionError";

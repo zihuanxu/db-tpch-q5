@@ -31,14 +31,14 @@ memq5::Q5Params Asia1994Params() {
   return params;
 }
 
-void assert_setup(const memq5::Q5SessionSetup& setup) {
+void assert_setup(const memq5::Q5SessionSetup& setup, int64_t gpu_rows) {
   assert(setup.plan_build_ms >= 0.0);
   assert(setup.host_staging_ms >= 0.0);
   assert(setup.allocation_ms >= 0.0);
   assert(setup.initial_h2d_ms >= 0.0);
   assert(setup.total_ms >= 0.0);
   assert(setup.resident_host_bytes > 0);
-  assert(setup.resident_gpu_bytes > 0);
+  assert((setup.resident_gpu_bytes > 0) == (gpu_rows > 0));
   assert(setup.resident_pinned_bytes == 0);
 }
 
@@ -70,7 +70,7 @@ std::unique_ptr<memq5::HybridQ5Session> MakeSessionAfterDatasetRelease(
       .ValueOrDie();
 }
 
-void assert_ratio_one_combines_cpu_host_bytes(
+void assert_ratio_one_uses_only_cpu_setup(
     const memq5::ArrowQ5Dataset& dataset, const memq5::Q5Params& params) {
   memq5::HybridOptions options;
   options.cpu_ratio = 1.0;
@@ -79,17 +79,11 @@ void assert_ratio_one_combines_cpu_host_bytes(
       memq5::HybridQ5Session::Make(dataset, params, options).ValueOrDie();
   auto cpu = memq5::ArrowCpuQ5Session::Make(dataset, params).ValueOrDie();
 
-  memq5::ArrowQ5Dataset empty_gpu_dataset = dataset;
-  empty_gpu_dataset.lineitem =
-      dataset.lineitem->Slice(dataset.lineitem->num_rows(), 0);
-  empty_gpu_dataset.tables["lineitem"] = empty_gpu_dataset.lineitem;
-  auto gpu = memq5::ArrowCudaQ5Session::Make(
-                 empty_gpu_dataset, params, memq5::ArrowCudaMemoryMode::kCopy)
-                 .ValueOrDie();
-
   assert(cpu->setup().resident_host_bytes > 0);
   assert(hybrid->setup().resident_host_bytes ==
-         cpu->setup().resident_host_bytes + gpu->setup().resident_host_bytes);
+         cpu->setup().resident_host_bytes);
+  assert(hybrid->setup().resident_gpu_bytes == 0);
+  assert(hybrid->setup().initial_h2d_ms == 0.0);
 }
 
 void assert_concurrent_execution_is_stable(
@@ -159,12 +153,12 @@ int main() {
     auto session =
         memq5::HybridQ5Session::Make(dataset, params, options).ValueOrDie();
     assert(session->cpu_ratio() == ratio);
-    assert_setup(session->setup());
+    const int64_t cpu_rows = std::llround(6.0 * ratio);
+    const int64_t gpu_rows = 6 - cpu_rows;
+    assert_setup(session->setup(), gpu_rows);
 
     const auto first = session->Execute().ValueOrDie();
     const auto second = session->Execute().ValueOrDie();
-    const int64_t cpu_rows = std::llround(6.0 * ratio);
-    const int64_t gpu_rows = 6 - cpu_rows;
     assert_request(first, cpu_rows, gpu_rows);
     assert_request(second, cpu_rows, gpu_rows);
     assert(memq5::result_hash_hex(first) == memq5::result_hash_hex(second));
@@ -185,7 +179,7 @@ int main() {
   assert_request(detached_session->Execute().ValueOrDie(), 3, 3);
   assert_request(detached_session->Execute().ValueOrDie(), 3, 3);
 
-  assert_ratio_one_combines_cpu_host_bytes(dataset, params);
+  assert_ratio_one_uses_only_cpu_setup(dataset, params);
   assert_concurrent_execution_is_stable(dataset, params);
 
   return 0;

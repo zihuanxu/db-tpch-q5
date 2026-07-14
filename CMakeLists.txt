@@ -80,6 +80,10 @@ if(MEMQ5_ENABLE_ARROW)
     src/cli/memq5_arrow_session.cpp
   )
   target_link_libraries(memq5_arrow_session PRIVATE memq5_arrow)
+  if(MEMQ5_ENABLE_NVTX)
+    target_compile_definitions(memq5_arrow_session PRIVATE MEMQ5_ENABLE_NVTX=1)
+    target_link_libraries(memq5_arrow_session PRIVATE CUDA::nvtx3)
+  endif()
 endif()
 
 add_executable(memq5

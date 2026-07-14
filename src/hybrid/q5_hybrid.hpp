@@ -27,11 +27,12 @@ struct HybridAutoTuning {
   double gpu_calibration_ms = 0.0;
   double gpu_kernel_calibration_ms = 0.0;
   double cpu_rows_per_ms = 0.0;
-  double gpu_rows_per_ms = 0.0;
+  double gpu_kernel_rows_per_ms = 0.0;
   double gpu_fixed_ms = 0.0;
   double predicted_cpu_ratio = 0.0;
   int64_t selected_batch_boundary_rows = 0;
   double realized_cpu_ratio = 0.0;
+  // Calibration and model selection time, included in session setup total.
   double tune_ms = 0.0;
 };
 
@@ -65,6 +66,10 @@ class HybridQ5Session {
   const double cpu_ratio_;
   const HybridAutoTuning auto_tuning_;
 };
+
+arrow::Status validate_hybrid_calibration_results(const Q5Result& cpu,
+                                                   const Q5Result& gpu,
+                                                   int64_t calibration_rows);
 
 arrow::Result<Q5Result> execute_q5_hybrid(
     const ArrowQ5Dataset& dataset, const Q5Params& params,
