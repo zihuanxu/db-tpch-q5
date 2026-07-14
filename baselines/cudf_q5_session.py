@@ -171,6 +171,7 @@ def _request_record(
             "selected_cpu_ratio": 0.0,
             "result_rows": 0,
             "result_hash": "",
+            "rows": [],
             "query_total_ms": 0.0,
             "input_lineitem_rows": 0,
             "matched_lineitem_rows": 0,
@@ -191,6 +192,10 @@ def _request_record(
         "selected_cpu_ratio": 0.0,
         "result_rows": len(result.rows),
         "result_hash": result_hash(result.rows),
+        "rows": [
+            {"nation": row.nation, "revenue_1e4": row.revenue_1e4}
+            for row in result.rows
+        ],
         "query_total_ms": result.query_ms,
         "input_lineitem_rows": result.input_lineitem_rows,
         "matched_lineitem_rows": result.matched_lineitem_rows,

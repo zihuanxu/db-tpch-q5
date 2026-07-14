@@ -85,6 +85,11 @@ def test_cudf_resident_session_converts_once_and_emits_stable_request_hashes(
     assert [record["request_index"] for record in records[1:]] == [0, 1, 2]
     assert [record["is_warmup"] for record in records[1:]] == [True, False, False]
     assert len({record["result_hash"] for record in records[1:]}) == 1
+    expected_rows = [
+        {"nation": "JAPAN", "revenue_1e4": 1900000},
+        {"nation": "INDIA", "revenue_1e4": 900000},
+    ]
+    assert [record["rows"] for record in records[1:]] == [expected_rows] * 3
 
 
 def test_cudf_resident_session_execute_reports_only_request_timing() -> None:
