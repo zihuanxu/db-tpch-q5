@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -170,7 +171,12 @@ def _require_post_stage_free_space(directory: Path, minimum_free_bytes: int, sta
     return free_bytes
 
 
-def _raw_manifest(raw_dir: Path, command: list[str]) -> None:
+def _raw_manifest(
+    raw_dir: Path,
+    command: list[str],
+    cwd: Path,
+    environment_overrides: dict[str, str],
+) -> None:
     tables = {}
     for table in TABLES:
         path = raw_dir / f"{table}.tbl"
@@ -179,7 +185,13 @@ def _raw_manifest(raw_dir: Path, command: list[str]) -> None:
         tables[path.name] = {"bytes": path.stat().st_size, "sha256": _sha256(path)}
     (raw_dir / RAW_MANIFEST).write_text(
         json.dumps(
-            {"scale_factor": SCALE_FACTOR, "command": command, "tables": tables},
+            {
+                "scale_factor": SCALE_FACTOR,
+                "command": command,
+                "cwd": str(cwd),
+                "environment_overrides": environment_overrides,
+                "tables": tables,
+            },
             indent=2,
             sort_keys=True,
         )
@@ -188,15 +200,28 @@ def _raw_manifest(raw_dir: Path, command: list[str]) -> None:
     )
 
 
-def _run_stage(name: str, command: list[str], cwd: Path, output_dir: Path) -> dict[str, object]:
+def _run_stage(
+    name: str,
+    command: list[str],
+    cwd: Path,
+    output_dir: Path,
+    environment_overrides: dict[str, str] | None = None,
+) -> dict[str, object]:
+    cwd = cwd.resolve()
     cwd.mkdir(parents=True, exist_ok=True)
+    environment = None
+    if environment_overrides is not None:
+        environment = os.environ.copy()
+        environment.update(environment_overrides)
     started = time.monotonic()
-    completed = subprocess.run(command, cwd=cwd, check=False)
+    completed = subprocess.run(command, cwd=cwd, check=False, env=environment)
     elapsed_seconds = time.monotonic() - started
     record = {
         "name": name,
         "status": "complete" if completed.returncode == 0 else "failed",
         "command": command,
+        "cwd": str(cwd),
+        "environment_overrides": dict(environment_overrides or {}),
         "return_code": completed.returncode,
         "elapsed_seconds": elapsed_seconds,
         "output_bytes": _directory_bytes(output_dir) if output_dir.exists() else 0,
@@ -209,12 +234,18 @@ def _run_stage(name: str, command: list[str], cwd: Path, output_dir: Path) -> di
 
 def prepare_sf10(args: argparse.Namespace) -> dict[str, object]:
     paths = Sf10Paths(Path(args.raw_dir), Path(args.q5_dir), Path(args.arrow_dir))
+    dbgen = Path(args.dbgen).resolve()
+    raw_cwd = dbgen.parent
+    raw_environment = {
+        "DSS_CONFIG": str(raw_cwd),
+        "DSS_PATH": str(paths.raw.resolve()),
+    }
     minimum_free_bytes = int(args.minimum_free_gib * 1024**3)
     result = preflight(paths, minimum_free_bytes)
     stages: list[dict[str, object]] = []
 
     commands = {
-        "raw": [str(Path(args.dbgen).resolve()), "-s", SCALE_FACTOR, "-f"],
+        "raw": [str(dbgen), "-s", SCALE_FACTOR, "-f"],
         "q5": [
             sys.executable,
             "scripts/prepare_tpch_q5_data.py",
@@ -250,17 +281,30 @@ def prepare_sf10(args: argparse.Namespace) -> dict[str, object]:
         if state == "complete":
             continue
         if args.dry_run:
-            stages.append({"name": name, "status": "dry-run", "command": commands[name]})
+            stage = {"name": name, "status": "dry-run", "command": commands[name]}
+            if name == "raw":
+                stage["cwd"] = str(raw_cwd)
+                stage["environment_overrides"] = raw_environment
+            stages.append(stage)
             continue
-        cwd = paths.raw if name == "raw" else Path.cwd()
-        record = _run_stage(name, commands[name], cwd, output_dir)
+        cwd = raw_cwd if name == "raw" else Path.cwd()
+        environment_overrides = raw_environment if name == "raw" else None
         if name == "raw":
-            _raw_manifest(paths.raw, commands[name])
+            output_dir.mkdir(parents=True, exist_ok=True)
+        record = _run_stage(
+            name,
+            commands[name],
+            cwd,
+            output_dir,
+            environment_overrides,
+        )
+        if name == "raw":
+            _raw_manifest(paths.raw, commands[name], raw_cwd, raw_environment)
             record["output_bytes"] = _directory_bytes(paths.raw)
         if stage_state(paths)[name] != "complete":
             raise ValueError(f"{name} stage completed without a valid manifest")
         record["free_bytes"] = _require_post_stage_free_space(
-            paths.raw.parent, minimum_free_bytes, name
+            output_dir, minimum_free_bytes, name
         )
         stages.append(record)
 
@@ -284,7 +328,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     try:
         summary = prepare_sf10(parse_args())
-    except (RuntimeError, ValueError) as exc:
+    except (OSError, RuntimeError, ValueError) as exc:
         try:
             failure = json.loads(str(exc))
         except json.JSONDecodeError:
