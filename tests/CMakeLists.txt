@@ -41,6 +41,16 @@ if(MEMQ5_ENABLE_ARROW)
   )
   add_test(NAME test_q5_arrow_cpu COMMAND test_q5_arrow_cpu)
 
+  add_executable(test_q5_cpu_session test_q5_cpu_session.cpp)
+  target_link_libraries(test_q5_cpu_session PRIVATE memq5_arrow)
+  target_compile_definitions(test_q5_cpu_session PRIVATE
+    MEMQ5_ARROW_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow"
+  )
+  target_compile_options(test_q5_cpu_session PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-UNDEBUG>
+  )
+  add_test(NAME test_q5_cpu_session COMMAND test_q5_cpu_session)
+
   add_executable(test_q5_acero test_q5_acero.cpp)
   target_link_libraries(test_q5_acero PRIVATE memq5_arrow)
   target_compile_definitions(test_q5_acero PRIVATE

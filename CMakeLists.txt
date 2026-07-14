@@ -35,7 +35,9 @@ if(MEMQ5_ENABLE_ARROW)
     src/hybrid/batch_partition.cpp
     src/cpu/q5_acero.cpp
     src/cpu/q5_arrow_cpu.cpp
+    src/cpu/q5_arrow_scan.cpp
     src/io/arrow_q5_loader.cpp
+    src/session/q5_cpu_session.cpp
   )
 
   target_include_directories(memq5_arrow PUBLIC
