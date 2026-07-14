@@ -3,16 +3,20 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from scripts.v7_profiler_bundle import audit, finalize, sha256_file
+from scripts import v7_profiler_bundle
+from scripts.v7_profiler_bundle import artifact_checksums, audit, finalize, sha256_file
 
 
 SESSION_COMMIT = "a" * 40
 GPU_UUID = "GPU-test-uuid"
 ORACLE_HASH = "542abf4003633c7c"
+ORACLE_HASHES = {"1": ORACLE_HASH, "10": "b1351a421ba8dcfd"}
 SELECTED_METRICS = {
     "duration": "gpu__time_duration.sum",
     "dram_read_bytes": "dram__bytes_read.sum",
@@ -35,6 +39,7 @@ ENGINE_RANGES = {
     "hybrid-auto": {"request", "cpu_scan", "q5_kernel", "merge"},
 }
 NSYS_REPORTS = ["cuda_api_sum", "cuda_gpu_kern_sum", "cuda_gpu_mem_time_sum", "nvtx_sum"]
+NSYS_REPORT_MAGIC = b"NVIDIA Tegra Profiler Report "
 NCU_REPORT = """\
 "ID","Process ID","Kernel Name","Context","Stream","Metric Name","Metric Value"
 "1","42","void q5_kernel()","1","7","gpu__time_duration.sum","1250000"
@@ -69,6 +74,16 @@ def _ratio(engine: str, cpu_ratio: float | None) -> tuple[float, float]:
     return cpu, 1.0 - cpu
 
 
+def _option(command: list[str], name: str) -> str:
+    position = command.index(name)
+    return command[position + 1]
+
+
+@pytest.fixture(autouse=True)
+def _dependency_free_nsys_replay(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(v7_profiler_bundle, "_find_nsys", lambda: None, raising=False)
+
+
 class BundleFixture:
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -77,6 +92,18 @@ class BundleFixture:
         self.evidence = root / "evidence"
         for directory in (self.captures, self.datasets, self.evidence):
             directory.mkdir(parents=True, exist_ok=True)
+        executable = root / "bin/memq5_arrow_session"
+        executable.parent.mkdir(parents=True, exist_ok=True)
+        executable.write_bytes(b"\x7fELF\x02\x01fixture memq5_arrow_session\n")
+        executable.chmod(0o755)
+        self.execution = {
+            "cwd": str(root.resolve()),
+            "executable": {
+                "path": "bin/memq5_arrow_session",
+                "sha256": sha256_file(executable),
+                "build_commit": SESSION_COMMIT,
+            },
+        }
         self.expected: list[dict[str, object]] = []
         self.profiles: list[dict[str, object]] = []
 
@@ -84,14 +111,32 @@ class BundleFixture:
         dataset_path = self.datasets / scale / "manifest.json"
         evidence_path = self.evidence / scale / "manifest.json"
         if not dataset_path.exists():
-            _write_json(dataset_path, {"schema_version": 1, "scale_factor": scale})
+            _write_json(
+                dataset_path,
+                {
+                    "format_version": 1,
+                    "scale_factor": scale,
+                    "batch_rows": 262144,
+                    "tables": {"lineitem": {"file": "lineitem.arrow", "rows": 1}},
+                },
+            )
         if not evidence_path.exists():
             _write_json(
                 evidence_path,
                 {
                     "manifest_version": 1,
-                    "scale_factor": scale,
-                    "dataset_manifest_sha256": sha256_file(dataset_path),
+                    "status": "complete",
+                    "git": {"commit": SESSION_COMMIT},
+                    "dataset": {
+                        "path": str(dataset_path.parent.resolve()),
+                        "scale_factor": scale,
+                        "manifest_sha256": sha256_file(dataset_path),
+                    },
+                    "correctness": {
+                        "ok": True,
+                        "expected_hash": ORACLE_HASHES[scale],
+                        "observed_hashes": [ORACLE_HASHES[scale]],
+                    },
                 },
             )
         return (
@@ -120,7 +165,7 @@ class BundleFixture:
         dataset_manifest, evidence_manifest = self._manifests(scale)
         dataset_dir = self.root / Path(dataset_manifest["path"]).parent
         command = [
-            "build/memq5_arrow_session",
+            "bin/memq5_arrow_session",
             "--dataset",
             str(dataset_dir),
             "--engine",
@@ -130,6 +175,12 @@ class BundleFixture:
             "--requests",
             "1",
         ]
+        command.extend(
+            ["--hybrid-selection", "auto" if engine == "hybrid-auto" else "fixed"]
+            if engine.startswith("hybrid-")
+            else []
+        )
+        oracle_hash = ORACLE_HASHES[scale]
         identity: dict[str, object] = {
             "scale_factor": scale,
             "engine": engine,
@@ -138,8 +189,10 @@ class BundleFixture:
             "session_commit": SESSION_COMMIT,
             "dataset_manifest": dataset_manifest,
             "evidence_manifest": evidence_manifest,
-            "oracle_hash": ORACLE_HASH,
+            "oracle_hash": oracle_hash,
+            "result_hash": oracle_hash,
             "gpu_uuid": GPU_UUID,
+            "execution": self.execution,
         }
         nsys_dir = self.captures / capture_id / "nsys"
         self._write_nsys(nsys_dir, command, identity, ranges or ENGINE_RANGES[engine])
@@ -157,8 +210,10 @@ class BundleFixture:
             "session_commit": SESSION_COMMIT,
             "dataset_manifest": dataset_manifest,
             "evidence_manifest": evidence_manifest,
-            "oracle_hash": ORACLE_HASH,
+            "oracle_hash": oracle_hash,
+            "result_hash": oracle_hash,
             "gpu_uuid": GPU_UUID,
+            "execution": self.execution,
             "command": command,
             "nsys": {
                 "metadata_path": (nsys_dir / "metadata.json").relative_to(self.root).as_posix()
@@ -181,7 +236,9 @@ class BundleFixture:
     ) -> None:
         directory.mkdir(parents=True)
         raw_report = directory / "profile.nsys-rep"
-        raw_report.write_bytes(b"nsys raw report")
+        raw_report.write_bytes(
+            NSYS_REPORT_MAGIC + b"2024@5@1@fixturev0.\n" + b"\x00" * 8192
+        )
         (directory / "stats_cuda_api_sum.csv").write_text(
             '"Total Time (ns)","Name"\n"100","cudaLaunchKernel"\n', encoding="utf-8"
         )
@@ -197,8 +254,39 @@ class BundleFixture:
         (directory / "stats_nvtx_sum.csv").write_text(
             f'"Total Time (ns)","Range"\n{nvtx_rows}', encoding="utf-8"
         )
-        (directory / "profile.stdout.log").write_text("", encoding="utf-8")
+        setup = {
+            "record_type": "session_setup",
+            "session_id": "00000000-0000-4000-8000-000000000001",
+            "lifecycle": "resident",
+            "status": "ok",
+            "engine": _option(command, "--engine"),
+            "dataset": _option(command, "--dataset"),
+            "warmup": 0,
+            "repeat": 1,
+            "selected_cpu_ratio": identity["cpu_ratio"],
+        }
+        request = {
+            "record_type": "request",
+            "session_id": setup["session_id"],
+            "lifecycle": "resident",
+            "status": "ok",
+            "request_index": 0,
+            "is_warmup": False,
+            "selected_cpu_ratio": identity["cpu_ratio"],
+            "result_hash": identity["result_hash"],
+        }
+        (directory / "profile.stdout.log").write_text(
+            json.dumps(setup, sort_keys=True)
+            + "\n"
+            + json.dumps(request, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
         (directory / "profile.stderr.log").write_text("", encoding="utf-8")
+        (directory / "stats.stdout.log").write_text(
+            "Generated Nsight Systems CSV reports\n", encoding="utf-8"
+        )
+        (directory / "stats.stderr.log").write_text("", encoding="utf-8")
         profile_command = [
             "nsys",
             "profile",
@@ -226,7 +314,14 @@ class BundleFixture:
             "profile_command": profile_command,
             "stats_commands": [stats_command],
             "return_code": 0,
-            "stats": [{"return_code": 0}],
+            "stats": [
+                {
+                    "command": stats_command,
+                    "return_code": 0,
+                    "stdout": "Generated Nsight Systems CSV reports\n",
+                    "stderr": "",
+                }
+            ],
             "tool_versions": {"nsys": "NVIDIA Nsight Systems 2026.1"},
             "tool_version_provenance": {
                 "nsys": {
@@ -264,6 +359,7 @@ class BundleFixture:
             "--devices",
             "0",
         ]
+        query_stdout = "\n".join(sorted(SELECTED_METRICS.values())) + "\n"
         profile_command = [
             "ncu",
             "--csv",
@@ -285,16 +381,33 @@ class BundleFixture:
             "metadata": identity,
             "device_index": 0,
             "query_command": query_command,
+            "metric_query": {
+                "command": query_command,
+                "return_code": 0,
+                "stdout": query_stdout,
+                "stderr": "",
+            },
             "supported_metrics": sorted(SELECTED_METRICS.values()),
             "selected_metrics": SELECTED_METRICS,
             "profile_command": profile_command,
             "tool_versions": {"ncu": "NVIDIA Nsight Compute 2026.1"},
+            "tool_version_provenance": {
+                "ncu": {
+                    "command": ["ncu", "--version"],
+                    "return_code": 0,
+                    "stdout": "NVIDIA Nsight Compute 2026.1\n",
+                    "stderr": "",
+                }
+            },
             "gpu": {
                 "status": "ok",
                 "requested_index": 0,
                 "index": 0,
                 "uuid": GPU_UUID,
                 "driver_version": "555.1",
+                "return_code": 0,
+                "stdout": f"0, {GPU_UUID}, 555.1\n",
+                "stderr": "",
                 "query_command": [
                     "nvidia-smi",
                     "--id=0",
@@ -335,6 +448,7 @@ class BundleFixture:
         profiles: list[dict[str, object]] | None = None,
         expected: list[dict[str, object]] | None = None,
         hybrid_auto_status: str | None = None,
+        roots: dict[str, str] | None = None,
     ) -> None:
         expected_profiles = self.expected if expected is None else expected
         if hybrid_auto_status is None:
@@ -346,14 +460,22 @@ class BundleFixture:
         _write_json(
             self.root / "profiles.json",
             {
-                "schema_version": 2,
+                "schema_version": 3,
                 "status": "complete",
-                "roots": {
+                "roots": roots
+                or {
                     "captures": "captures",
                     "datasets": "datasets",
                     "evidence": "evidence",
                 },
-                "hybrid_auto": {"status": hybrid_auto_status},
+                "hybrid_auto": {
+                    "status": hybrid_auto_status,
+                    "reason": (
+                        "canonical hybrid-auto profiles captured"
+                        if hybrid_auto_status == "enabled"
+                        else "trusted profiler policy permits omission"
+                    ),
+                },
                 "expected_profiles": expected_profiles,
                 "profiles": self.profiles if profiles is None else profiles,
             },
@@ -364,20 +486,89 @@ def _args(root: Path) -> argparse.Namespace:
     return argparse.Namespace(directory=root, index=None)
 
 
-def _single_bundle(root: Path, *, engine: str = "copy", ncu_status: str = "ok") -> BundleFixture:
+def _canonical_specs(*, include_auto: bool = False) -> list[tuple[str, str]]:
+    specs = [
+        (scale, engine)
+        for scale in ("1", "10")
+        for engine in ("copy", "managed", "mapped", "hybrid-fixed")
+    ]
+    if include_auto:
+        specs.extend((scale, "hybrid-auto") for scale in ("1", "10"))
+    return specs
+
+
+def _single_bundle(
+    root: Path,
+    *,
+    engine: str = "copy",
+    ncu_status: str = "ok",
+    ranges: set[str] | None = None,
+) -> BundleFixture:
     bundle = BundleFixture(root)
-    bundle.add_profile("1", engine, ncu_status=ncu_status)
+    specs = _canonical_specs(include_auto=engine == "hybrid-auto")
+    target = ("1", engine)
+    specs.remove(target)
+    for scale, current_engine in [target, *specs]:
+        bundle.add_profile(
+            scale,
+            current_engine,
+            ncu_status=ncu_status if (scale, current_engine) == target else "ok",
+            ranges=ranges if (scale, current_engine) == target else None,
+        )
     bundle.write_index()
     return bundle
 
 
 def _two_by_five(root: Path) -> BundleFixture:
     bundle = BundleFixture(root)
-    for scale in ("1", "10"):
-        for engine in ENGINE_COMMANDS:
-            bundle.add_profile(scale, engine)
+    for scale, engine in _canonical_specs(include_auto=True):
+        bundle.add_profile(scale, engine)
     bundle.write_index()
     return bundle
+
+
+def _refresh_metadata_files(metadata_path: Path) -> dict[str, object]:
+    metadata = _read_json(metadata_path)
+    metadata["files"] = _files(metadata_path.parent)
+    _write_json(metadata_path, metadata)
+    return metadata
+
+
+def _set_profile_identity(
+    root: Path, profile: dict[str, object], field: str, value: object
+) -> None:
+    profile[field] = copy.deepcopy(value)
+    for tool in ("nsys", "ncu"):
+        config = profile[tool]
+        assert isinstance(config, dict)
+        metadata_path = root / str(config["metadata_path"])
+        metadata = _read_json(metadata_path)
+        identity = metadata["metadata"]
+        assert isinstance(identity, dict)
+        identity[field] = copy.deepcopy(value)
+        _write_json(metadata_path, metadata)
+
+
+def _refresh_manifest_reference(
+    root: Path, profile: dict[str, object], field: str
+) -> None:
+    reference = profile[field]
+    assert isinstance(reference, dict)
+    path = root / str(reference["path"])
+    _set_profile_identity(
+        root,
+        profile,
+        field,
+        {"path": path.relative_to(root).as_posix(), "sha256": sha256_file(path)},
+    )
+
+
+def _rewrite_control_hashes(root: Path, manifest: dict[str, object]) -> None:
+    manifest["artifacts"] = artifact_checksums(root)
+    _write_json(root / "manifest.json", manifest)
+    (root / "manifest.sha256").write_text(
+        f"{sha256_file(root / 'manifest.json')}  manifest.json\n", encoding="ascii"
+    )
 
 
 def test_finalize_and_audit_freeze_exact_two_by_five_coverage(tmp_path: Path) -> None:
@@ -390,12 +581,23 @@ def test_finalize_and_audit_freeze_exact_two_by_five_coverage(tmp_path: Path) ->
     assert manifest["status"] == "complete"
     assert manifest["profile_count"] == 10
     assert len(manifest["expected_profiles"]) == 10
+    assert manifest["coverage_policy"] == {
+        "fixed_matrix": "SF1/SF10 x copy/managed/mapped/hybrid-fixed",
+        "hybrid_fixed_cpu_ratio": 0.5,
+        "hybrid_auto": "optional",
+    }
     artifacts = manifest["artifacts"]
     assert isinstance(artifacts, dict)
     assert "datasets/1/manifest.json" in artifacts
     assert "evidence/10/manifest.json" in artifacts
     first = manifest["profiles"][0]
-    assert first["nsys"]["derivation"]["status"] == "not_cryptographically_proven"
+    assert first["nsys"]["derivation"]["status"] == "residual"
+    assert first["nsys"]["derivation"]["replay_validation"] == "unavailable"
+    assert {item["id"] for item in manifest["residuals"]} >= {
+        "nsys-export-linkage",
+        "executable-build-commit",
+        "concurrent-bundle-root-replacement",
+    }
 
 
 def test_complete_coverage_must_equal_the_explicit_matrix(tmp_path: Path) -> None:
@@ -403,6 +605,46 @@ def test_complete_coverage_must_equal_the_explicit_matrix(tmp_path: Path) -> Non
     bundle.write_index(profiles=bundle.profiles[:-1])
 
     with pytest.raises(ValueError, match="coverage mismatch"):
+        finalize(_args(tmp_path))
+
+
+def test_self_declared_expected_profiles_cannot_shrink_canonical_fixed_matrix(
+    tmp_path: Path,
+) -> None:
+    bundle = _single_bundle(tmp_path)
+    bundle.write_index(profiles=bundle.profiles[:1], expected=bundle.expected[:1])
+
+    with pytest.raises(ValueError, match="canonical profiler coverage mismatch"):
+        finalize(_args(tmp_path))
+
+
+def test_enabled_hybrid_auto_requires_both_canonical_scales(tmp_path: Path) -> None:
+    bundle = BundleFixture(tmp_path)
+    for scale, engine in _canonical_specs():
+        bundle.add_profile(scale, engine)
+    bundle.add_profile("1", "hybrid-auto")
+    bundle.write_index(hybrid_auto_status="enabled")
+
+    with pytest.raises(ValueError, match="hybrid-auto coverage mismatch"):
+        finalize(_args(tmp_path))
+
+
+def test_fixed_matrix_rejects_noncanonical_hybrid_ratio(tmp_path: Path) -> None:
+    bundle = _single_bundle(tmp_path, engine="hybrid-fixed")
+    profile = bundle.profiles[0]
+    profile["cpu_ratio"] = 0.25
+    profile["gpu_ratio"] = 0.75
+    bundle.expected[0] = {
+        "scale_factor": "1",
+        "engine": "hybrid-fixed",
+        "cpu_ratio": 0.25,
+        "gpu_ratio": 0.75,
+    }
+    bundle.write_index()
+
+    with pytest.raises(
+        ValueError, match="(canonical profiler coverage mismatch|invalid ratio for hybrid-fixed)"
+    ):
         finalize(_args(tmp_path))
 
 
@@ -418,6 +660,16 @@ def test_hybrid_auto_can_be_explicitly_disabled_or_unavailable(
 
     assert finalize(_args(tmp_path)) == 0
     assert audit(_args(tmp_path)) == 0
+
+
+def test_hybrid_auto_omission_requires_an_explicit_policy_reason(tmp_path: Path) -> None:
+    bundle = _single_bundle(tmp_path)
+    index = _read_json(tmp_path / "profiles.json")
+    index["hybrid_auto"] = {"status": "disabled", "reason": ""}
+    _write_json(tmp_path / "profiles.json", index)
+
+    with pytest.raises(ValueError, match="hybrid_auto.reason"):
+        finalize(_args(tmp_path))
 
 
 def test_duplicate_logical_tuple_is_rejected(tmp_path: Path) -> None:
@@ -472,7 +724,9 @@ def test_capture_reuse_rejects_lexically_different_equivalent_paths(tmp_path: Pa
             {"path": "evidence/1/manifest.json", "sha256": "0" * 64},
         ),
         ("oracle_hash", "0000000000000000"),
+        ("result_hash", "0000000000000000"),
         ("gpu_uuid", "GPU-other"),
+        ("execution", {}),
     ],
 )
 @pytest.mark.parametrize("tool", ["nsys", "ncu"])
@@ -488,6 +742,155 @@ def test_collector_metadata_must_repeat_frozen_identity(
     _write_json(metadata_path, metadata)
 
     with pytest.raises(ValueError, match="collector metadata identity mismatch"):
+        finalize(_args(tmp_path))
+
+
+@pytest.mark.parametrize("field", ["oracle_hash", "result_hash", "session_commit"])
+def test_profile_identity_must_match_evidence_and_app_result(
+    tmp_path: Path, field: str
+) -> None:
+    bundle = _single_bundle(tmp_path)
+    profile = bundle.profiles[0]
+    replacement = "b" * 40 if field == "session_commit" else "0000000000000000"
+    _set_profile_identity(tmp_path, profile, field, replacement)
+    bundle.write_index()
+
+    with pytest.raises(ValueError, match="(evidence manifest|app result|session commit|oracle)"):
+        finalize(_args(tmp_path))
+
+
+@pytest.mark.parametrize("manifest_kind", ["dataset_scale", "evidence_scale", "evidence_commit"])
+def test_real_manifest_schema_is_bound_to_profile_identity(
+    tmp_path: Path, manifest_kind: str
+) -> None:
+    bundle = _single_bundle(tmp_path)
+    profile = bundle.profiles[0]
+    dataset_ref = profile["dataset_manifest"]
+    evidence_ref = profile["evidence_manifest"]
+    assert isinstance(dataset_ref, dict) and isinstance(evidence_ref, dict)
+    dataset_path = tmp_path / str(dataset_ref["path"])
+    evidence_path = tmp_path / str(evidence_ref["path"])
+    if manifest_kind == "dataset_scale":
+        dataset = _read_json(dataset_path)
+        dataset["scale_factor"] = "10"
+        _write_json(dataset_path, dataset)
+        evidence = _read_json(evidence_path)
+        evidence_dataset = evidence["dataset"]
+        assert isinstance(evidence_dataset, dict)
+        evidence_dataset["manifest_sha256"] = sha256_file(dataset_path)
+        _write_json(evidence_path, evidence)
+        _refresh_manifest_reference(tmp_path, profile, "dataset_manifest")
+    else:
+        evidence = _read_json(evidence_path)
+        if manifest_kind == "evidence_scale":
+            evidence_dataset = evidence["dataset"]
+            assert isinstance(evidence_dataset, dict)
+            evidence_dataset["scale_factor"] = "10"
+        else:
+            git = evidence["git"]
+            assert isinstance(git, dict)
+            git["commit"] = "b" * 40
+        _write_json(evidence_path, evidence)
+    _refresh_manifest_reference(tmp_path, profile, "evidence_manifest")
+    bundle.write_index()
+
+    with pytest.raises(ValueError, match="(dataset|evidence).*(scale|commit)"):
+        finalize(_args(tmp_path))
+
+
+@pytest.mark.parametrize("field", ["engine", "dataset", "selected_cpu_ratio"])
+def test_app_stdout_jsonl_is_bound_to_command_and_identity(tmp_path: Path, field: str) -> None:
+    bundle = _single_bundle(tmp_path)
+    profile = bundle.profiles[0]
+    config = profile["nsys"]
+    assert isinstance(config, dict)
+    metadata_path = tmp_path / str(config["metadata_path"])
+    stdout_path = metadata_path.parent / "profile.stdout.log"
+    records = [json.loads(line) for line in stdout_path.read_text(encoding="utf-8").splitlines()]
+    if field == "engine":
+        records[0][field] = "gpu-mapped"
+    elif field == "dataset":
+        records[0][field] = str(tmp_path / "datasets/10")
+    else:
+        records[0][field] = 0.25
+        records[1][field] = 0.25
+    stdout_path.write_text(
+        "".join(json.dumps(record, sort_keys=True) + "\n" for record in records),
+        encoding="utf-8",
+    )
+    _refresh_metadata_files(metadata_path)
+
+    with pytest.raises(ValueError, match="app stdout"):
+        finalize(_args(tmp_path))
+
+
+def test_app_stdout_result_hash_cannot_be_replaced(tmp_path: Path) -> None:
+    bundle = _single_bundle(tmp_path)
+    profile = bundle.profiles[0]
+    config = profile["nsys"]
+    assert isinstance(config, dict)
+    metadata_path = tmp_path / str(config["metadata_path"])
+    stdout_path = metadata_path.parent / "profile.stdout.log"
+    records = [json.loads(line) for line in stdout_path.read_text(encoding="utf-8").splitlines()]
+    records[1]["result_hash"] = "0000000000000000"
+    stdout_path.write_text(
+        "".join(json.dumps(record, sort_keys=True) + "\n" for record in records),
+        encoding="utf-8",
+    )
+    _refresh_metadata_files(metadata_path)
+
+    with pytest.raises(ValueError, match="app result_hash"):
+        finalize(_args(tmp_path))
+
+
+@pytest.mark.parametrize("attack", ["sha256", "build_commit", "cwd"])
+def test_execution_provenance_is_verified_against_real_executable(
+    tmp_path: Path, attack: str
+) -> None:
+    bundle = _single_bundle(tmp_path)
+    profile = bundle.profiles[0]
+    execution = copy.deepcopy(profile["execution"])
+    assert isinstance(execution, dict)
+    executable = execution["executable"]
+    assert isinstance(executable, dict)
+    if attack == "sha256":
+        executable["sha256"] = "0" * 64
+    elif attack == "build_commit":
+        executable["build_commit"] = "b" * 40
+    else:
+        execution["cwd"] = str(tmp_path.parent.resolve())
+    _set_profile_identity(tmp_path, profile, "execution", execution)
+    bundle.write_index()
+
+    with pytest.raises(ValueError, match="(executable|build commit|working directory)"):
+        finalize(_args(tmp_path))
+
+
+def test_unrelated_executable_cannot_be_relabelled_with_valid_hash(tmp_path: Path) -> None:
+    bundle = _single_bundle(tmp_path)
+    profile = bundle.profiles[0]
+    old_command = list(profile["command"])
+    unrelated = Path("/usr/bin/true")
+    new_command = [str(unrelated), *old_command[1:]]
+    profile["command"] = new_command
+    execution = copy.deepcopy(profile["execution"])
+    assert isinstance(execution, dict)
+    executable = execution["executable"]
+    assert isinstance(executable, dict)
+    executable.update({"path": str(unrelated), "sha256": sha256_file(unrelated)})
+    _set_profile_identity(tmp_path, profile, "execution", execution)
+    for tool in ("nsys", "ncu"):
+        config = profile[tool]
+        assert isinstance(config, dict)
+        metadata_path = tmp_path / str(config["metadata_path"])
+        metadata = _read_json(metadata_path)
+        profile_command = metadata["profile_command"]
+        assert isinstance(profile_command, list)
+        metadata["profile_command"] = [*profile_command[: -len(old_command)], *new_command]
+        _write_json(metadata_path, metadata)
+    bundle.write_index()
+
+    with pytest.raises(ValueError, match="memq5_arrow_session executable"):
         finalize(_args(tmp_path))
 
 
@@ -518,6 +921,48 @@ def test_profile_paths_must_stay_within_declared_roots(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="outside declared datasets root"):
         finalize(_args(tmp_path))
+
+
+@pytest.mark.parametrize(
+    "roots",
+    [
+        {"captures": ".", "datasets": ".", "evidence": "."},
+        {"captures": "captures", "datasets": "captures", "evidence": "evidence"},
+    ],
+)
+def test_declared_roots_are_fixed_and_nonoverlapping(
+    tmp_path: Path, roots: dict[str, str]
+) -> None:
+    bundle = _single_bundle(tmp_path)
+    bundle.write_index(roots=roots)
+
+    with pytest.raises(ValueError, match="roots must be exactly"):
+        finalize(_args(tmp_path))
+
+
+def test_audit_requires_the_canonical_profiles_index(tmp_path: Path) -> None:
+    _single_bundle(tmp_path)
+    assert finalize(_args(tmp_path)) == 0
+    alternate = tmp_path / "alternate-profiles.json"
+    alternate.write_bytes((tmp_path / "profiles.json").read_bytes())
+    manifest = _read_json(tmp_path / "manifest.json")
+    manifest["source_index"] = {
+        "path": alternate.name,
+        "sha256": sha256_file(alternate),
+    }
+    _rewrite_control_hashes(tmp_path, manifest)
+
+    assert audit(_args(tmp_path)) == 1
+
+
+def test_control_io_uses_dirfd_nofollow_static_protection() -> None:
+    source = Path(v7_profiler_bundle.__file__).read_text(encoding="utf-8")
+
+    assert hasattr(os, "O_NOFOLLOW")
+    assert "dir_fd=" in source
+    assert "src_dir_fd=" in source
+    assert "dst_dir_fd=" in source
+    assert "os.O_NOFOLLOW" in source or 'getattr(os, "O_NOFOLLOW"' in source
 
 
 @pytest.mark.parametrize(
@@ -610,6 +1055,79 @@ def test_nsys_collector_command_options_are_validated(tmp_path: Path) -> None:
         finalize(_args(tmp_path))
 
 
+def test_nsys_rejects_text_placeholder_as_raw_report(tmp_path: Path) -> None:
+    bundle = _single_bundle(tmp_path)
+    profile = bundle.profiles[0]
+    config = profile["nsys"]
+    assert isinstance(config, dict)
+    metadata_path = tmp_path / str(config["metadata_path"])
+    raw_report = metadata_path.parent / "profile.nsys-rep"
+    raw_report.write_bytes(b"nsys raw report\n" * 1024)
+    _refresh_metadata_files(metadata_path)
+
+    with pytest.raises(ValueError, match="Nsight Systems raw report signature"):
+        finalize(_args(tmp_path))
+
+
+def test_nsys_kernel_export_must_contain_q5_kernel(tmp_path: Path) -> None:
+    bundle = _single_bundle(tmp_path)
+    profile = bundle.profiles[0]
+    config = profile["nsys"]
+    assert isinstance(config, dict)
+    metadata_path = tmp_path / str(config["metadata_path"])
+    kernel_csv = metadata_path.parent / "stats_cuda_gpu_kern_sum.csv"
+    kernel_csv.write_text(
+        '"Total Time (ns)","Operation"\n"1250","void unrelated_kernel()"\n',
+        encoding="utf-8",
+    )
+    _refresh_metadata_files(metadata_path)
+
+    with pytest.raises(ValueError, match="q5_kernel"):
+        finalize(_args(tmp_path))
+
+
+def test_nsys_stats_success_requires_exact_command_and_output_provenance(
+    tmp_path: Path,
+) -> None:
+    bundle = _single_bundle(tmp_path)
+    profile = bundle.profiles[0]
+    config = profile["nsys"]
+    assert isinstance(config, dict)
+    metadata_path = tmp_path / str(config["metadata_path"])
+    metadata = _read_json(metadata_path)
+    stats = metadata["stats"]
+    assert isinstance(stats, list) and isinstance(stats[0], dict)
+    stats[0]["command"] = ["nsys", "stats", "unrelated.nsys-rep"]
+    _write_json(metadata_path, metadata)
+
+    with pytest.raises(ValueError, match="stats.*provenance"):
+        finalize(_args(tmp_path))
+
+
+def test_nsys_reexport_mismatch_fails_when_compatible_tool_is_available(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _single_bundle(tmp_path)
+    monkeypatch.setattr(v7_profiler_bundle, "_find_nsys", lambda: "/usr/bin/nsys")
+
+    def fake_run(
+        command: list[str], **_: object
+    ) -> subprocess.CompletedProcess[str]:
+        output_prefix = Path(command[command.index("--output") + 1])
+        source = Path(command[-1]).parent
+        for report in NSYS_REPORTS:
+            data = (source / f"stats_{report}.csv").read_bytes()
+            if report == "cuda_api_sum":
+                data += b"tampered re-export\n"
+            (output_prefix.parent / f"{output_prefix.name}_{report}.csv").write_bytes(data)
+        return subprocess.CompletedProcess(command, 0, "re-exported\n", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(ValueError, match="Nsight Systems re-export mismatch"):
+        finalize(_args(tmp_path))
+
+
 def test_invented_ncu_metrics_are_rejected_against_canonical_selection(tmp_path: Path) -> None:
     bundle = _single_bundle(tmp_path)
     metadata_path = tmp_path / bundle.profiles[0]["ncu"]["metadata_path"]
@@ -618,6 +1136,9 @@ def test_invented_ncu_metrics_are_rejected_against_canonical_selection(tmp_path:
     selected["duration"] = "invented__duration.sum"
     metadata["selected_metrics"] = selected
     metadata["supported_metrics"] = sorted(selected.values())
+    metric_query = metadata["metric_query"]
+    assert isinstance(metric_query, dict)
+    metric_query["stdout"] = "\n".join(sorted(selected.values())) + "\n"
     selected_path = metadata_path.parent / "selected_metrics.json"
     supported_path = metadata_path.parent / "supported_metrics.txt"
     _write_json(selected_path, selected)
@@ -626,6 +1147,66 @@ def test_invented_ncu_metrics_are_rejected_against_canonical_selection(tmp_path:
     _write_json(metadata_path, metadata)
 
     with pytest.raises(ValueError, match="canonical NCU metric selection"):
+        finalize(_args(tmp_path))
+
+
+def test_ncu_ok_requires_successful_gpu_query_with_consistent_identity(
+    tmp_path: Path,
+) -> None:
+    bundle = _single_bundle(tmp_path)
+    profile = bundle.profiles[0]
+    config = profile["ncu"]
+    assert isinstance(config, dict)
+    metadata_path = tmp_path / str(config["metadata_path"])
+    metadata = _read_json(metadata_path)
+    gpu = metadata["gpu"]
+    assert isinstance(gpu, dict)
+    gpu.update({"status": "failed", "return_code": 1, "stdout": "", "stderr": "query failed"})
+    _write_json(metadata_path, metadata)
+
+    with pytest.raises(ValueError, match="ncu GPU provenance must be successful"):
+        finalize(_args(tmp_path))
+
+
+@pytest.mark.parametrize("field", ["index", "uuid", "driver_version"])
+def test_ncu_gpu_query_output_must_match_parsed_metadata(
+    tmp_path: Path, field: str
+) -> None:
+    bundle = _single_bundle(tmp_path)
+    profile = bundle.profiles[0]
+    config = profile["ncu"]
+    assert isinstance(config, dict)
+    metadata_path = tmp_path / str(config["metadata_path"])
+    metadata = _read_json(metadata_path)
+    gpu = metadata["gpu"]
+    assert isinstance(gpu, dict)
+    gpu[field] = 1 if field == "index" else "GPU-other" if field == "uuid" else "999.0"
+    _write_json(metadata_path, metadata)
+
+    with pytest.raises(ValueError, match="ncu GPU query output"):
+        finalize(_args(tmp_path))
+
+
+@pytest.mark.parametrize("attack", ["return_code", "missing_metric"])
+def test_ncu_selected_metrics_require_successful_query_stdout_proof(
+    tmp_path: Path, attack: str
+) -> None:
+    bundle = _single_bundle(tmp_path)
+    profile = bundle.profiles[0]
+    config = profile["ncu"]
+    assert isinstance(config, dict)
+    metadata_path = tmp_path / str(config["metadata_path"])
+    metadata = _read_json(metadata_path)
+    metric_query = metadata["metric_query"]
+    assert isinstance(metric_query, dict)
+    if attack == "return_code":
+        metric_query["return_code"] = 1
+        metric_query["stderr"] = "metric query failed"
+    else:
+        metric_query["stdout"] = "gpu__time_duration.sum\n"
+    _write_json(metadata_path, metadata)
+
+    with pytest.raises(ValueError, match="ncu metric query"):
         finalize(_args(tmp_path))
 
 
@@ -641,6 +1222,57 @@ def test_ncu_unavailable_requires_failed_collector_evidence(tmp_path: Path) -> N
     _write_json(metadata_path, metadata)
 
     with pytest.raises(ValueError, match="unavailable NCU claim lacks failed collector evidence"):
+        finalize(_args(tmp_path))
+
+
+@pytest.mark.parametrize(
+    ("return_code", "message"),
+    [
+        (-11, "Segmentation fault"),
+        (139, "Segmentation fault (core dumped)"),
+        (2, "Error: unknown option --metricz"),
+    ],
+)
+def test_ncu_unavailable_rejects_crashes_and_command_errors(
+    tmp_path: Path, return_code: int, message: str
+) -> None:
+    bundle = _single_bundle(tmp_path, ncu_status="unavailable")
+    profile = bundle.profiles[0]
+    config = profile["ncu"]
+    assert isinstance(config, dict)
+    metadata_path = tmp_path / str(config["metadata_path"])
+    metadata = _read_json(metadata_path)
+    metadata["return_code"] = return_code
+    metadata["replay"] = {
+        "mode": "application",
+        "return_code": return_code,
+        "succeeded": False,
+    }
+    (metadata_path.parent / "profile.stderr.log").write_text(message + "\n", encoding="utf-8")
+    metadata["files"] = _files(metadata_path.parent)
+    _write_json(metadata_path, metadata)
+
+    with pytest.raises(ValueError, match="recognized counter permission or hardware support failure"):
+        finalize(_args(tmp_path))
+
+
+def test_structured_ncu_unavailable_cannot_hide_a_fatal_failure(tmp_path: Path) -> None:
+    bundle = _single_bundle(tmp_path, ncu_status="unavailable")
+    profile = bundle.profiles[0]
+    config = profile["ncu"]
+    assert isinstance(config, dict)
+    metadata_path = tmp_path / str(config["metadata_path"])
+    metadata = _read_json(metadata_path)
+    metadata["return_code"] = 0
+    metadata["replay"] = {"mode": "application", "return_code": 0, "succeeded": True}
+    metadata["access"] = {
+        "status": "unavailable",
+        "code": "ERR_NVGPUCTRPERM",
+        "message": "Segmentation fault (core dumped)",
+    }
+    _write_json(metadata_path, metadata)
+
+    with pytest.raises(ValueError, match="recognized counter permission or hardware support failure"):
         finalize(_args(tmp_path))
 
 
@@ -674,9 +1306,7 @@ def test_required_nvtx_ranges_are_derived_from_the_trusted_engine(
     tmp_path: Path, engine: str, missing_range: str
 ) -> None:
     ranges = ENGINE_RANGES[engine] - {missing_range}
-    bundle = BundleFixture(tmp_path)
-    bundle.add_profile("1", engine, ranges=ranges)
-    bundle.write_index()
+    _single_bundle(tmp_path, engine=engine, ranges=ranges)
 
     with pytest.raises(ValueError, match=f"missing required range: {missing_range}"):
         finalize(_args(tmp_path))

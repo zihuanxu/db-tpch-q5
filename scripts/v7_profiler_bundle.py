@@ -9,7 +9,10 @@ import json
 import math
 import os
 import re
+import secrets
+import shutil
 import stat
+import subprocess
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,10 +47,68 @@ ENGINE_NVTX_RANGES = {
     "hybrid-fixed": {"request", "cpu_scan", "q5_kernel", "merge"},
     "hybrid-auto": {"request", "cpu_scan", "q5_kernel", "merge"},
 }
+CANONICAL_SCALES = ("1", "10")
+CANONICAL_FIXED_ENGINES = ("copy", "managed", "mapped", "hybrid-fixed")
+HYBRID_FIXED_CPU_RATIO = 0.5
+HYBRID_AUTO_POLICY = "optional"
+CANONICAL_COVERAGE_POLICY = {
+    "fixed_matrix": "SF1/SF10 x copy/managed/mapped/hybrid-fixed",
+    "hybrid_fixed_cpu_ratio": HYBRID_FIXED_CPU_RATIO,
+    "hybrid_auto": HYBRID_AUTO_POLICY,
+}
+BUNDLE_RESIDUALS = [
+    {
+        "id": "nsys-export-linkage",
+        "status": "documented",
+        "reason": (
+            "When compatible nsys is available, finalize re-exports and compares every CSV hash; "
+            "the external tool's interpretation is not a cryptographic proof of report semantics."
+        ),
+    },
+    {
+        "id": "executable-build-commit",
+        "status": "documented",
+        "reason": (
+            "The executable bytes are hashed and build_commit is cross-checked with evidence git.commit, "
+            "but the commit is not cryptographically embedded in the executable."
+        ),
+    },
+    {
+        "id": "concurrent-bundle-root-replacement",
+        "status": "documented",
+        "reason": (
+            "Individual reads and control writes walk directory descriptors with O_NOFOLLOW; "
+            "independent whole-bundle operations are not serialized against a hostile concurrent root rename."
+        ),
+    },
+]
+NSYS_REPORT_MAGIC = b"NVIDIA Tegra Profiler Report "
+NSYS_MIN_REPORT_BYTES = 4096
+KNOWN_NCU_UNAVAILABLE_CODES = {13}
+KNOWN_NCU_ACCESS_CODES = {
+    "ERR_NVGPUCTRPERM",
+    "COUNTERS_UNAVAILABLE",
+    "UNSUPPORTED_DEVICE",
+    "UNSUPPORTED_HARDWARE",
+    "UNSUPPORTED_METRICS",
+}
+NCU_UNAVAILABLE_PATTERNS = (
+    re.compile(r"err_nvgpuctrperm", re.IGNORECASE),
+    re.compile(r"permission.*(?:gpu )?performance counters", re.IGNORECASE),
+    re.compile(r"performance counters.*permission", re.IGNORECASE),
+    re.compile(r"profil(?:ing|er).*(?:not supported|unsupported).*(?:gpu|device|hardware)", re.IGNORECASE),
+    re.compile(r"(?:gpu|device|hardware).*(?:not supported|unsupported).*(?:profil|counter)", re.IGNORECASE),
+)
+NCU_FATAL_PATTERNS = (
+    re.compile(r"segmentation fault", re.IGNORECASE),
+    re.compile(r"core dumped", re.IGNORECASE),
+    re.compile(r"unknown (?:option|argument)", re.IGNORECASE),
+    re.compile(r"unrecognized (?:option|argument)", re.IGNORECASE),
+)
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _COMMIT_RE = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 _ORACLE_HASH_RE = re.compile(r"[0-9a-f]{16}")
-_SCALE_RE = re.compile(r"[1-9][0-9]*(?:\.[0-9]+)?")
+_NCU_METRIC_TOKEN = re.compile(r"^([A-Za-z][A-Za-z0-9_]*__[A-Za-z0-9_.]+)")
 
 
 def _absolute(path: Path) -> Path:
@@ -103,17 +164,49 @@ def _bundle_root(value: object) -> Path:
     return root
 
 
-def _open_regular(path: Path, label: str) -> int:
-    _assert_no_symlink_components(path, label)
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+def _open_directory_nofollow(path: Path, label: str) -> int:
+    absolute = _absolute(path)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    descriptor = os.open(absolute.anchor, flags)
     try:
-        descriptor = os.open(path, flags)
+        for part in absolute.parts[1:]:
+            next_descriptor = os.open(part, flags, dir_fd=descriptor)
+            try:
+                if not stat.S_ISDIR(os.fstat(next_descriptor).st_mode):
+                    raise ValueError(f"{label} component is not a directory: {part}")
+            except Exception:
+                os.close(next_descriptor)
+                raise
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def _open_regular(path: Path, label: str) -> int:
+    absolute = _absolute(path)
+    _assert_no_symlink_components(absolute, label)
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    parent_descriptor = _open_directory_nofollow(absolute.parent, f"{label} parent")
+    try:
+        descriptor = os.open(absolute.name, flags, dir_fd=parent_descriptor)
     except OSError as exc:
-        raise ValueError(f"cannot open {label} without following links: {path}: {exc}") from exc
+        raise ValueError(
+            f"cannot open {label} without following links: {absolute}: {exc}"
+        ) from exc
+    finally:
+        os.close(parent_descriptor)
     mode = os.fstat(descriptor).st_mode
     if not stat.S_ISREG(mode):
         os.close(descriptor)
-        raise ValueError(f"{label} is not a regular file: {path}")
+        raise ValueError(f"{label} is not a regular file: {absolute}")
     return descriptor
 
 
@@ -133,11 +226,24 @@ def sha256_file(path: Path) -> str:
 
 
 def _atomic_write(path: Path, data: bytes, mode: int) -> None:
+    path = _absolute(path)
     parent = path.parent
     _assert_no_symlink_components(parent, "control-file parent")
     _assert_no_symlink_components(path, "control file", allow_missing_leaf=True)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=parent)
-    temporary = Path(temporary_name)
+    parent_descriptor = _open_directory_nofollow(parent, "control-file parent")
+    temporary_name = f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}"
+    flags = (
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    try:
+        descriptor = os.open(temporary_name, flags, mode, dir_fd=parent_descriptor)
+    except Exception:
+        os.close(parent_descriptor)
+        raise
     try:
         os.fchmod(descriptor, mode)
         with os.fdopen(descriptor, "wb") as handle:
@@ -145,22 +251,28 @@ def _atomic_write(path: Path, data: bytes, mode: int) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         try:
-            target_mode = os.lstat(path).st_mode
+            target_mode = os.stat(
+                path.name, dir_fd=parent_descriptor, follow_symlinks=False
+            ).st_mode
         except FileNotFoundError:
             target_mode = None
         if target_mode is not None and stat.S_ISLNK(target_mode):
             raise ValueError(f"symlink is forbidden for control file: {path}")
-        os.replace(temporary, path)
-        directory_fd = os.open(parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+        if target_mode is not None and not stat.S_ISREG(target_mode):
+            raise ValueError(f"control file target is not regular: {path}")
+        os.replace(
+            temporary_name,
+            path.name,
+            src_dir_fd=parent_descriptor,
+            dst_dir_fd=parent_descriptor,
+        )
+        os.fsync(parent_descriptor)
     finally:
         try:
-            temporary.unlink()
+            os.unlink(temporary_name, dir_fd=parent_descriptor)
         except FileNotFoundError:
             pass
+        os.close(parent_descriptor)
 
 
 def artifact_checksums(root: Path) -> dict[str, str]:
@@ -258,8 +370,15 @@ def _artifact(root: Path, path: Path) -> dict[str, object]:
 
 def _declared_roots(root: Path, index: dict[str, object]) -> dict[str, Path]:
     values = index.get("roots")
-    if not isinstance(values, dict) or set(values) != {"captures", "datasets", "evidence"}:
-        raise ValueError("profiles.json roots must declare captures, datasets, and evidence")
+    expected = {
+        "captures": "captures",
+        "datasets": "datasets",
+        "evidence": "evidence",
+    }
+    if values != expected:
+        raise ValueError(
+            "profiles.json roots must be exactly captures, datasets, and evidence"
+        )
     roots: dict[str, Path] = {}
     for name in ("captures", "datasets", "evidence"):
         path = _inside_root(root, values[name], f"roots.{name}", require_file=False)
@@ -282,7 +401,7 @@ def _logical_profile(raw: object, label: str) -> tuple[dict[str, object], tuple[
     if not isinstance(raw, dict):
         raise ValueError(f"{label} must be an object")
     scale = _text(raw.get("scale_factor"), f"{label}.scale_factor")
-    if not _SCALE_RE.fullmatch(scale):
+    if scale not in CANONICAL_SCALES:
         raise ValueError(f"invalid scale factor for {label}: {scale}")
     engine = _text(raw.get("engine"), f"{label}.engine")
     if engine not in ENGINE_COMMANDS:
@@ -293,7 +412,11 @@ def _logical_profile(raw: object, label: str) -> tuple[dict[str, object], tuple[
         raise ValueError(f"invalid ratio pair for {label}")
     if engine in {"copy", "managed", "mapped"} and (cpu_ratio, gpu_ratio) != (0.0, 1.0):
         raise ValueError(f"invalid ratio for non-hybrid engine {engine}")
-    if engine.startswith("hybrid-") and not (0.0 < cpu_ratio < 1.0):
+    if engine == "hybrid-fixed" and not math.isclose(
+        cpu_ratio, HYBRID_FIXED_CPU_RATIO, abs_tol=1e-12
+    ):
+        raise ValueError(f"invalid ratio for hybrid-fixed engine: {cpu_ratio}")
+    if engine == "hybrid-auto" and not (0.0 < cpu_ratio < 1.0):
         raise ValueError(f"invalid ratio for hybrid engine {engine}")
     logical = {
         "scale_factor": scale,
@@ -304,6 +427,31 @@ def _logical_profile(raw: object, label: str) -> tuple[dict[str, object], tuple[
     return logical, (scale, engine, cpu_ratio, gpu_ratio)
 
 
+def _canonical_fixed_profiles() -> list[dict[str, object]]:
+    profiles: list[dict[str, object]] = []
+    for scale in CANONICAL_SCALES:
+        for engine in CANONICAL_FIXED_ENGINES:
+            cpu_ratio = HYBRID_FIXED_CPU_RATIO if engine == "hybrid-fixed" else 0.0
+            profiles.append(
+                {
+                    "scale_factor": scale,
+                    "engine": engine,
+                    "cpu_ratio": cpu_ratio,
+                    "gpu_ratio": 1.0 - cpu_ratio,
+                }
+            )
+    return profiles
+
+
+def _logical_key(logical: dict[str, object]) -> tuple[object, ...]:
+    return (
+        logical["scale_factor"],
+        logical["engine"],
+        logical["cpu_ratio"],
+        logical["gpu_ratio"],
+    )
+
+
 def _option(command: list[str], name: str) -> str:
     positions = [index for index, value in enumerate(command) if value == name]
     if len(positions) != 1 or positions[0] + 1 >= len(command):
@@ -312,10 +460,10 @@ def _option(command: list[str], name: str) -> str:
 
 
 def _validate_app_command(
-    root: Path,
     command: list[str],
     logical: dict[str, object],
     dataset_manifest: Path,
+    execution: dict[str, object],
 ) -> None:
     if "--warmup" in command or "--repeat" in command:
         raise ValueError("profile command must use --requests 1 without warmup/repeat")
@@ -329,8 +477,19 @@ def _validate_app_command(
         raise ValueError("profile command has invalid --cpu-ratio") from exc
     if not math.isclose(command_ratio, float(logical["cpu_ratio"]), abs_tol=1e-12):
         raise ValueError("profile command ratio does not match logical profiler ratio")
+    engine = str(logical["engine"])
+    selection_positions = [
+        index for index, value in enumerate(command) if value == "--hybrid-selection"
+    ]
+    if engine.startswith("hybrid-"):
+        expected_selection = "auto" if engine == "hybrid-auto" else "fixed"
+        if _option(command, "--hybrid-selection") != expected_selection:
+            raise ValueError("profile command hybrid selection does not match logical engine")
+    elif selection_positions:
+        raise ValueError("non-hybrid profile command must not set --hybrid-selection")
+    cwd = Path(str(execution["cwd"]))
     dataset_value = Path(_option(command, "--dataset"))
-    dataset_path = _absolute(dataset_value if dataset_value.is_absolute() else root / dataset_value)
+    dataset_path = _absolute(dataset_value if dataset_value.is_absolute() else cwd / dataset_value)
     if dataset_path != dataset_manifest.parent:
         raise ValueError("profile command dataset does not match dataset manifest path")
 
@@ -360,6 +519,7 @@ def _identity(
     logical: dict[str, object],
     dataset: dict[str, str],
     evidence: dict[str, str],
+    command: list[str],
 ) -> dict[str, object]:
     session_commit = _text(raw.get("session_commit"), "session_commit")
     if not _COMMIT_RE.fullmatch(session_commit):
@@ -367,17 +527,177 @@ def _identity(
     oracle_hash = _text(raw.get("oracle_hash"), "oracle_hash")
     if not _ORACLE_HASH_RE.fullmatch(oracle_hash):
         raise ValueError("oracle_hash must be 16 lowercase hex characters")
+    result_hash = _text(raw.get("result_hash"), "result_hash")
+    if not _ORACLE_HASH_RE.fullmatch(result_hash):
+        raise ValueError("result_hash must be 16 lowercase hex characters")
+    if result_hash != oracle_hash:
+        raise ValueError("oracle hash does not match result_hash")
     gpu_uuid = _text(raw.get("gpu_uuid"), "gpu_uuid")
     if not gpu_uuid.startswith("GPU-"):
         raise ValueError("gpu_uuid must be a physical GPU UUID")
+    execution = _execution_provenance(raw.get("execution"), command, session_commit)
     return {
         **logical,
         "session_commit": session_commit,
         "dataset_manifest": dataset,
         "evidence_manifest": evidence,
         "oracle_hash": oracle_hash,
+        "result_hash": result_hash,
         "gpu_uuid": gpu_uuid,
+        "execution": execution,
     }
+
+
+def _execution_provenance(
+    value: object,
+    command: list[str],
+    session_commit: str,
+) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError("execution provenance must be an object")
+    cwd_text = _text(value.get("cwd"), "execution working directory")
+    cwd = Path(cwd_text)
+    if not cwd.is_absolute():
+        raise ValueError("execution working directory must be absolute")
+    cwd = _absolute(cwd)
+    _assert_no_symlink_components(cwd, "execution working directory")
+    if not cwd.is_dir():
+        raise ValueError("execution working directory is not a directory")
+    executable = value.get("executable")
+    if not isinstance(executable, dict):
+        raise ValueError("execution executable provenance must be an object")
+    executable_text = _text(executable.get("path"), "execution executable path")
+    if command[0] != executable_text:
+        raise ValueError("profile command executable does not match execution provenance")
+    executable_value = Path(executable_text)
+    executable_path = _absolute(
+        executable_value if executable_value.is_absolute() else cwd / executable_value
+    )
+    if executable_path.name != "memq5_arrow_session":
+        raise ValueError("profile command must use the memq5_arrow_session executable")
+    expected_sha = _text(executable.get("sha256"), "execution executable sha256")
+    if not _SHA256_RE.fullmatch(expected_sha):
+        raise ValueError("execution executable sha256 must be lowercase SHA256")
+    try:
+        actual_sha = sha256_file(executable_path)
+    except ValueError as exc:
+        raise ValueError(f"execution executable cannot be verified: {exc}") from exc
+    if actual_sha != expected_sha:
+        raise ValueError("execution executable sha256 mismatch")
+    if not os.access(executable_path, os.X_OK):
+        raise ValueError("execution executable is not executable")
+    build_commit = _text(executable.get("build_commit"), "execution build commit")
+    if build_commit != session_commit:
+        raise ValueError("execution build commit does not match session commit")
+    return {
+        "cwd": str(cwd),
+        "executable": {
+            "path": executable_text,
+            "sha256": expected_sha,
+            "build_commit": build_commit,
+        },
+    }
+
+
+def _validate_dataset_manifest(path: Path, logical: dict[str, object]) -> dict[str, object]:
+    manifest = _load_json(path, "dataset manifest")
+    if manifest.get("format_version") != 1:
+        raise ValueError("dataset manifest format_version must be 1")
+    if str(manifest.get("scale_factor")) != logical["scale_factor"]:
+        raise ValueError("dataset manifest scale mismatch")
+    tables = manifest.get("tables")
+    if not isinstance(tables, dict) or not tables:
+        raise ValueError("dataset manifest tables must be a non-empty object")
+    return manifest
+
+
+def _validate_evidence_manifest(
+    root: Path,
+    path: Path,
+    dataset_path: Path,
+    dataset_sha256: str,
+    identity: dict[str, object],
+) -> dict[str, object]:
+    manifest = _load_json(path, "evidence manifest")
+    if manifest.get("manifest_version") != 1 or manifest.get("status") != "complete":
+        raise ValueError("evidence manifest must be a complete version-1 bundle")
+    git = manifest.get("git")
+    if not isinstance(git, dict) or git.get("commit") != identity["session_commit"]:
+        raise ValueError("evidence manifest session commit mismatch")
+    dataset = manifest.get("dataset")
+    if not isinstance(dataset, dict):
+        raise ValueError("evidence manifest dataset is missing")
+    if str(dataset.get("scale_factor")) != identity["scale_factor"]:
+        raise ValueError("evidence manifest dataset scale mismatch")
+    if dataset.get("manifest_sha256") != dataset_sha256:
+        raise ValueError("evidence manifest dataset sha mismatch")
+    dataset_text = _text(dataset.get("path"), "evidence manifest dataset path")
+    declared_dataset = Path(dataset_text)
+    declared_path = _absolute(
+        declared_dataset if declared_dataset.is_absolute() else root / declared_dataset
+    )
+    _assert_no_symlink_components(declared_path, "evidence manifest dataset path")
+    if declared_path != dataset_path.parent:
+        raise ValueError("evidence manifest dataset path mismatch")
+    correctness = manifest.get("correctness")
+    if not isinstance(correctness, dict) or correctness.get("ok") is not True:
+        raise ValueError("evidence manifest correctness is not complete")
+    if correctness.get("expected_hash") != identity["oracle_hash"]:
+        raise ValueError("evidence manifest oracle hash mismatch")
+    if correctness.get("observed_hashes") != [identity["result_hash"]]:
+        raise ValueError("evidence manifest result hash mismatch")
+    return manifest
+
+
+def _validate_app_stdout(
+    path: Path,
+    logical: dict[str, object],
+    command: list[str],
+    dataset_path: Path,
+    execution: dict[str, object],
+    result_hash: str,
+) -> dict[str, object]:
+    try:
+        records = [
+            json.loads(line)
+            for line in _read_bytes(path, "app stdout JSONL").decode("utf-8").splitlines()
+            if line.strip()
+        ]
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid app stdout JSONL: {exc}") from exc
+    if len(records) != 2 or any(not isinstance(record, dict) for record in records):
+        raise ValueError("app stdout JSONL must contain one setup and one request")
+    setup, request = records
+    if setup.get("record_type") != "session_setup" or request.get("record_type") != "request":
+        raise ValueError("app stdout JSONL record types are invalid")
+    session_id = setup.get("session_id")
+    if not isinstance(session_id, str) or not session_id or request.get("session_id") != session_id:
+        raise ValueError("app stdout JSONL session identity mismatch")
+    if any(record.get("lifecycle") != "resident" or record.get("status") != "ok" for record in records):
+        raise ValueError("app stdout JSONL does not contain a successful resident request")
+    if setup.get("engine") != ENGINE_COMMANDS[str(logical["engine"])]:
+        raise ValueError("app stdout engine does not match profile identity")
+    cwd = Path(str(execution["cwd"]))
+    app_dataset_value = Path(str(setup.get("dataset", "")))
+    app_dataset = _absolute(
+        app_dataset_value if app_dataset_value.is_absolute() else cwd / app_dataset_value
+    )
+    if app_dataset != dataset_path.parent or str(setup.get("dataset")) != _option(command, "--dataset"):
+        raise ValueError("app stdout dataset does not match profile command")
+    if setup.get("warmup") != 0 or setup.get("repeat") != 1:
+        raise ValueError("app stdout request count does not match --requests 1")
+    expected_ratio = float(logical["cpu_ratio"])
+    for record in records:
+        ratio = record.get("selected_cpu_ratio")
+        if isinstance(ratio, bool) or not isinstance(ratio, (int, float)) or not math.isclose(
+            float(ratio), expected_ratio, abs_tol=1e-12
+        ):
+            raise ValueError("app stdout selected_cpu_ratio does not match profile identity")
+    if request.get("request_index") != 0 or request.get("is_warmup") is not False:
+        raise ValueError("app stdout request markers are invalid")
+    if request.get("result_hash") != result_hash:
+        raise ValueError("app result_hash does not match frozen profile identity")
+    return {"session_id": session_id, "result_hash": result_hash}
 
 
 def _validate_collector_identity(
@@ -467,6 +787,87 @@ def _tool_version(metadata: dict[str, object], tool: str) -> str:
     return _text(versions.get(tool), f"{tool} tool version")
 
 
+def _tool_provenance(
+    metadata: dict[str, object], tool: str, version: str
+) -> dict[str, object]:
+    provenances = metadata.get("tool_version_provenance")
+    provenance = provenances.get(tool) if isinstance(provenances, dict) else None
+    if not isinstance(provenance, dict):
+        raise ValueError(f"{tool} tool version provenance is required")
+    if provenance.get("command") != [tool, "--version"] or provenance.get("return_code") != 0:
+        raise ValueError(f"{tool} tool version provenance is invalid")
+    stdout = provenance.get("stdout")
+    stderr = provenance.get("stderr")
+    if not isinstance(stdout, str) or not isinstance(stderr, str):
+        raise ValueError(f"{tool} tool version provenance output is invalid")
+    if (stdout or stderr).strip() != version:
+        raise ValueError(f"{tool} tool version does not match version provenance")
+    return dict(provenance)
+
+
+def _find_nsys() -> str | None:
+    return shutil.which("nsys")
+
+
+def _replay_nsys_exports(
+    stats_command: list[str],
+    raw_report: Path,
+    exports: dict[str, Path],
+    cwd: Path,
+) -> dict[str, object]:
+    executable = _find_nsys()
+    if executable is None:
+        return {
+            "status": "residual",
+            "replay_validation": "unavailable",
+            "reason": "A compatible nsys executable was not available during validation.",
+        }
+    with tempfile.TemporaryDirectory(prefix="v7-nsys-replay-") as temporary:
+        output_prefix = Path(temporary) / "stats"
+        replay_command = list(stats_command)
+        replay_command[0] = executable
+        replay_command[replay_command.index("--output") + 1] = str(output_prefix)
+        replay_command[-1] = str(raw_report)
+        environment = os.environ.copy()
+        environment.update({"LC_ALL": "C", "LANG": "C"})
+        try:
+            completed = subprocess.run(
+                replay_command,
+                cwd=cwd,
+                env=environment,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+        except OSError as exc:
+            raise ValueError(f"Nsight Systems re-export launch failed: {exc}") from exc
+        if completed.returncode != 0:
+            message = (completed.stderr or completed.stdout).strip()
+            raise ValueError(
+                f"Nsight Systems re-export failed return_code={completed.returncode}: {message}"
+            )
+        mismatches: list[str] = []
+        replay_hashes: dict[str, str] = {}
+        for report, original in exports.items():
+            candidates = sorted(Path(temporary).glob(f"*{report}*.csv"))
+            if len(candidates) != 1:
+                raise ValueError(f"Nsight Systems re-export missing report: {report}")
+            replay_hash = sha256_file(candidates[0])
+            replay_hashes[report] = replay_hash
+            if replay_hash != sha256_file(original):
+                mismatches.append(report)
+        if mismatches:
+            raise ValueError(f"Nsight Systems re-export mismatch: {mismatches}")
+        return {
+            "status": "verified",
+            "replay_validation": "matched",
+            "command": stats_command,
+            "return_code": completed.returncode,
+            "export_sha256": replay_hashes,
+        }
+
+
 def _compile_nsys(
     root: Path,
     captures_root: Path,
@@ -504,23 +905,32 @@ def _compile_nsys(
     ]
     if metadata.get("stats_commands") != [expected_stats_command]:
         raise ValueError("Nsight Systems stats command options do not match collector contract")
-    if metadata.get("return_code") != 0 or metadata.get("stats") != [{"return_code": 0}]:
+    stats = metadata.get("stats")
+    if metadata.get("return_code") != 0 or not isinstance(stats, list) or len(stats) != 1:
         raise ValueError("Nsight Systems collection did not succeed")
+    stats_provenance = stats[0]
+    if (
+        not isinstance(stats_provenance, dict)
+        or stats_provenance.get("command") != expected_stats_command
+        or stats_provenance.get("return_code") != 0
+        or not isinstance(stats_provenance.get("stdout"), str)
+        or not isinstance(stats_provenance.get("stderr"), str)
+    ):
+        raise ValueError("Nsight Systems stats success provenance is invalid")
     version = _tool_version(metadata, "nsys")
-    provenances = metadata.get("tool_version_provenance")
-    provenance = provenances.get("nsys") if isinstance(provenances, dict) else None
-    if not isinstance(provenance, dict):
-        raise ValueError("nsys tool version provenance is required")
-    if provenance.get("command") != ["nsys", "--version"] or provenance.get("return_code") != 0:
-        raise ValueError("nsys tool version provenance is invalid")
-    observed_version = str(provenance.get("stdout") or provenance.get("stderr") or "").strip()
-    if observed_version != version:
-        raise ValueError("nsys tool version does not match version provenance")
+    provenance = _tool_provenance(metadata, "nsys", version)
     paths = _collector_files(root, captures_root, metadata_path, metadata, "nsys")
     _verify_collector_files(paths, metadata, "nsys")
     raw_path = _required_file(paths, "profile.nsys-rep", "Nsight Systems raw report")
-    if raw_path.stat().st_size == 0:
-        raise ValueError("Nsight Systems raw report is empty")
+    raw_bytes = _read_bytes(raw_path, "Nsight Systems raw report")
+    if len(raw_bytes) < NSYS_MIN_REPORT_BYTES or not raw_bytes.startswith(NSYS_REPORT_MAGIC):
+        raise ValueError("Nsight Systems raw report signature or size is invalid")
+    stats_stdout = _required_file(paths, "stats.stdout.log", "Nsight Systems stats stdout")
+    stats_stderr = _required_file(paths, "stats.stderr.log", "Nsight Systems stats stderr")
+    if _read_bytes(stats_stdout, "nsys stats stdout").decode("utf-8") != stats_provenance["stdout"]:
+        raise ValueError("Nsight Systems stats stdout provenance mismatch")
+    if _read_bytes(stats_stderr, "nsys stats stderr").decode("utf-8") != stats_provenance["stderr"]:
+        raise ValueError("Nsight Systems stats stderr provenance mismatch")
     exports: dict[str, Path] = {}
     for report in NSYS_EXPORTS:
         candidates = [
@@ -540,11 +950,28 @@ def _compile_nsys(
         row
         for row in parsed["cuda_gpu_kern_sum"]
         if row.get("kind") == "kernel"
+        and "q5_kernel" in str(row.get("name", ""))
         and isinstance(row.get("total_ns"), (int, float))
         and row["total_ns"] > 0
     ]
     if not kernel_rows:
-        raise ValueError("Nsight Systems evidence has no positive CUDA kernel activity")
+        raise ValueError("Nsight Systems kernel export has no positive q5_kernel activity")
+    app_stdout = _required_file(paths, "profile.stdout.log", "profiled app stdout JSONL")
+    dataset_manifest_path = root / str(identity["dataset_manifest"]["path"])
+    app_result = _validate_app_stdout(
+        app_stdout,
+        identity,
+        command,
+        dataset_manifest_path,
+        identity["execution"],
+        str(identity["result_hash"]),
+    )
+    derivation = _replay_nsys_exports(
+        expected_stats_command,
+        raw_path,
+        exports,
+        Path(str(identity["execution"]["cwd"])),
+    )
     observed_ranges = sorted(
         str(row["name"])
         for row in parsed["nvtx_sum"]
@@ -563,13 +990,9 @@ def _compile_nsys(
         "required_nvtx_ranges": sorted(required_ranges),
         "observed_nvtx_ranges": observed_ranges,
         "cuda_kernel_rows": len(kernel_rows),
-        "derivation": {
-            "status": "not_cryptographically_proven",
-            "reason": (
-                "Stored Nsight Systems commands and hashes do not cryptographically bind "
-                "the exported CSV files to the .nsys-rep raw report."
-            ),
-        },
+        "app_stdout": _artifact(root, app_stdout),
+        "app_result": app_result,
+        "derivation": derivation,
     }
 
 
@@ -587,13 +1010,26 @@ def _gpu_provenance(
     ]
     if gpu.get("requested_index") != device_index or gpu.get("query_command") != expected_query:
         raise ValueError("ncu GPU provenance query does not match device index")
-    status_value = gpu.get("status")
-    if status_value == "ok":
-        if gpu.get("index") != device_index or gpu.get("uuid") != gpu_uuid:
-            raise ValueError("ncu GPU UUID does not match frozen identity")
-        _text(gpu.get("driver_version"), "ncu GPU driver version")
-    elif status_value not in {"failed", "unavailable", "invalid_output", "device_mismatch"}:
-        raise ValueError("ncu GPU provenance status is invalid")
+    if gpu.get("status") != "ok" or gpu.get("return_code") != 0:
+        raise ValueError("ncu GPU provenance must be successful")
+    stdout = gpu.get("stdout")
+    stderr = gpu.get("stderr")
+    if not isinstance(stdout, str) or not isinstance(stderr, str):
+        raise ValueError("ncu GPU query output provenance is invalid")
+    rows = [line.strip() for line in stdout.splitlines() if line.strip()]
+    fields = [field.strip() for field in rows[0].split(",")] if len(rows) == 1 else []
+    if len(fields) != 3 or not fields[0].isdigit():
+        raise ValueError("ncu GPU query output is invalid")
+    parsed_index = int(fields[0])
+    if (
+        gpu.get("index") != parsed_index
+        or gpu.get("uuid") != fields[1]
+        or gpu.get("driver_version") != fields[2]
+    ):
+        raise ValueError("ncu GPU query output does not match parsed metadata")
+    if parsed_index != device_index or fields[1] != gpu_uuid:
+        raise ValueError("ncu GPU query output does not match frozen identity")
+    _text(gpu.get("driver_version"), "ncu GPU driver version")
     return dict(gpu)
 
 
@@ -603,6 +1039,24 @@ def _ncu_metric_state(
     *,
     allow_empty: bool,
 ) -> tuple[dict[str, str], list[str]]:
+    query = metadata.get("metric_query")
+    device_index = metadata.get("device_index")
+    expected_query = _ncu_query_command(device_index) if isinstance(device_index, int) else None
+    if (
+        not isinstance(query, dict)
+        or query.get("command") != expected_query
+        or query.get("return_code") != 0
+        or not isinstance(query.get("stdout"), str)
+        or not isinstance(query.get("stderr"), str)
+    ):
+        raise ValueError("ncu metric query provenance is not successful")
+    discovered = sorted(
+        {
+            match.group(1)
+            for line in query["stdout"].splitlines()
+            if (match := _NCU_METRIC_TOKEN.match(line.strip())) is not None
+        }
+    )
     supported_raw = metadata.get("supported_metrics", [])
     selected_raw = metadata.get("selected_metrics", {})
     if not isinstance(supported_raw, list) or any(not isinstance(value, str) for value in supported_raw):
@@ -610,6 +1064,8 @@ def _ncu_metric_state(
     if not isinstance(selected_raw, dict):
         raise ValueError("selected NCU metrics must be an object")
     supported = sorted(set(supported_raw))
+    if discovered != supported:
+        raise ValueError("ncu metric query stdout does not match supported_metrics")
     selected = dict(selected_raw)
     if not supported and not selected and allow_empty:
         return {}, []
@@ -687,6 +1143,7 @@ def _ncu_common(
     if metadata.get("query_command") != _ncu_query_command(device_index):
         raise ValueError("ncu metric query command does not match collector contract")
     version = _tool_version(metadata, "ncu")
+    _tool_provenance(metadata, "ncu", version)
     gpu = _gpu_provenance(metadata, str(identity["gpu_uuid"]), device_index)
     paths = _collector_files(root, captures_root, metadata_path, metadata, "ncu")
     _verify_collector_files(paths, metadata, "ncu")
@@ -738,14 +1195,8 @@ def _compile_ncu_ok(
         "metadata_sha256": sha256_file(metadata_path),
         "profile_command": expected_profile_command,
         "tool_version": version,
-        "tool_version_provenance": {
-            "metadata_path": _relative(root, metadata_path),
-            "metadata_sha256": sha256_file(metadata_path),
-            "version_command": ["ncu", "--version"],
-            "metric_query_command": _ncu_query_command(device_index),
-            "gpu_query_command": gpu["query_command"],
-            "profile_command": expected_profile_command,
-        },
+        "tool_version_provenance": _tool_provenance(metadata, "ncu", version),
+        "metric_query": dict(metadata["metric_query"]),
         "gpu": gpu,
         "selected_metrics": selected,
         "report": _artifact(root, report_path),
@@ -763,7 +1214,23 @@ def _structured_access_failure(metadata: dict[str, object]) -> dict[str, object]
     message = access.get("message")
     if not isinstance(code, str) or not code or not isinstance(message, str) or not message:
         return None
+    if any(pattern.search(message) for pattern in NCU_FATAL_PATTERNS) or (
+        code not in KNOWN_NCU_ACCESS_CODES
+        and not _recognized_ncu_unavailable(None, message)
+    ):
+        raise ValueError(
+            "unavailable NCU claim is not a recognized counter permission or hardware support failure"
+        )
     return dict(access)
+
+
+def _recognized_ncu_unavailable(return_code: int | None, message: str) -> bool:
+    if any(pattern.search(message) for pattern in NCU_FATAL_PATTERNS):
+        return False
+    return (
+        return_code in KNOWN_NCU_UNAVAILABLE_CODES
+        or any(pattern.search(message) for pattern in NCU_UNAVAILABLE_PATTERNS)
+    )
 
 
 def _compile_ncu_unavailable(
@@ -800,10 +1267,15 @@ def _compile_ncu_unavailable(
         stderr = _read_bytes(stderr_path, "ncu stderr log")
         if not stdout and not stderr:
             raise ValueError("unavailable NCU claim requires nonempty failure logs")
+        message = (stderr or stdout).decode("utf-8", errors="replace").strip()
+        if not _recognized_ncu_unavailable(return_code, message):
+            raise ValueError(
+                "unavailable NCU claim is not a recognized counter permission or hardware support failure"
+            )
         failure: dict[str, object] = {
             "status": "failed",
             "return_code": return_code,
-            "message": (stderr or stdout).decode("utf-8", errors="replace").strip(),
+            "message": message,
         }
     else:
         assert access_failure is not None
@@ -816,13 +1288,8 @@ def _compile_ncu_unavailable(
         "failure": failure,
         "profile_command": profile_command,
         "tool_version": version,
-        "tool_version_provenance": {
-            "metadata_path": _relative(root, metadata_path),
-            "metadata_sha256": sha256_file(metadata_path),
-            "version_command": ["ncu", "--version"],
-            "metric_query_command": _ncu_query_command(device_index),
-            "profile_command": profile_command,
-        },
+        "tool_version_provenance": _tool_provenance(metadata, "ncu", version),
+        "metric_query": dict(metadata["metric_query"]),
         "gpu": gpu,
         "selected_metrics": selected,
         "stdout": _artifact(root, stdout_path),
@@ -840,12 +1307,20 @@ def _compile_profile(
     dataset, dataset_path = _manifest_reference(
         root, roots["datasets"], raw.get("dataset_manifest"), "dataset_manifest"
     )
-    evidence, _ = _manifest_reference(
+    evidence, evidence_path = _manifest_reference(
         root, roots["evidence"], raw.get("evidence_manifest"), "evidence_manifest"
     )
-    identity = _identity(raw, logical, dataset, evidence)
     command = _command(raw.get("command"), f"{profile_id}.command")
-    _validate_app_command(root, command, logical, dataset_path)
+    identity = _identity(raw, logical, dataset, evidence, command)
+    _validate_dataset_manifest(dataset_path, logical)
+    _validate_evidence_manifest(
+        root,
+        evidence_path,
+        dataset_path,
+        dataset["sha256"],
+        identity,
+    )
+    _validate_app_command(command, logical, dataset_path, identity["execution"])
     nsys = _compile_nsys(root, roots["captures"], raw, command, identity)
     ncu_config = raw.get("ncu")
     if not isinstance(ncu_config, dict):
@@ -888,35 +1363,21 @@ def _capture_paths(
 def _compile_bundle(
     root: Path, index: dict[str, object]
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
-    if index.get("schema_version") != 2:
-        raise ValueError("profiles.json schema_version must be 2")
+    if index.get("schema_version") != 3:
+        raise ValueError("profiles.json schema_version must be 3")
     if index.get("status") != "complete":
         raise ValueError("profiler index status must be complete")
     roots = _declared_roots(root, index)
-    expected_raw = index.get("expected_profiles")
     profiles_raw = index.get("profiles")
-    if not isinstance(expected_raw, list) or not expected_raw:
-        raise ValueError("expected_profiles must be a non-empty array")
     if not isinstance(profiles_raw, list) or not profiles_raw:
         raise ValueError("profiles must be a non-empty array")
-
-    expected: list[dict[str, object]] = []
-    expected_keys: set[tuple[object, ...]] = set()
-    for index_number, item in enumerate(expected_raw):
-        logical, key = _logical_profile(item, f"expected_profiles[{index_number}]")
-        if key in expected_keys:
-            raise ValueError(f"duplicate expected logical profile tuple: {key}")
-        expected_keys.add(key)
-        expected.append(logical)
     hybrid_auto = index.get("hybrid_auto")
     hybrid_status = hybrid_auto.get("status") if isinstance(hybrid_auto, dict) else None
     if hybrid_status not in {"enabled", "disabled", "unavailable"}:
         raise ValueError("hybrid_auto.status must be enabled, disabled, or unavailable")
-    expected_has_auto = any(item["engine"] == "hybrid-auto" for item in expected)
-    if hybrid_status == "enabled" and not expected_has_auto:
-        raise ValueError("enabled hybrid-auto is absent from expected coverage")
-    if hybrid_status != "enabled" and expected_has_auto:
-        raise ValueError("disabled/unavailable hybrid-auto appears in expected coverage")
+    if not isinstance(hybrid_auto, dict):
+        raise ValueError("hybrid_auto policy must be an object")
+    _text(hybrid_auto.get("reason"), "hybrid_auto.reason")
 
     raw_with_logical: list[tuple[dict[str, object], dict[str, object]]] = []
     actual_keys: set[tuple[object, ...]] = set()
@@ -940,10 +1401,53 @@ def _compile_bundle(
                 )
             capture_paths.add(metadata_path)
         raw_with_logical.append((item, logical))
+
+    canonical_fixed = _canonical_fixed_profiles()
+    canonical_fixed_keys = {_logical_key(profile) for profile in canonical_fixed}
+    actual_fixed_keys = {
+        key
+        for key in actual_keys
+        if key[1] in CANONICAL_FIXED_ENGINES
+    }
+    if actual_fixed_keys != canonical_fixed_keys:
+        missing = sorted(canonical_fixed_keys - actual_fixed_keys)
+        extra = sorted(actual_fixed_keys - canonical_fixed_keys)
+        raise ValueError(
+            f"canonical profiler coverage mismatch missing={missing} extra={extra}"
+        )
+    auto_profiles = [
+        logical for _, logical in raw_with_logical if logical["engine"] == "hybrid-auto"
+    ]
+    auto_scales = [str(profile["scale_factor"]) for profile in auto_profiles]
+    if hybrid_status == "enabled":
+        if sorted(auto_scales) != sorted(CANONICAL_SCALES):
+            raise ValueError(
+                f"hybrid-auto coverage mismatch expected={list(CANONICAL_SCALES)} "
+                f"actual={auto_scales}"
+            )
+    elif auto_profiles:
+        raise ValueError("disabled/unavailable hybrid-auto appears in profiler coverage")
+
+    expected = [*canonical_fixed, *sorted(auto_profiles, key=lambda item: str(item["scale_factor"]))]
+    expected_keys = {_logical_key(profile) for profile in expected}
     if actual_keys != expected_keys:
         missing = sorted(expected_keys - actual_keys)
         extra = sorted(actual_keys - expected_keys)
         raise ValueError(f"profiler coverage mismatch missing={missing} extra={extra}")
+
+    declared_expected = index.get("expected_profiles")
+    if not isinstance(declared_expected, list) or not declared_expected:
+        raise ValueError("expected_profiles must be a non-empty consistency assertion")
+    declared_keys: set[tuple[object, ...]] = set()
+    for index_number, item in enumerate(declared_expected):
+        _, key = _logical_profile(item, f"expected_profiles[{index_number}]")
+        if key in declared_keys:
+            raise ValueError(f"duplicate expected logical profile tuple: {key}")
+        declared_keys.add(key)
+    if declared_keys != expected_keys:
+        raise ValueError(
+            "self-declared expected_profiles do not match derived canonical coverage"
+        )
     profiles = [
         _compile_profile(root, roots, raw, logical)
         for raw, logical in raw_with_logical
@@ -958,12 +1462,12 @@ def finalize(args: argparse.Namespace) -> int:
     if requested_index is not None:
         source = _absolute(Path(requested_index))
         if source != canonical_index:
-            _atomic_write(canonical_index, _read_bytes(source, "profiler index"), 0o644)
+            raise ValueError("profiler index must be the canonical profiles.json")
     _assert_bundle_tree(root)
     index = _load_json(canonical_index, "profiler profile index")
     profiles, expected = _compile_bundle(root, index)
     manifest = {
-        "manifest_version": 2,
+        "manifest_version": 3,
         "status": "complete",
         "created_at_utc": _utc_now(),
         "source_index": {
@@ -971,11 +1475,13 @@ def finalize(args: argparse.Namespace) -> int:
             "sha256": sha256_file(canonical_index),
         },
         "expected_profiles": expected,
+        "coverage_policy": CANONICAL_COVERAGE_POLICY,
         "profile_count": len(profiles),
         "ncu_unavailable_profiles": sum(
             profile["ncu"]["status"] == "unavailable" for profile in profiles
         ),
         "profiles": profiles,
+        "residuals": BUNDLE_RESIDUALS,
         "artifacts": artifact_checksums(root),
     }
     manifest_bytes = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8")
@@ -1023,7 +1529,11 @@ def _audit_errors(root: Path) -> list[str]:
         errors.append("manifest source_index is missing")
     else:
         try:
-            index_path = _inside_root(root, source.get("path"), "source_index.path", require_file=True)
+            if source.get("path") != "profiles.json":
+                raise ValueError("source index must be canonical profiles.json")
+            index_path = _inside_root(
+                root, "profiles.json", "source_index.path", require_file=True
+            )
             if source.get("sha256") != sha256_file(index_path):
                 errors.append("source index checksum mismatch")
             profiles, expected = _compile_bundle(
@@ -1036,10 +1546,14 @@ def _audit_errors(root: Path) -> list[str]:
         except ValueError as exc:
             errors.append(f"profiler evidence validation failed: {exc}")
     profiles_value = manifest.get("profiles")
-    if manifest.get("manifest_version") != 2:
-        errors.append("manifest_version must be 2")
+    if manifest.get("manifest_version") != 3:
+        errors.append("manifest_version must be 3")
     if manifest.get("status") != "complete":
         errors.append("manifest status is not complete")
+    if manifest.get("coverage_policy") != CANONICAL_COVERAGE_POLICY:
+        errors.append("manifest coverage_policy mismatch")
+    if manifest.get("residuals") != BUNDLE_RESIDUALS:
+        errors.append("manifest residuals mismatch")
     if not isinstance(profiles_value, list) or manifest.get("profile_count") != len(profiles_value):
         errors.append("manifest profile_count mismatch")
     elif manifest.get("ncu_unavailable_profiles") != sum(
