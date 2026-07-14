@@ -1,0 +1,63 @@
+{
+  "schema_version": 2,
+  "experiment_id": "v7-resident-sf1-smoke",
+  "dataset": {
+    "path": "data/tpch_sf1_arrow",
+    "scale_factor": "1",
+    "manifest_sha256": "0d7899db921b223a3f94625fa910191485f6fb050054447025b9f2abbc2729a5",
+    "expected_hash": "542abf4003633c7c"
+  },
+  "query": {
+    "region": "ASIA",
+    "date": "1994-01-01"
+  },
+  "engines": {
+    "cpu-specialized": {
+      "runner": "cpp",
+      "threads": 8,
+      "cpu_ratio": 1.0,
+      "correctness_backend": "cpu-specialized",
+      "mode_options": {}
+    },
+    "gpu-copy": {
+      "runner": "cpp",
+      "threads": 1,
+      "cpu_ratio": 0.0,
+      "correctness_backend": "gpu-copy",
+      "mode_options": {"memory_mode": "copy"}
+    },
+    "gpu-managed": {
+      "runner": "cpp",
+      "threads": 1,
+      "cpu_ratio": 0.0,
+      "correctness_backend": "gpu-managed",
+      "mode_options": {"memory_mode": "managed"}
+    },
+    "gpu-mapped": {
+      "runner": "cpp",
+      "threads": 1,
+      "cpu_ratio": 0.0,
+      "correctness_backend": "gpu-mapped",
+      "mode_options": {"memory_mode": "mapped"}
+    },
+    "hybrid-arrow": {
+      "runner": "cpp",
+      "threads": 8,
+      "cpu_ratio": 0.5,
+      "correctness_backend": "hybrid-fixed",
+      "mode_options": {"partition": "fixed"}
+    },
+    "cudf": {
+      "runner": "cudf",
+      "threads": 1,
+      "cpu_ratio": 0.0,
+      "correctness_backend": "cudf",
+      "mode_options": {"framework": "cudf"}
+    }
+  },
+  "protocol": {
+    "warmup": 1,
+    "repeat": 2,
+    "timeout_seconds": 1800
+  }
+}
