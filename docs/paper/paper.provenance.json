@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "sha256": {
-    "generated/results.tex": "ec9ac4923b06e55dd069e436ad530371dd2e8efeec02c743c3c2d2348cbd453c",
-    "paper.pdf": "811b4728ace70d3b9685ef8466d256db8ffe3f489419708bd049d8b6d51705fb",
-    "paper.tex": "52c31c9e00f5f953c66fce44730cbc11f58b557d2ed251fffc89b19de4ce9305"
+    "generated/results.tex": "f63aee30bb7e947f0b0bf185bc06180dec8c66d2a8f862287699ade7f04d2ce4",
+    "paper.pdf": "4ef8cef1d2b1cecc2142ed534ef1304afc3614917aa4159b5e677b99213aacf2",
+    "paper.tex": "ab867192c7fc2cbbb92f613f27481db294154f304e7621819b7bc83adbe0cd1a"
   }
 }

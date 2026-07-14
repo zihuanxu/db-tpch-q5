@@ -75,4 +75,4 @@ def test_repository_claim_ledger_is_valid() -> None:
     root = Path(__file__).resolve().parents[2]
     report = validate_ledger(root / "docs/research/CLAIM_LEDGER.md", root)
     assert report.ok, "\n".join(report.errors)
-    assert len(report.claims) == 10
+    assert len(report.claims) == 21

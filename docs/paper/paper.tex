@@ -15,7 +15,7 @@
 
 \twocolumn[
 \begin{center}
-{\zihao{2}\bfseries 基于Apache Arrow与CUDA内存模式的TPC-H Q5查询实验\par}
+{\zihao{2}\bfseries 基于Apache Arrow的TPC-H Q5 CPU--GPU协同查询实验\par}
 \vspace{4mm}
 {\zihao{4}徐子桓\quad 2025104082\par}
 \vspace{4mm}
@@ -23,40 +23,44 @@
 \zihao{5}
 \sloppy
 \textbf{摘\quad 要}\quad
-本文围绕内存数据库中的CPU--GPU协同查询处理，实现了一个固定的TPC-H
-Q5物理执行器。实验保留Q5需要的六张表和字段，使用Apache Arrow IPC作为
-可复现的数据交换格式，并比较Arrow CPU算子、专用CPU实现、三种CUDA内存
-模式、CPU--GPU混合执行以及cuDF算子库。三种CUDA模式分别是显式PCIe复制、
-managed memory预取和mapped pinned host memory直接访问。所有正式后端从
-同一Arrow数据集读取，先用tiny数据检查查询逻辑，再在官方TPC-H SF1上完成
-19组配置、57次预热和\FormalMeasuredRuns 次正式测量。结果哈希均为
-\texttt{\FormalResultHash}，并逐行通过官方答案核对。专用CPU在16线程时的
-查询中位数为\CpuBestQueryMedian\,ms，cuDF为\CuDFQueryMedian\,ms，三种
-CUDA模式为\GpuCopyQueryMedian 至\GpuMappedQueryMedian\,ms。混合执行虽然
-正确并有并发时段，但最佳中位数仍为\HybridBestQueryMedian\,ms，没有超过
-专用CPU。当前实现没有完整SQL解析和代价优化，GPU也只负责最后的lineitem
-扫描，因此结论只适用于本项目的固定查询、冷进程和SF1规模。
+本文实现了一个固定的TPC-H Q5内存查询执行器，用它比较CPU列式算子、专用
+CPU执行、三种CUDA内存模式、cuDF算子库和CPU--GPU混合执行。六张输入表先
+统一转换为Apache Arrow IPC，CPU端建立过滤传播索引，GPU端主要扫描lineitem
+并按国家聚合。与只测一次冷启动不同，本实验增加了常驻会话，把数据装载和内存
+准备记为setup，把后续请求单独计时。SF1和SF10各包含18组配置、
+\VSevenSfOneWarmupRuns 次预热和\VSevenSfOneMeasuredRuns 次正式请求，所有后端
+均通过oracle。SF1中copy、managed和mapped的请求中位数分别为
+\SfOneGpuCopyMedian、\SfOneGpuManagedMedian 和\SfOneGpuMappedMedian\,ms；
+SF10中分别为\SfTenGpuCopyMedian、\SfTenGpuManagedMedian 和
+\SfTenGpuMappedMedian\,ms。固定比例混合执行在两个规模的最佳中位数为
+\SfOneHybridBestMedian 和\SfTenHybridBestMedian\,ms，但自动比例相对离线最佳点
+仍有\SfOneHybridAutoRegretPercent\%和\SfTenHybridAutoRegretPercent\%的损失。
+Nsight结果进一步表明，mapped虽然没有显式输入H2D，核函数仍会经PCIe远程读取
+主机页。实验也暴露出setup成本较高、自动模型不稳定等问题。因此本文的结论只
+适用于当前Q5实现、测试硬件和两个数据规模，不能直接推广到通用数据库。
 
-\textbf{关键词}\quad 内存数据库；TPC-H Q5；Apache Arrow；CUDA；统一虚拟寻址；cuDF
+\textbf{关键词}\quad 内存数据库；TPC-H Q5；Apache Arrow；CUDA；统一虚拟寻址；CPU--GPU协同
 \end{minipage}
 \vspace{5mm}
 
 \begin{minipage}{0.94\textwidth}
 \zihao{5}
 \textbf{Abstract}\quad
-This report studies CPU--GPU query processing with a fixed implementation of
-TPC-H Query 5. Apache Arrow IPC is used as the reproducible interchange format.
-The experiment compares an Arrow CPU baseline, a specialized CPU executor,
-three CUDA memory modes, a concurrent CPU--GPU path, and a cuDF operator
-baseline. Nineteen SF1 configurations completed 190 measured cold-process
-runs with the same official result. The best specialized CPU median was
-61.414 ms. The best hybrid median was 222.832 ms, so the hybrid-speedup
-hypothesis was rejected for this implementation. The prototype does not
-implement a general SQL optimizer, and the GPU only scans and aggregates the
-lineitem table. The conclusions are therefore limited to this query, hardware,
-execution lifecycle, and SF1 data set.
+This report implements a fixed TPC-H Query 5 executor and compares an Arrow
+CPU plan, a specialized CPU path, three CUDA memory modes, cuDF, and concurrent
+CPU--GPU execution. Arrow IPC is the common input format. A resident-session
+protocol separates one-time setup from repeated request latency. For both SF1
+and SF10, 18 configurations completed 54 warmups and 180 measured requests with
+oracle-verified results. At SF10, the resident medians of copy, managed, and
+mapped memory were 15.416, 15.066, and 358.582 ms. The best fixed hybrid ratio
+reached 10.054 ms, while the automatic policy had 9.21\% regret relative to the
+offline fixed-ratio sweep. Nsight evidence confirms that mapped memory removes
+an explicit input copy but still causes remote PCIe reads during the kernel.
+The prototype remains a fixed-query executor, uses only two scale factors, and
+has substantial setup costs. Its results should not be generalized to a full
+DBMS or other hardware without further experiments.
 
-\textbf{Keywords}\quad in-memory database; TPC-H Q5; Apache Arrow; CUDA; UVA; cuDF
+\textbf{Keywords}\quad in-memory database; TPC-H Q5; Apache Arrow; CUDA; UVA; CPU--GPU execution
 \end{minipage}
 \vspace{5mm}
 \end{center}
@@ -66,104 +70,125 @@ execution lifecycle, and SF1 data set.
 
 \section{引言}
 
-GPU具有较高的并行计算能力和显存带宽，但数据库查询不只包含计算，还包含
-数据装载、连接准备、主机与设备之间的数据移动等步骤。只比较一个CUDA核函数
-容易得到不完整的结论。因此，本实验选用TPC-H Q5，把CPU列式算子、专用CPU
-执行器、不同GPU内存模式和GPU算子库放在同一查询语义下进行对比。
+GPU具有较高的并行度和显存带宽，但数据库查询不仅有核函数计算，还包含数据
+装载、哈希或索引准备、主机与设备之间的数据移动等步骤。如果只报告CUDA核
+函数时间，很容易忽略真正占用时间的部分。本实验选择TPC-H Q5，是因为它同时
+包含地区和日期过滤、六表连接、聚合与排序，能够把CPU执行、GPU内存访问和
+CPU--GPU协同放在同一查询语义下讨论。
 
-本项目不是通用数据库。它没有SQL解析器、逻辑优化器和事务模块，而是把Q5
-的连接顺序和过滤过程直接写成物理执行计划。这样实现范围较小，适合课程实验，
-但也意味着结果不能直接推广到其他查询。
+项目不是通用数据库。它没有SQL解析器、逻辑重写和事务模块，而是把Q5直接写
+成物理执行计划。这样做的优点是课程周期内可以把正确性、内存模式和实验流程做
+完整；缺点是专用优化较多，结论的外推范围比较小。本文主要回答四个问题：
+（1）不同后端能否得到同一Q5结果；（2）常驻请求下copy、managed、mapped
+的差别是什么；（3）CPU与GPU按数据分片后能否获得加速；（4）简单的自动比例
+模型能否代替离线扫描。最后一个问题的结果并不理想，但我仍把它保留在报告中。
 
-\section{查询与数据表示}
+\section{查询语义与Arrow数据}
 
-Q5包含六张表。region和nation用于确定地区与国家，customer和orders用于
-确定客户与订单，supplier和lineitem用于供应商匹配和收入计算。查询选择
-指定地区及一年日期范围内的订单，要求客户与供应商属于同一国家，最后按国家聚合
+Q5一共使用六张表。region和nation确定目标地区中的国家；customer和orders
+确定客户、订单日期及订单所属国家；supplier给出供应商国家；lineitem保存订单
+明细和价格。一个lineitem
+被计入结果，需要订单日期位于1994年、客户与供应商都属于ASIA，并且二者来自
+同一国家。最后按国家计算
 \begin{equation}
   \mathrm{revenue}=\sum l\_extendedprice\times(1-l\_discount).
 \end{equation}
+同国家条件不是为了提高性能而人为增加的，它来自Q5本身，用来统计一个地区内
+由本国供应商完成的订单收入。
 
-项目只保留查询需要的列。字符串使用字典编码，日期转换为从Unix epoch开始
-的天数。价格以分为单位保存，折扣以百分之一为单位保存。单行收入用整数表示
-为
+项目只保存Q5需要的列。字符串采用字典编码，日期转换成从Unix epoch开始的
+天数。价格用分表示，折扣用百分之一表示，单行收入在$10^4$尺度上计算为
 \begin{equation}
-  r_{10^4}=p_{cent}\times(100-d_{0.01}),
+  r_{10^4}=p_{cent}\times(100-d_{0.01}).
 \end{equation}
-先按$10^4$尺度求和，输出时再舍入到两位小数。这一处理避免原版本逐行截断
-不足一分部分的问题。
+聚合完成后再舍入到两位小数。这一细节很重要：早期版本逐行截断不足一分的部分，
+虽然不同后端彼此一致，却和官方答案不一致。现在的正确性门禁同时检查内部结果
+哈希和官方oracle，避免出现“大家一起算错”的情况。
 
-数据准备脚本把TPC-H的六个\texttt{.tbl}文件转换为Arrow IPC文件，同时写入
-schema、行数、record batch和SHA256校验信息。正式实验中，专用C++、Acero、
-三种CUDA、混合执行和cuDF都读取这份Arrow数据集。它们的输入格式相同，但
-内部准备并不相同：专用路径会构造按键直接索引的数组，cuDF会把Arrow表转换
-成DataFrame。因此统一Arrow解决了输入可比性问题，没有消除执行器准备开销。
+数据准备脚本把TPC-H的\texttt{.tbl}转换为Arrow IPC文件，并记录schema、
+行数、record batch和SHA256。C++与cuDF都从这组文件开始，因此输入来源一致。
+不过Arrow统一的是接口和列式格式，不代表各后端没有额外转换：专用CPU会建立
+直接索引，CUDA会准备设备可访问数组，cuDF会构造DataFrame。这也是后文把
+setup和request分开统计的原因。
 
-\section{查询执行方法}
+\section{系统实现}
 
-\subsection{CPU过滤传播}
+\subsection{CPU物理计划}
 
-执行器先在CPU端找到目标region中的nation，然后构造supplier、customer和
-order到nation的三个直接索引数组，以下分别记为$S[s]$、$C[c]$和$O[o]$。
-日期或地区条件不满足的
-位置写为$-1$。最后扫描lineitem，只要订单国家与供应商国家相同，就把收入
-加入对应国家。该方法避免物化六表连接，但依赖TPC-H键值比较稠密的特点。
+专用CPU执行器先找到ASIA中的nation，再构造三个直接索引数组：供应商
+$S[s]$、客户$C[c]$和订单$O[o]$。不满足地区或日期条件的位置记为$-1$。
+扫描lineitem时只需检查$O[o]=S[s]\neq -1$，然后把定点数收入累加到对应国家。
+线程按Arrow batch边界和连续行区间分工，各自使用本地聚合数组，最后归并。
+这个方法避免物化六表连接，但依赖TPC-H主键较稠密以及查询固定的条件。
 
-专用CPU版本按Arrow record batch边界分片，并把lineitem划分为连续区间。
-每个线程使用本地国家聚合数组，结束后再归并。另一个CPU版本使用Arrow
-Acero的filter、hash join、aggregate和order by节点，作为通用列式算子计划
-对照。二者处理相同语义，但专用版本利用了固定Q5和稠密键，不能代表通用SQL
-执行器都能采用这种结构。
+Arrow Acero基线使用filter、hash join、aggregate和order by算子组成较通用的
+列式计划。它与专用路径语义相同，却不能使用相同程度的直接索引优化。因此两者
+的性能差异反映“通用算子计划与固定查询专用计划”的综合差异，不能简单解释为
+Arrow框架本身慢。
 
-\subsection{CUDA内存模式}
+\subsection{三种CUDA内存模式}
 
-三个手写CUDA后端复用CPU生成的过滤传播数组，并执行同一个lineitem聚合核：
-
+三个手写CUDA后端执行同一个lineitem聚合核，只改变输入数组的存放和访问方式：
 \begin{itemize}
-  \item \texttt{gpu-copy}使用device buffer和显式复制；
-  \item \texttt{gpu-managed}使用统一内存并在执行前预取；
-  \item \texttt{gpu-mapped}使用映射锁页内存，GPU经PCIe读取主机数据。
+  \item \texttt{gpu-copy}在setup时分配device buffer并显式H2D复制；
+  \item \texttt{gpu-managed}使用统一内存，运行时通过预取和页迁移使GPU访问；
+  \item \texttt{gpu-mapped}使用映射的锁页主机内存，GPU通过UVA地址经PCIe读取。
 \end{itemize}
+常驻会话中，copy的输入H2D发生在setup，不在每次request里。managed也不是
+“完全不用传输”，它只是由运行时管理迁移。mapped没有大块输入H2D，但数据仍
+要跨PCIe，只是传输发生在核函数读取主机页时。
 
-这三个模式比较的是输入数组到GPU的存放和访问方式，并不是三种不同的连接
-算法。managed提供统一虚拟地址，但数据仍要迁移；mapped省去大块显式H2D，
-GPU却要经PCIe读取主机页。cuDF版本通过通用GPU DataFrame的merge、filter、
-groupby和sort算子执行Q5，用来观察专用核函数与算子库之间的差别。
+\subsection{混合执行与自动比例}
 
-混合版本按Arrow batch把lineitem划成互不重叠的CPU和GPU区间，GPU端异步
-启动copy路径，主线程同时执行CPU区间，最后按国家合并两个定点数结果。实验
-使用25\%、50\%和75\%三种CPU比例。这里的“混合”是数据并行，不是把不同
-关系算子流水化到CPU和GPU。
+混合后端按Arrow batch把lineitem切成互不重叠的CPU和GPU区间。GPU异步处理
+一段，主线程同时扫描另一段，结束后按国家合并两个定点数结果。固定模式扫描
+0.125到0.875共7个CPU比例。自动模式在session setup中用抽样估计CPU和GPU
+单位处理能力，再选择一个比例，正式请求不重新调参。
 
-\section{实验设计}
+这个模型故意较简单，只使用行数和一次校准，没有考虑PCIe访问、CPU缓存、不同
+batch大小和运行时干扰。我原先希望它能接近离线最优点，实际只在SF10比较接近，
+SF1偏差较大。这是当前实现中一个比较明确的漏洞。
 
-实验分为两级。tiny数据只有6条lineitem，用来检查日期、地区、同国家条件和
-收入公式。正式数据使用TPC-H V3.0.1 dbgen生成的SF1。冻结矩阵包含专用CPU
-和Acero各6种线程数、三种CUDA模式、三种混合比例以及cuDF，共19组配置。
-每组先运行3次预热，再启动10个独立冷进程测量，总计57次预热和
-\FormalMeasuredRuns 次正式样本。工具保留每次stdout、stderr、退出状态、
-进程RSS、原始CSV和环境信息，并从原始记录重新计算中位数、p95和标准差。
+\subsection{常驻会话}
 
-服务器包含2路AMD EPYC 9654和NVIDIA GeForce RTX 4090，本次使用第0张GPU；
-软件环境为CUDA 12.6、Arrow/PyArrow 23.0.1和cuDF 26.06.00。正确性要求不同
-后端输出的国家顺序和$10^4$尺度收入相同，并与官方\texttt{q5.out}的两位
-小数结果一致。正式证据目录的manifest摘要前12位为
-\texttt{\FormalManifestShort}，完整值保存在生成文件和证据目录中。
+每个后端都提供setup和重复request两个阶段。setup负责Arrow装载、索引构建、
+内存分配及必要的数据传输；request只执行已经准备好的查询。若setup时间为
+$T_s$，请求中位数为$T_q$，本文用
+\begin{equation}
+  T_{amortized}(n)=T_s/n+T_q
+\end{equation}
+估计$n$次请求的平均成本。它不是并发吞吐模型，只表示同一会话顺序重复请求时
+一次性成本如何摊薄。
 
-为了缩短课程项目周期，正式实验只做SF1，没有继续做SF10；也没有做查询并发、
-NUMA绑定和完整Nsight分析，也没有GPU显存峰值采样。因此，本文主要回答
-“这些实现能否正确运行、主要时间花在哪里”，不尝试给出普遍性能模型。
+\section{实验方法}
+
+首先使用6条lineitem的tiny数据检查边界条件和收入公式。正式数据由TPC-H
+V3.0.1 dbgen生成，包含SF1与SF10。每个规模有18组配置：专用CPU和Acero各
+3种线程数，copy、managed、mapped、cuDF各1组，固定混合7个比例，自动混合
+1组。每组建立一次session，预热3次，再测量10次，因此每个规模共有
+\VSevenSfOneConfigurations 组配置、\VSevenSfOneWarmupRuns 次预热和
+\VSevenSfOneMeasuredRuns 次正式请求。
+
+主指标是request的中位数和p95，同时记录setup以及1、10、100次请求的摊销
+结果。正式计时不包含profiler采集。正确性要求每个请求状态为ok、哈希唯一，
+并与冻结oracle逐行一致。SF1和SF10证据manifest的摘要分别为
+\texttt{\VSevenSfOneManifestShort}和\texttt{\VSevenSfTenManifestShort}。
+
+实验服务器为双路AMD EPYC 9654，GPU为\VSevenGpuName，驱动版本
+\VSevenGpuDriver；软件包含CUDA、Apache Arrow/PyArrow 23.0.1和cuDF 26.06。
+正式证据固定到提交\texttt{\VSevenGitCommitShort}。此外，对SF1/SF10的
+copy、managed、mapped、0.5固定混合和auto混合各采集一组Nsight Systems与
+Nsight Compute。profiler会明显扰动执行时间，所以它只用于解释内存活动、
+NVTX阶段和核函数指标，不进入普通延迟排名。
 
 \section{实验结果}
 
 \subsection{正确性}
 
-tiny数据的预期结果为JAPAN 190.00、INDIA 90.00。修正decimal语义后，CPU
-与三种CUDA模式在$10^4$尺度上的结果哈希一致。
-
-SF1上19组配置的\FormalMeasuredRuns 次正式结果哈希均为
-\texttt{\FormalResultHash}。表\ref{tab:oracle}
-列出的五行与官方\texttt{q5.out}逐行一致，核对过程没有把字符串转换为浮点数。
+SF1的\VSevenSfOneMeasuredRuns 次正式请求得到唯一哈希
+\texttt{\VSevenSfOneResultHash}，SF10的\VSevenSfTenMeasuredRuns 次请求得到
+\texttt{\VSevenSfTenResultHash}。两个规模的18组配置全部通过oracle。表
+\ref{tab:oracle}给出SF1官方答案；核对过程使用定点整数，没有先转换成浮点数。
 
 \begin{table}[htbp]
 \centering
@@ -183,75 +208,117 @@ JAPAN & 45410175.70\\
 \end{tabular}
 \end{table}
 
-\subsection{性能观察}
+\subsection{常驻请求性能}
 
-表\ref{tab:perf}给出3次预热、10次正式运行的中位数。内部查询时间由各后端
-按统一字段报告，冷进程时间由外部控制器测量。我原先预期GPU或混合执行会在
-六百万行lineitem上占优，但本次结果没有支持这个预期。专用CPU查询时间最短，
-cuDF的查询阶段次之；三种手写CUDA和混合路径仍包含较重的计划准备、分配与
-Arrow列暂存成本。
+表\ref{tab:resident}列出各后端最有代表性的请求中位数。专用CPU从SF1的
+\SfOneCpuBestMedian\,ms增长到SF10的\SfTenCpuBestMedian\,ms。Acero分别为
+\SfOneAceroBestMedian 和\SfTenAceroBestMedian\,ms，说明当前通用连接计划的
+开销仍然较大。cuDF在SF10为\SfTenCuDFMedian\,ms，虽然比Acero快很多，但也
+没有超过专用CUDA和最佳混合路径。
 
 \begin{table}[htbp]
 \centering
-\caption{SF1时间中位数（ms）}
-\label{tab:perf}
+\caption{常驻请求时间中位数（ms）}
+\label{tab:resident}
 \small
 \begin{tabular}{lrr}
 \toprule
-后端 & 内部total & 冷进程墙钟\\
+后端 & SF1 & SF10\\
 \midrule
-专用CPU (16线程) & \CpuBestQueryMedian & \CpuBestProcessMedian\\
-Arrow Acero (32线程) & \AceroBestQueryMedian & \AceroBestProcessMedian\\
-cuDF & \CuDFQueryMedian & \CuDFProcessMedian\\
-gpu-copy & \GpuCopyQueryMedian & 1008.970\\
-gpu-managed & \GpuManagedQueryMedian & 1006.683\\
-gpu-mapped & \GpuMappedQueryMedian & 1134.574\\
-hybrid (75\% CPU) & \HybridBestQueryMedian & 888.370\\
+专用CPU & \SfOneCpuBestMedian & \SfTenCpuBestMedian\\
+Arrow Acero & \SfOneAceroBestMedian & \SfTenAceroBestMedian\\
+cuDF & \SfOneCuDFMedian & \SfTenCuDFMedian\\
+gpu-copy & \SfOneGpuCopyMedian & \SfTenGpuCopyMedian\\
+gpu-managed & \SfOneGpuManagedMedian & \SfTenGpuManagedMedian\\
+gpu-mapped & \SfOneGpuMappedMedian & \SfTenGpuMappedMedian\\
+hybrid-fixed最佳 & \SfOneHybridBestMedian & \SfTenHybridBestMedian\\
+hybrid-auto & \SfOneHybridAutoMedian & \SfTenHybridAutoMedian\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-更细的CUDA计时能说明内存模式差异。gpu-copy的H2D中位数为
-\GpuCopyHtoDMedian\,ms，kernel为\GpuCopyKernelMedian\,ms；managed的
-预取阶段为\GpuManagedHtoDMedian\,ms，kernel为
-\GpuManagedKernelMedian\,ms；mapped没有大块显式H2D，但kernel增加到
-\GpuMappedKernelMedian\,ms。这说明mapped并不是取消PCIe访问，而是把输入
-传输改成核函数运行期间的远程读取。managed也没有在本次SF1中超过copy。
+三种内存模式的变化并不是一个固定排名。SF1中copy比managed低约0.17\,ms；
+SF10中managed反而比copy低约0.35\,ms，这个差距相对p95波动并不大，我不认为
+它足以证明managed在更大规模一定更好。mapped在两个规模都明显最慢，SF10达到
+\SfTenGpuMappedMedian\,ms。它避免的是setup中的显式复制，不是PCIe数据访问。
 
-混合比例从25\% CPU增加到75\% CPU时，查询中位数从
-\HybridQuarterQueryMedian\,ms依次下降到\HybridHalfQueryMedian\,ms和
-\HybridBestQueryMedian\,ms。75\%配置记录到\HybridBestOverlapMedian\,ms
-的后端持续时间重叠，但这只能说明两个后端的运行区间相交。因为没有Nsight
-时间线，本文不声称CPU scan和CUDA kernel本身发生了重叠。
+\subsection{混合比例与自动模型}
 
-两种时间列不能混为同一种排名。\texttt{query\_total\_ms}用于观察后端查询
-阶段；\texttt{process\_elapsed\_ms}还包含进程启动、Arrow校验与加载，cuDF
-还包含Conda和Python导入。比如cuDF查询中位数为\CuDFQueryMedian\,ms，冷
-进程却达到\CuDFProcessMedian\,ms。只挑其中一列都可能得到片面的结论。
+SF1固定混合的最佳CPU比例是\SfOneHybridBestRatio，中位数
+\SfOneHybridBestMedian\,ms；SF10最佳比例变为\SfTenHybridBestRatio，中位数
+\SfTenHybridBestMedian\,ms。两个规模都低于对应的专用CPU请求时间，说明当
+数据已经常驻并且分片合理时，CPU--GPU并行可以带来收益。它与V5冷进程中混合
+执行较慢并不矛盾，因为V5把重复的数据准备也算在每次运行中。
+
+auto在SF1预测比例\SfOneHybridAutoPredictedRatio，实际选择
+\SfOneHybridAutoSelectedRatio，请求中位数\SfOneHybridAutoMedian\,ms，相对
+最佳fixed的regret为\SfOneHybridAutoRegretPercent\%。SF10的预测和选择比例为
+\SfTenHybridAutoPredictedRatio 与\SfTenHybridAutoSelectedRatio，中位数
+\SfTenHybridAutoMedian\,ms，regret降到\SfTenHybridAutoRegretPercent\%。模型
+捕捉到了规模变化方向，但还不能替代离线比例扫描。
+
+\subsection{setup与摊销}
+
+请求快不代表第一次查询也快。SF10最佳fixed的setup为
+\SfTenHybridBestSetup\,ms，因此1次请求的摊销值仍有
+\SfTenHybridBestAmortizedOne\,ms，100次请求后才降到
+\SfTenHybridBestAmortizedHundred\,ms。专用CPU的SF10 setup为
+\SfTenCpuBestSetup\,ms，100次摊销值为\SfTenCpuBestAmortizedHundred\,ms，
+仍低于混合路径。这说明当前混合后端虽然稳态请求更快，但需要足够多的重复请求
+才能抵消准备成本。auto的setup更高，SF10达到\SfTenHybridAutoSetup\,ms，
+主要来自两侧计划准备和校准。这里还有明显优化空间。
+
+\subsection{Profiler观察}
+
+下文把Nsight Systems和Nsight Compute分别简称为NSYS和NCU。
+
+NSYS在SF10测得copy核函数约15.34\,ms。
+
+managed约15.59\,ms，mapped约135.25\,ms。
+
+NCU测得的三个数值分别为16.72、16.93和129.81\,ms。
+
+copy与managed的device DRAM读取均约545\,MB，mapped只有约2.89\,MB。
+这不是mapped少读了数据，而是主要输入来自映射主机页，没有经过device DRAM。
+mapped的occupancy反而较高，因此occupancy本身不能代表有效吞吐。
+
+0.5固定混合在SF10的NCU核函数约8.16\,ms，DRAM读取约273\,MB，与只处理
+部分lineitem相符。NSYS中CPU scan约12.31\,ms、GPU请求约8.27\,ms，二者位于
+约12.51\,ms的measured request范围内，支持CPU和GPU阶段存在时间重叠。
+不过profiler运行比普通请求慢，本文不把这些数值加入表
+\ref{tab:resident}，也不据此计算端到端加速比。
 
 \section{讨论与不足}
 
-本实验有几处比较明显的不足。第一，专用C++路径和Arrow/cuDF路径还没有完全
-统一执行准备口径；虽然输入都是Arrow，专用路径、Acero和cuDF的转换工作仍然
-不同。第二，GPU只做lineitem扫描，不是完整的GPU查询计划。第三，三种CUDA
-模式每次运行都重新分配和准备内存，无法代表常驻数据库缓冲池。第四，只测试
-SF1，数据量不足以说明更大规模下的交叉点。第五，聚合使用全局原子加，没有
-实现block内局部归约。第六，混合路径两侧会重复准备计划，目前没有证明更细的
-kernel级重叠。
+实验支持了“专用物理计划比通用Acero计划更适合固定Q5”以及“常驻状态下合理
+分片可以让CPU和GPU共同受益”这两个判断，但没有支持“copy在所有规模都最好”
+和“简单auto模型可以直接找到最优比例”。我一开始比较关注GPU核函数，做完
+常驻实验后才发现setup会改变结论：SF10最佳混合请求只要10.05\,ms，但建立
+会话接近5\,s。如果老师只问单次查询，专用CPU仍更合适；如果同一数据上重复
+很多次，常驻GPU和混合执行才有讨论价值。
 
-这些问题不影响本次“实现并比较不同内存模式”的基本目标，但会限制性能结论。
-后续最直接的改进是复用CPU计划和GPU缓冲区，再增加SF10、常驻查询和多查询
-实验。我认为这些改动比继续微调当前单次kernel更可能改变整体结果。
+本项目还存在以下限制。第一，它只实现固定Q5，CPU直接索引不适合任意SQL。
+第二，GPU只处理最后的lineitem扫描和聚合，六表连接的大部分准备仍在CPU。
+第三，Arrow统一了输入文件，却没有统一各后端内部表示，公平性仍有争议。第四，
+只有SF1、SF10和一台服务器，没有多查询并发、NUMA绑定或其他GPU。第五，自动
+模型只做一次简单校准，SF1 regret较大。第六，Nsight重放会扰动统一内存行为，
+分析器数值只能解释机制，不能替代普通实验。最后，实验每组只建立一个session，
+setup本身没有做多次统计，这会让摊销结果对一次性抖动比较敏感。
+
+这些问题并不表示实验没有意义，但会限制结论。后续更值得做的是复用CPU过滤
+索引、减少混合两侧重复准备，再增加session级多次setup和并发请求实验。我认为
+继续微调当前原子聚合核的收益，可能还不如先解决这些端到端问题。
 
 \section{结论}
 
-本文完成了一个可以复现的TPC-H Q5 CPU--GPU实验原型。实现表明，GPU内存
-模式的差别不仅是API差别，还会改变PCIe传输发生的位置和核函数的数据访问
-代价。对于当前冷进程SF1查询，专用CPU的查询中位数最短；copy在三种CUDA
-模式中最好，mapped虽无显式大块H2D却最慢；混合执行正确但没有获得加速。
-这个负结果说明并行执行本身不等于端到端优化，计划复用和数据准备同样重要。
-项目还通过官方答案修复了原有decimal截断问题。由于系统仍是固定查询执行器、
-实验规模也较小，本文把更大规模、常驻生命周期和完整GPU查询计划留作后续工作。
+本文完成了一个基于Arrow输入的TPC-H Q5 CPU--GPU实验原型，并把冷启动、
+常驻请求和profiler观察分开记录。SF1/SF10的全部正式请求通过oracle。copy与
+managed在常驻请求中接近，mapped因远程PCIe访问明显较慢；固定比例混合在两个
+规模都超过了专用CPU请求时间，但setup成本较高；auto能够跟随规模改变比例，
+却没有达到离线最优点。这个结果说明，CPU--GPU查询优化不能只看是否并行或是否
+使用统一地址，还要同时考虑生命周期、数据放置、比例选择和准备成本。由于系统
+仍是固定查询执行器，本文把这些结论看作对Q5实现的实验观察，而不是通用数据库
+结论。
 
 \begin{thebibliography}{9}
 \zihao{5-}
@@ -270,6 +337,10 @@ NVIDIA. CUDA C++ Programming Guide[EB/OL].
 \bibitem{cudf}
 RAPIDS. cuDF Documentation[EB/OL].
 \url{https://docs.rapids.ai/api/cudf/stable/}.
+
+\bibitem{nsight}
+NVIDIA. Nsight Systems and Nsight Compute Documentation[EB/OL].
+\url{https://docs.nvidia.com/nsight-systems/}.
 \end{thebibliography}
 
 \end{CJK*}

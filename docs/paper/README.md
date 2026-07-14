@@ -13,3 +13,26 @@
 
 当前论文已填写作者徐子桓和学号 2025104082。实验结果只能从仓库中已保存的
 CSV、环境记录和正确性校验记录引用；没有证据的实验不得写成已完成。
+
+## V7 结果来源
+
+- `docs/artifacts/v7_sf1_resident`：SF1 常驻会话正式矩阵；
+- `docs/artifacts/v7_sf10_resident`：SF10 常驻会话正式矩阵；
+- `docs/artifacts/v7_hybrid_model`：fixed 比例曲线、auto 选择和 regret；
+- `docs/artifacts/v7_profiler`：Nsight 的轻量发布副本。
+
+V5 的 `docs/artifacts/v5_sf1` 只作为冷进程历史对照。V5 的冷进程墙钟、V7 的
+setup 和 V7 的 resident request 是三种不同口径，不能放在同一列中直接排名。
+
+重新生成论文数值并编译：
+
+```bash
+python3 scripts/import_paper_evidence.py \
+  --sf1 docs/artifacts/v7_sf1_resident \
+  --sf10 docs/artifacts/v7_sf10_resident \
+  --model docs/artifacts/v7_hybrid_model/memq5-v7-hybrid-model.json \
+  --ledger docs/research/CLAIM_LEDGER.md \
+  --output docs/paper/generated
+bash docs/paper/build.sh
+python3 scripts/check_paper.py
+```

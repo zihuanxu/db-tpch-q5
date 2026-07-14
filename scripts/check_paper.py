@@ -11,11 +11,13 @@ from pathlib import Path
 
 STALE_RESULT_HASH = "9f1f5f7578dd816e"
 REQUIRED_GENERATED_MARKERS = (
-    r"\newcommand{\FormalResultHash}{542abf4003633c7c}",
-    r"\newcommand{\FormalMeasuredRuns}{190}",
-    r"\newcommand{\FormalWarmupRuns}{57}",
-    r"\newcommand{\CpuBestQueryMedian}{61.414}",
-    r"\newcommand{\HybridBestQueryMedian}{222.832}",
+    r"\newcommand{\VSevenSfOneResultHash}{542abf4003633c7c}",
+    r"\newcommand{\VSevenSfTenResultHash}{b1351a421ba8dcfd}",
+    r"\newcommand{\VSevenSfOneMeasuredRuns}{180}",
+    r"\newcommand{\VSevenSfTenMeasuredRuns}{180}",
+    r"\newcommand{\SfOneGpuCopyMedian}{1.267}",
+    r"\newcommand{\SfTenHybridBestMedian}{10.054}",
+    r"\newcommand{\SfOneHybridAutoRegretPercent}{33.89}",
 )
 PROVENANCE_FILE = "paper.provenance.json"
 PROVENANCE_INPUTS = ("paper.tex", "generated/results.tex", "paper.pdf")
@@ -65,6 +67,9 @@ def check_source_text(text: str) -> list[str]:
         errors.append("paper contains a pending/TBD/TODO marker")
     if STALE_RESULT_HASH in text:
         errors.append(f"paper contains stale result hash: {STALE_RESULT_HASH}")
+    for stale in ("正式实验只做SF1", "没有继续做SF10", "resident 生命周期未实现"):
+        if stale in text:
+            errors.append(f"paper contains stale V5-only statement: {stale}")
     return errors
 
 
@@ -73,11 +78,17 @@ def check_paper(repo_root: Path) -> list[str]:
     source = paper_dir / "paper.tex"
     generated = paper_dir / "generated/results.tex"
     pdf = paper_dir / "paper.pdf"
-    evidence_manifest = repo_root / "docs/artifacts/v5_sf1/manifest.json"
-    evidence_digest = repo_root / "docs/artifacts/v5_sf1/manifest.sha256"
+    evidence = (
+        repo_root / "docs/artifacts/v7_sf1_resident",
+        repo_root / "docs/artifacts/v7_sf10_resident",
+    )
+    model = repo_root / "docs/artifacts/v7_hybrid_model/memq5-v7-hybrid-model.json"
     errors: list[str] = []
 
-    for path in (source, generated, pdf, evidence_manifest, evidence_digest):
+    required = [source, generated, pdf, model]
+    for directory in evidence:
+        required.extend([directory / "manifest.json", directory / "manifest.sha256"])
+    for path in required:
         if not path.is_file():
             errors.append(f"missing publication file: {path.relative_to(repo_root)}")
     if errors:
@@ -92,12 +103,18 @@ def check_paper(repo_root: Path) -> list[str]:
         if marker not in generated_text:
             errors.append(f"generated results missing marker: {marker}")
 
-    manifest_sha = hashlib.sha256(evidence_manifest.read_bytes()).hexdigest()
-    expected_digest = f"{manifest_sha}  manifest.json"
-    if evidence_digest.read_text(encoding="ascii").strip() != expected_digest:
-        errors.append("formal evidence manifest digest mismatch")
-    if f"% manifest_sha256={manifest_sha}" not in generated_text:
-        errors.append("generated results do not identify the formal evidence manifest")
+    for label, directory in (("sf1", evidence[0]), ("sf10", evidence[1])):
+        manifest = directory / "manifest.json"
+        digest = directory / "manifest.sha256"
+        manifest_sha = hashlib.sha256(manifest.read_bytes()).hexdigest()
+        expected_digest = f"{manifest_sha}  manifest.json"
+        if digest.read_text(encoding="ascii").strip() != expected_digest:
+            errors.append(f"{label} formal evidence manifest digest mismatch")
+        if f"% {label}_manifest_sha256={manifest_sha}" not in generated_text:
+            errors.append(f"generated results do not identify the {label} evidence manifest")
+    model_sha = _sha256(model)
+    if f"% model_sha256={model_sha}" not in generated_text:
+        errors.append("generated results do not identify the hybrid model")
 
     pdf_bytes = pdf.read_bytes()
     if len(pdf_bytes) < 10_000 or not pdf_bytes.startswith(b"%PDF"):
