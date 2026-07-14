@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <new>
 #include <stdexcept>
 #include <string>
@@ -532,9 +533,15 @@ auto arrow_cuda_status_boundary(Function&& function) -> decltype(function()) {
 }
 
 struct ArrowCudaQ5Session::Impl {
+  struct RequestPrefetch {
+    double ms = 0.0;
+    int64_t bytes = 0;
+  };
+
   ArrowGpuInput input;
   const std::size_t nation_count;
   const ArrowCudaMemoryMode mode;
+  std::mutex execute_mutex;
   int device = 0;
   Q5SessionSetup setup;
   int64_t initial_h2d_bytes = 0;
@@ -617,9 +624,9 @@ struct ArrowCudaQ5Session::Impl {
     outputs_clean = true;
   }
 
-  double prefetch_managed_output_to_device_if_needed() {
+  RequestPrefetch prefetch_managed_output_to_device_if_needed() {
     if (mode != ArrowCudaMemoryMode::kManaged || managed_output_on_device) {
-      return 0.0;
+      return {};
     }
     CudaEvent start;
     CudaEvent stop;
@@ -629,7 +636,7 @@ struct ArrowCudaQ5Session::Impl {
     check_cuda(cudaEventRecord(stop.get()),
                "cudaEventRecord managed output prefetch stop");
     managed_output_on_device = true;
-    return elapsed_ms(start, stop);
+    return RequestPrefetch{elapsed_ms(start, stop), output_bytes(nation_count)};
   }
 
   double launch_existing_kernel() {
@@ -666,12 +673,13 @@ struct ArrowCudaQ5Session::Impl {
   }
 
   arrow::Result<Q5Result> finish_result_for_request(
-      double h2d_ms, double kernel_ms, double d2h_ms,
+      const RequestPrefetch& prefetch, double kernel_ms, double d2h_ms,
       const Stopwatch& total_timer) {
     Q5Result result;
-    result.timing.h2d_ms = h2d_ms;
+    result.timing.h2d_ms = prefetch.ms;
     result.timing.kernel_ms = kernel_ms;
     result.timing.d2h_ms = d2h_ms;
+    result.counters.h2d_bytes = prefetch.bytes;
     result.counters.d2h_bytes = output_bytes(nation_count);
     if (mode == ArrowCudaMemoryMode::kMapped) {
       result.counters.mapped_remote_read_bytes =
@@ -976,12 +984,14 @@ arrow::Result<std::unique_ptr<ArrowCudaQ5Session>> ArrowCudaQ5Session::Make(
 
 arrow::Result<Q5Result> ArrowCudaQ5Session::Execute() {
   return arrow_cuda_status_boundary([&]() -> arrow::Result<Q5Result> {
+    std::lock_guard<std::mutex> lock(impl_->execute_mutex);
     Stopwatch total_timer;
     impl_->reset_output_buffers();
-    const double h2d_ms = impl_->prefetch_managed_output_to_device_if_needed();
+    const Impl::RequestPrefetch prefetch =
+        impl_->prefetch_managed_output_to_device_if_needed();
     const double kernel_ms = impl_->launch_existing_kernel();
     const double d2h_ms = impl_->collect_small_output();
-    return impl_->finish_result_for_request(h2d_ms, kernel_ms, d2h_ms,
+    return impl_->finish_result_for_request(prefetch, kernel_ms, d2h_ms,
                                              total_timer);
   });
 }

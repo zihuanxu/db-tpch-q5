@@ -3,7 +3,11 @@
 #include <arrow/api.h>
 
 #include <cassert>
+#include <condition_variable>
+#include <future>
 #include <iostream>
+#include <mutex>
+#include <vector>
 
 #include "cuda/q5_arrow_cuda.hpp"
 #include "engine/q5_params.hpp"
@@ -45,6 +49,44 @@ void assert_setup_for_mode(const memq5::Q5SessionSetup& setup,
   }
 }
 
+void assert_concurrent_managed_calls_are_stable(
+    const memq5::ArrowQ5Dataset& dataset, const memq5::Q5Params& params) {
+  auto session = memq5::ArrowCudaQ5Session::Make(
+                     dataset, params, memq5::ArrowCudaMemoryMode::kManaged)
+                     .ValueOrDie();
+
+  constexpr int kConcurrentCalls = 8;
+  std::mutex start_mutex;
+  std::condition_variable start_condition;
+  int ready = 0;
+  bool start = false;
+  std::vector<std::future<arrow::Result<memq5::Q5Result>>> calls;
+  calls.reserve(kConcurrentCalls);
+  for (int call = 0; call < kConcurrentCalls; ++call) {
+    calls.push_back(std::async(std::launch::async, [&]() {
+      {
+        std::unique_lock<std::mutex> lock(start_mutex);
+        ++ready;
+        start_condition.notify_all();
+        start_condition.wait(lock, [&]() { return start; });
+      }
+      return session->Execute();
+    }));
+  }
+
+  {
+    std::unique_lock<std::mutex> lock(start_mutex);
+    start_condition.wait(lock, [&]() { return ready == kConcurrentCalls; });
+    start = true;
+  }
+  start_condition.notify_all();
+
+  for (auto& call : calls) {
+    const auto result = call.get().ValueOrDie();
+    assert(memq5::result_hash_hex(result) == "248d10b6ee352953");
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -66,6 +108,8 @@ int main() {
       memq5::load_arrow_q5_dataset(MEMQ5_ARROW_FIXTURE_DIR).ValueOrDie();
   const memq5::Q5Params params = Asia1994Params();
 
+  assert_concurrent_managed_calls_are_stable(dataset, params);
+
   for (const auto mode : {memq5::ArrowCudaMemoryMode::kCopy,
                           memq5::ArrowCudaMemoryMode::kManaged,
                           memq5::ArrowCudaMemoryMode::kMapped}) {
@@ -81,6 +125,10 @@ int main() {
     if (mode == memq5::ArrowCudaMemoryMode::kCopy) {
       assert(first.timing.h2d_ms == 0.0);
       assert(second.counters.h2d_bytes == 0);
+    } else if (mode == memq5::ArrowCudaMemoryMode::kManaged) {
+      assert(first.counters.h2d_bytes == 0);
+      assert(second.counters.h2d_bytes == first.counters.d2h_bytes);
+      assert(second.timing.h2d_ms >= 0.0);
     }
   }
 
