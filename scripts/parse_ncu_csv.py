@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import io
 import math
 import re
 from pathlib import Path
@@ -31,16 +32,24 @@ def _number(value: str, metric: str) -> float:
 
 def parse_ncu_csv(path: Path, q5_kernel: str) -> dict[str, object]:
     """Return metrics for exactly one kernel whose name includes `q5_kernel`."""
-    with path.open("r", encoding="utf-8-sig", newline="") as handle:
-        sample = handle.read(4096)
-        if not sample.strip():
-            raise ValueError(f"empty Nsight Compute CSV: {path}")
-        handle.seek(0)
-        try:
-            dialect = csv.Sniffer().sniff(sample, delimiters=",;")
-        except csv.Error:
-            dialect = csv.excel
-        rows = list(csv.DictReader(handle, dialect=dialect))
+    text = path.read_text(encoding="utf-8-sig")
+    lines = text.splitlines(keepends=True)
+    header_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if "Kernel Name" in line and "Metric Name" in line
+        ),
+        None,
+    )
+    if header_index is None:
+        raise ValueError(f"no Q5 kernel matching {q5_kernel!r} in {path}")
+    csv_text = "".join(lines[header_index:])
+    try:
+        dialect = csv.Sniffer().sniff(csv_text[:4096], delimiters=",;")
+    except csv.Error:
+        dialect = csv.excel
+    rows = list(csv.DictReader(io.StringIO(csv_text), dialect=dialect))
 
     matching = [row for row in rows if q5_kernel in _header(row, "Kernel Name")]
     if not matching:

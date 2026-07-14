@@ -183,7 +183,8 @@ def collect_ncu(
 
     profile_command = [
         "ncu", "--csv", "--target-processes", "all", "--replay-mode", "application",
-        "--kernel-name-base", "demangled", "--kernel-name", q5_kernel,
+        "--kernel-name-base", "demangled", "--kernel-name",
+        f"regex:.*{re.escape(q5_kernel)}.*",
         "--metrics", ",".join(selected.values()), "--devices", str(device_index), *command,
     ]
     manifest: dict[str, object] = {

@@ -78,6 +78,21 @@ def test_parser_returns_normalized_metrics_for_exactly_one_q5_kernel() -> None:
     }
 
 
+def test_parser_ignores_ncu_and_profiled_application_preamble(tmp_path: Path) -> None:
+    report = tmp_path / "report.csv"
+    report.write_text(
+        "==PROF== Connected to process 42 (resident-q5)\n"
+        '{"record_type":"session_setup","status":"ok"}\n'
+        + FIXTURE.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    parsed = parse_ncu_csv(report, "q5_kernel")
+
+    assert parsed["kernel_name"] == "void memq5::q5_kernel<float>(...)"
+    assert parsed["metrics"]["gpu__time_duration.sum"] == 1_250_000.0
+
+
 def test_parser_rejects_multiple_q5_kernels(tmp_path: Path) -> None:
     report = tmp_path / "report.csv"
     report.write_text(FIXTURE.read_text(encoding="utf-8").replace('"1","42"', '"2","42"', 1), encoding="utf-8")
@@ -141,6 +156,8 @@ def test_collector_persists_discovery_capture_and_replay_failure_provenance(
     assert manifest["supported_metrics"] == sorted(supported.splitlines())
     assert manifest["selected_metrics"]["duration"] == "gpu__time_duration.sum"
     assert manifest["profile_command"][:7] == ["ncu", "--csv", "--target-processes", "all", "--replay-mode", "application", "--kernel-name-base"]
+    kernel_filter_index = manifest["profile_command"].index("--kernel-name")
+    assert manifest["profile_command"][kernel_filter_index + 1] == "regex:.*q5_kernel.*"
     assert manifest["profile_command"][-3:] == ["resident-q5", "--requests", "1"]
     assert manifest["replay"] == {"mode": "application", "return_code": 1, "succeeded": False}
     assert manifest["tool_versions"]["ncu"] == "NVIDIA Nsight Compute 2026.1"
