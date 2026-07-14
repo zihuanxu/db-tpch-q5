@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "cuda/q5_arrow_cuda.hpp"
+#include "engine/arrow_q5_plan.hpp"
 #include "engine/q5_params.hpp"
 #include "engine/q5_result_io.hpp"
 #include "io/arrow_q5_loader.hpp"
@@ -26,6 +27,24 @@ memq5::Q5Params Asia1994Params() {
   memq5::set_q5_date(&params, "1994-01-01");
   params.threads = 2;
   return params;
+}
+
+int64_t expected_resident_host_bytes(
+    const memq5::ArrowQ5Dataset& dataset, const memq5::Q5Params& params) {
+  const auto plan = memq5::build_arrow_q5_plan(dataset, params).ValueOrDie();
+  int64_t bytes = dataset.lineitem->num_rows() *
+                  static_cast<int64_t>(sizeof(int32_t) * 3 + sizeof(int64_t));
+  bytes += static_cast<int64_t>(plan.order_nation_by_key.size() * sizeof(int32_t));
+  bytes += static_cast<int64_t>(
+      plan.supplier_nation_by_key.size() * sizeof(int32_t));
+  for (const auto& name : plan.nation_name_by_key) {
+    bytes += static_cast<int64_t>(name.size());
+  }
+  const std::size_t nation_count =
+      plan.max_nation_key < 0 ? 0 : static_cast<std::size_t>(plan.max_nation_key) + 1;
+  bytes += static_cast<int64_t>(nation_count * sizeof(uint64_t) +
+                                sizeof(uint64_t) + sizeof(int32_t));
+  return bytes;
 }
 
 void assert_setup_for_mode(const memq5::Q5SessionSetup& setup,
@@ -107,6 +126,8 @@ int main() {
   const auto dataset =
       memq5::load_arrow_q5_dataset(MEMQ5_ARROW_FIXTURE_DIR).ValueOrDie();
   const memq5::Q5Params params = Asia1994Params();
+  const int64_t expected_host_bytes =
+      expected_resident_host_bytes(dataset, params);
 
   assert_concurrent_managed_calls_are_stable(dataset, params);
 
@@ -121,6 +142,7 @@ int main() {
     assert(memq5::result_hash_hex(first) == "248d10b6ee352953");
     assert(memq5::result_hash_hex(first) == memq5::result_hash_hex(second));
     assert_setup_for_mode(session->setup(), mode);
+    assert(session->setup().resident_host_bytes == expected_host_bytes);
 
     if (mode == memq5::ArrowCudaMemoryMode::kCopy) {
       assert(first.timing.h2d_ms == 0.0);

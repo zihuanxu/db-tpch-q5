@@ -344,6 +344,14 @@ int64_t input_bytes(const ArrowGpuInput& input) {
   return checked_counter_bytes(bytes);
 }
 
+int64_t nation_name_bytes(const ArrowGpuInput& input) {
+  std::size_t bytes = 0;
+  for (const auto& name : input.plan.nation_name_by_key) {
+    bytes = checked_add(bytes, name.size());
+  }
+  return checked_counter_bytes(bytes);
+}
+
 int64_t logical_mapped_read_bytes(const ArrowGpuInput& input,
                                   std::size_t nation_count) {
   std::size_t bytes = 0;
@@ -970,6 +978,7 @@ arrow::Result<std::unique_ptr<ArrowCudaQ5Session>> ArrowCudaQ5Session::Make(
         setup.plan_build_ms = input.plan.build_ms;
         setup.host_staging_ms = input.build_ms - setup.plan_build_ms;
         const int64_t gpu_input_bytes = input_bytes(input);
+        const int64_t host_name_bytes = nation_name_bytes(input);
         const int64_t output_size_bytes = output_bytes(nation_count);
 
         std::unique_ptr<Impl> impl;
@@ -985,7 +994,8 @@ arrow::Result<std::unique_ptr<ArrowCudaQ5Session>> ArrowCudaQ5Session::Make(
         impl->setup = setup;
         impl->initialize();
         impl->setup.resident_host_bytes = checked_counter_bytes(checked_add(
-            static_cast<std::size_t>(gpu_input_bytes),
+            checked_add(static_cast<std::size_t>(gpu_input_bytes),
+                        static_cast<std::size_t>(host_name_bytes)),
             static_cast<std::size_t>(output_size_bytes)));
         if (mode == ArrowCudaMemoryMode::kMapped) {
           impl->setup.resident_gpu_bytes = output_size_bytes;
