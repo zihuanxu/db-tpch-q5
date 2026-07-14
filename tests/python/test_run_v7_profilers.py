@@ -221,6 +221,33 @@ def _fake_collectors(
     return run
 
 
+def test_nsys_observation_ignores_profiler_progress_lines(tmp_path: Path) -> None:
+    output = tmp_path / "nsys"
+    output.mkdir()
+    setup = {
+        "record_type": "session_setup",
+        "status": "ok",
+        "selected_cpu_ratio": 0.25,
+    }
+    request = {
+        "record_type": "request",
+        "status": "ok",
+        "selected_cpu_ratio": 0.25,
+        "result_hash": HASHES["1"],
+    }
+    (output / "profile.stdout.log").write_text(
+        "Capture range started in the application.\n"
+        "[1/1] [50%] profile.nsys-rep\n"
+        + json.dumps(setup)
+        + "\n"
+        + json.dumps(request)
+        + "\nGenerated:\n    /tmp/profile.nsys-rep\n",
+        encoding="utf-8",
+    )
+
+    assert run_v7_profilers._nsys_observation(output, HASHES["1"]) == 0.25
+
+
 def test_dry_run_prints_exact_commands_and_ten_bound_identities(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -593,13 +593,16 @@ def _save_invocation_output(
 def _nsys_observation(output_dir: Path, expected_hash: str) -> float:
     path = output_dir / "profile.stdout.log"
     try:
-        records = [
-            json.loads(line)
+        json_lines = [
+            line.strip()
             for line in path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
+            if line.lstrip().startswith("{")
         ]
+        records = [json.loads(line) for line in json_lines]
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise OrchestrationError(f"invalid NSYS application output: {path}: {exc}") from exc
+    if any(not isinstance(record, dict) for record in records):
+        raise OrchestrationError(f"NSYS application records must be objects: {path}")
     setups = [record for record in records if record.get("record_type") == "session_setup"]
     requests = [record for record in records if record.get("record_type") == "request"]
     if len(setups) != 1 or len(requests) != 1:
