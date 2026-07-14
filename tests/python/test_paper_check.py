@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from scripts.check_paper import (
+    check_generated_results,
     check_paper,
     check_paper_provenance,
     check_source_text,
@@ -33,3 +34,21 @@ def test_paper_provenance_detects_source_changed_after_pdf_build(tmp_path: Path)
 
     (tmp_path / "docs/paper/paper.tex").write_text("changed\n", encoding="utf-8")
     assert any("paper.tex" in error for error in check_paper_provenance(tmp_path))
+
+
+def test_generated_results_must_match_full_evidence_regeneration(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[2]
+    source = (root / "docs/paper/generated/results.tex").read_text(encoding="utf-8")
+    tampered = tmp_path / "results.tex"
+    tampered.write_text(
+        source.replace(
+            r"\newcommand{\SfTenGpuManagedMedian}{15.066}",
+            r"\newcommand{\SfTenGpuManagedMedian}{0.001}",
+        ),
+        encoding="utf-8",
+    )
+    assert tampered.read_text(encoding="utf-8") != source
+
+    errors = check_generated_results(root, tampered)
+
+    assert any("does not match audited evidence" in error for error in errors)

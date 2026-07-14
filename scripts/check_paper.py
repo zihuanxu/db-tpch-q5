@@ -6,7 +6,13 @@ import argparse
 import hashlib
 import json
 import re
+import tempfile
 from pathlib import Path
+
+try:
+    from scripts.import_paper_evidence import import_v7_evidence
+except ModuleNotFoundError:
+    from import_paper_evidence import import_v7_evidence
 
 
 STALE_RESULT_HASH = "9f1f5f7578dd816e"
@@ -73,6 +79,24 @@ def check_source_text(text: str) -> list[str]:
     return errors
 
 
+def check_generated_results(repo_root: Path, generated: Path) -> list[str]:
+    try:
+        with tempfile.TemporaryDirectory(prefix="memq5-paper-evidence-") as directory:
+            regenerated = import_v7_evidence(
+                repo_root / "docs/artifacts/v7_sf1_resident",
+                repo_root / "docs/artifacts/v7_sf10_resident",
+                repo_root / "docs/artifacts/v7_hybrid_model/memq5-v7-hybrid-model.json",
+                repo_root / "docs/research/CLAIM_LEDGER.md",
+                Path(directory),
+                repo_root,
+            )
+            if generated.read_bytes() != regenerated.read_bytes():
+                return ["generated/results.tex does not match audited evidence regeneration"]
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        return [f"cannot regenerate generated/results.tex from audited evidence: {error}"]
+    return []
+
+
 def check_paper(repo_root: Path) -> list[str]:
     paper_dir = repo_root / "docs/paper"
     source = paper_dir / "paper.tex"
@@ -102,6 +126,7 @@ def check_paper(repo_root: Path) -> list[str]:
     for marker in REQUIRED_GENERATED_MARKERS:
         if marker not in generated_text:
             errors.append(f"generated results missing marker: {marker}")
+    errors.extend(check_generated_results(repo_root, generated))
 
     for label, directory in (("sf1", evidence[0]), ("sf10", evidence[1])):
         manifest = directory / "manifest.json"

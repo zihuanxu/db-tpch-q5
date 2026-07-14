@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import copy
+import json
 from pathlib import Path
 
 import pytest
 
-from scripts.import_paper_evidence import import_evidence, import_v7_evidence
+from scripts.import_paper_evidence import (
+    _validate_cross_scale_identity,
+    import_evidence,
+    import_v7_evidence,
+)
 
 
 def test_import_generates_provenance_and_verified_values(tmp_path: Path) -> None:
@@ -80,3 +86,77 @@ def test_v7_import_rejects_model_identity_mismatch(tmp_path: Path) -> None:
             tmp_path / "generated",
             root,
         )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda scale: scale.__setitem__("regret_percent", 99.0), "regret_percent"),
+        (lambda scale: scale["auto"].__setitem__("sample_count", 9), "sample_count"),
+        (
+            lambda scale: scale["auto"].__setitem__("realized_cpu_ratio", 0.9),
+            "realized_cpu_ratio",
+        ),
+        (
+            lambda scale: scale["auto"].__setitem__("predicted_cpu_ratio", float("nan")),
+            "predicted_cpu_ratio",
+        ),
+        (
+            lambda scale: scale["auto"].__setitem__("predicted_cpu_ratio", 0.9),
+            "predicted_cpu_ratio",
+        ),
+        (lambda scale: scale.__setitem__("status", "partial"), "status"),
+        (
+            lambda scale: scale.__setitem__("regret_percent_status", "estimated"),
+            "regret_percent_status",
+        ),
+    ],
+)
+def test_v7_import_rejects_untrusted_model_values(
+    tmp_path: Path, mutation: object, message: str
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    source = root / "docs/artifacts/v7_hybrid_model/memq5-v7-hybrid-model.json"
+    model_data = json.loads(source.read_text(encoding="utf-8"))
+    scale = model_data["scales"][0]
+    assert isinstance(scale, dict)
+    assert callable(mutation)
+    mutation(scale)
+    model = tmp_path / "model.json"
+    model.write_text(json.dumps(model_data), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        import_v7_evidence(
+            root / "docs/artifacts/v7_sf1_resident",
+            root / "docs/artifacts/v7_sf10_resident",
+            model,
+            root / "docs/research/CLAIM_LEDGER.md",
+            tmp_path / "generated",
+            root,
+        )
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "gpu_name",
+        "gpu_driver",
+        "session_cli_sha256",
+        "cudf_env",
+        "cudf_details",
+    ],
+)
+def test_v7_import_rejects_cross_scale_environment_mismatch(field: str) -> None:
+    root = Path(__file__).resolve().parents[2]
+    sf1_manifest = json.loads(
+        (root / "docs/artifacts/v7_sf1_resident/manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    sf1_identity = sf1_manifest["identity"]
+    assert isinstance(sf1_identity, dict)
+    sf10_identity = copy.deepcopy(sf1_identity)
+    sf10_identity[field] = {"tampered": True} if field == "cudf_details" else "tampered"
+
+    with pytest.raises(ValueError, match=field):
+        _validate_cross_scale_identity(sf1_identity, sf10_identity)

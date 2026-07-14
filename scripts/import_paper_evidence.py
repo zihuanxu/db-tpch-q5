@@ -8,6 +8,7 @@ import csv
 import hashlib
 import io
 import json
+import math
 from pathlib import Path
 
 try:
@@ -46,6 +47,17 @@ REQUIRED_V7_CLAIM_STATES = {
     "C020": "REJECTED",
     "C021": "VERIFIED",
 }
+
+CROSS_SCALE_IDENTITY_FIELDS = (
+    "git_commit",
+    "gpu_uuid",
+    "gpu_name",
+    "gpu_driver",
+    "session_cli_sha256",
+    "cudf_env",
+    "cudf_details",
+)
+MODEL_ABS_TOLERANCE = 1e-9
 
 
 def _row(
@@ -89,7 +101,7 @@ def _require_claim_states(ledger_path: Path, repo_root: Path) -> None:
 
 def _v7_bundle(
     evidence_dir: Path, expected_scale: str
-) -> tuple[dict[str, object], list[dict[str, str]], str]:
+) -> tuple[dict[str, object], list[dict[str, str]], list[dict[str, str]], str]:
     audit_result = audit_v7(evidence_dir)
     if audit_result.get("ok") is not True:
         raise ValueError(f"SF{expected_scale} V7 evidence bundle audit failed")
@@ -103,10 +115,17 @@ def _v7_bundle(
         rows = list(csv.DictReader(handle))
     if len(rows) != 18 or any(row.get("lifecycle") != "resident" for row in rows):
         raise ValueError(f"SF{expected_scale} V7 summary must contain 18 resident rows")
+    with (evidence_dir / "setups.csv").open(newline="", encoding="utf-8") as handle:
+        setups = list(csv.DictReader(handle))
+    if len(setups) != 18 or any(
+        row.get("lifecycle") != "resident" or row.get("status") != "ok"
+        for row in setups
+    ):
+        raise ValueError(f"SF{expected_scale} V7 setups must contain 18 successful resident rows")
     manifest_sha = (evidence_dir / "manifest.sha256").read_text(
         encoding="ascii"
     ).split()[0]
-    return manifest, rows, manifest_sha
+    return manifest, rows, setups, manifest_sha
 
 
 def _best_row(
@@ -143,10 +162,54 @@ def _model_scale(model: dict[str, object], scale: str) -> dict[str, object]:
     return matches[0]
 
 
+def _model_number(
+    value: object,
+    label: str,
+    *,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"hybrid model {label} must be numeric")
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"hybrid model {label} must be finite")
+    if minimum is not None and number < minimum:
+        raise ValueError(f"hybrid model {label} is below {minimum}")
+    if maximum is not None and number > maximum:
+        raise ValueError(f"hybrid model {label} is above {maximum}")
+    return number
+
+
+def _model_sample_count(value: object, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError(f"hybrid model {label}.sample_count must be a positive integer")
+    return value
+
+
+def _require_close(actual: float, expected: float, label: str) -> None:
+    if not math.isclose(
+        actual,
+        expected,
+        rel_tol=1e-12,
+        abs_tol=MODEL_ABS_TOLERANCE,
+    ):
+        raise ValueError(f"hybrid model {label} disagrees with V7 evidence")
+
+
+def _validate_cross_scale_identity(
+    sf1_identity: dict[str, object], sf10_identity: dict[str, object]
+) -> None:
+    for field in CROSS_SCALE_IDENTITY_FIELDS:
+        if sf1_identity.get(field) != sf10_identity.get(field):
+            raise ValueError(f"SF1 and SF10 V7 evidence {field} values disagree")
+
+
 def _validate_model_scale(
     model_scale: dict[str, object],
     manifest: dict[str, object],
     rows: list[dict[str, str]],
+    setups: list[dict[str, str]],
 ) -> None:
     identity = model_scale.get("identity")
     manifest_identity = manifest.get("identity")
@@ -167,20 +230,144 @@ def _validate_model_scale(
     }
     if any(identity.get(key) != value for key, value in expected.items()):
         raise ValueError("hybrid model identity does not match V7 evidence")
+    if model_scale.get("status") != "ok":
+        raise ValueError("hybrid model scale status must be ok")
+    if model_scale.get("regret_percent_status") != "measured":
+        raise ValueError("hybrid model regret_percent_status must be measured")
     auto = model_scale.get("auto")
     best_fixed = model_scale.get("best_fixed")
     if not isinstance(auto, dict) or not isinstance(best_fixed, dict):
         raise ValueError("hybrid model results are incomplete")
     auto_row = _best_row(rows, "hybrid-arrow", ratio_mode="auto")
     fixed_row = _best_row(rows, "hybrid-arrow", ratio_mode="fixed")
-    comparisons = (
-        (auto.get("selected_cpu_ratio"), auto_row["cpu_ratio"]),
-        (auto.get("p50_request_ms"), auto_row["query_total_ms_median"]),
-        (best_fixed.get("cpu_ratio"), fixed_row["cpu_ratio"]),
-        (best_fixed.get("p50_request_ms"), fixed_row["query_total_ms_median"]),
+    auto_selected = _model_number(
+        auto.get("selected_cpu_ratio"), "auto.selected_cpu_ratio", minimum=0.0, maximum=1.0
     )
-    if any(abs(float(actual) - float(expected_value)) > 1e-9 for actual, expected_value in comparisons):
-        raise ValueError("hybrid model identity values disagree with V7 summary")
+    auto_realized = _model_number(
+        auto.get("realized_cpu_ratio"), "auto.realized_cpu_ratio", minimum=0.0, maximum=1.0
+    )
+    auto_predicted = _model_number(
+        auto.get("predicted_cpu_ratio"),
+        "auto.predicted_cpu_ratio",
+        minimum=0.0,
+        maximum=1.0,
+    )
+    auto_p50 = _model_number(auto.get("p50_request_ms"), "auto.p50_request_ms", minimum=0.0)
+    fixed_ratio = _model_number(
+        best_fixed.get("cpu_ratio"), "best_fixed.cpu_ratio", minimum=0.0, maximum=1.0
+    )
+    fixed_p50 = _model_number(
+        best_fixed.get("p50_request_ms"), "best_fixed.p50_request_ms", minimum=0.0
+    )
+    if auto_p50 <= 0.0 or fixed_p50 <= 0.0:
+        raise ValueError("hybrid model p50_request_ms values must be positive")
+    auto_count = _model_sample_count(auto.get("sample_count"), "auto")
+    fixed_count = _model_sample_count(best_fixed.get("sample_count"), "best_fixed")
+
+    _require_close(auto_selected, float(auto_row["cpu_ratio"]), "auto.selected_cpu_ratio")
+    _require_close(auto_realized, auto_selected, "auto.realized_cpu_ratio")
+    _require_close(auto_p50, float(auto_row["query_total_ms_median"]), "auto.p50_request_ms")
+    _require_close(fixed_ratio, float(fixed_row["cpu_ratio"]), "best_fixed.cpu_ratio")
+    _require_close(
+        fixed_p50,
+        float(fixed_row["query_total_ms_median"]),
+        "best_fixed.p50_request_ms",
+    )
+    if auto_count != int(auto_row["success_count"]):
+        raise ValueError("hybrid model auto.sample_count disagrees with V7 evidence")
+    if fixed_count != int(fixed_row["success_count"]):
+        raise ValueError("hybrid model best_fixed.sample_count disagrees with V7 evidence")
+
+    setup_matches = [
+        row for row in setups if row.get("config_id") == auto_row.get("config_id")
+    ]
+    if len(setup_matches) != 1:
+        raise ValueError("hybrid model auto setup provenance is missing")
+    auto_setup = setup_matches[0]
+    if (
+        auto_setup.get("ratio_mode") != "auto"
+        or auto_setup.get("hybrid_provenance_status") != "measured"
+        or auto_setup.get("hybrid_model_version") != "hybrid-cost-v1-batch-v1"
+        or auto_setup.get("cpu_calibration_requests") != "1"
+        or auto_setup.get("gpu_calibration_requests") != "1"
+    ):
+        raise ValueError("hybrid model auto setup provenance is invalid")
+    _require_close(
+        auto_predicted,
+        float(auto_setup["predicted_cpu_ratio"]),
+        "auto.predicted_cpu_ratio",
+    )
+    _require_close(
+        auto_selected,
+        float(auto_setup["selected_cpu_ratio"]),
+        "auto.selected_cpu_ratio setup provenance",
+    )
+    _require_close(
+        auto_realized,
+        float(auto_setup["realized_cpu_ratio"]),
+        "auto.realized_cpu_ratio setup provenance",
+    )
+    calibration_rows = _model_number(
+        int(auto_setup["calibration_rows"]),
+        "auto setup calibration_rows",
+        minimum=1.0,
+    )
+    tune_ms = _model_number(
+        float(auto_setup["tune_ms"]), "auto setup tune_ms", minimum=0.0
+    )
+    session_setup_ms = _model_number(
+        float(auto_setup["session_setup_ms"]),
+        "auto setup session_setup_ms",
+        minimum=0.0,
+    )
+    if calibration_rows <= 0.0 or tune_ms > session_setup_ms:
+        raise ValueError("hybrid model auto setup timing provenance is invalid")
+
+    fixed_rows = sorted(
+        [
+            row
+            for row in rows
+            if row["engine"] == "hybrid-arrow" and row["ratio_mode"] == "fixed"
+        ],
+        key=lambda row: float(row["cpu_ratio"]),
+    )
+    curve = model_scale.get("fixed_curve")
+    if not isinstance(curve, list) or len(curve) != len(fixed_rows):
+        raise ValueError("hybrid model fixed_curve does not cover the fixed sweep")
+    for position, (entry, row) in enumerate(zip(curve, fixed_rows, strict=True)):
+        if not isinstance(entry, dict):
+            raise ValueError(f"hybrid model fixed_curve[{position}] must be an object")
+        ratio = _model_number(
+            entry.get("cpu_ratio"),
+            f"fixed_curve[{position}].cpu_ratio",
+            minimum=0.0,
+            maximum=1.0,
+        )
+        p50 = _model_number(
+            entry.get("p50_request_ms"),
+            f"fixed_curve[{position}].p50_request_ms",
+            minimum=0.0,
+        )
+        sample_count = _model_sample_count(
+            entry.get("sample_count"), f"fixed_curve[{position}]"
+        )
+        _require_close(ratio, float(row["cpu_ratio"]), f"fixed_curve[{position}].cpu_ratio")
+        _require_close(
+            p50,
+            float(row["query_total_ms_median"]),
+            f"fixed_curve[{position}].p50_request_ms",
+        )
+        if sample_count != int(row["success_count"]):
+            raise ValueError(
+                f"hybrid model fixed_curve[{position}].sample_count disagrees with V7 evidence"
+            )
+
+    regret_ms = _model_number(model_scale.get("regret_ms"), "regret_ms")
+    regret_percent = _model_number(model_scale.get("regret_percent"), "regret_percent")
+    expected_regret_ms = auto_p50 - fixed_p50
+    expected_regret_percent = expected_regret_ms / fixed_p50 * 100.0
+    _require_close(regret_ms, expected_regret_ms, "regret_ms")
+    _require_close(regret_percent, expected_regret_percent, "regret_percent")
 
 
 def _macro_values(
@@ -258,22 +445,19 @@ def import_v7_evidence(
     repo_root: Path,
 ) -> Path:
     _require_claim_states(ledger_path, repo_root)
-    sf1_manifest, sf1_rows, sf1_sha = _v7_bundle(sf1_dir, "1")
-    sf10_manifest, sf10_rows, sf10_sha = _v7_bundle(sf10_dir, "10")
+    sf1_manifest, sf1_rows, sf1_setups, sf1_sha = _v7_bundle(sf1_dir, "1")
+    sf10_manifest, sf10_rows, sf10_setups, sf10_sha = _v7_bundle(sf10_dir, "10")
     model = json.loads(model_path.read_text(encoding="utf-8"))
     if model.get("schema_version") != 1 or model.get("status") != "ok":
         raise ValueError("hybrid model is not a complete version-1 result")
     sf1_model = _model_scale(model, "1")
     sf10_model = _model_scale(model, "10")
-    _validate_model_scale(sf1_model, sf1_manifest, sf1_rows)
-    _validate_model_scale(sf10_model, sf10_manifest, sf10_rows)
+    _validate_model_scale(sf1_model, sf1_manifest, sf1_rows, sf1_setups)
+    _validate_model_scale(sf10_model, sf10_manifest, sf10_rows, sf10_setups)
     sf1_identity = sf1_manifest["identity"]
     sf10_identity = sf10_manifest["identity"]
     assert isinstance(sf1_identity, dict) and isinstance(sf10_identity, dict)
-    if sf1_identity.get("git_commit") != sf10_identity.get("git_commit"):
-        raise ValueError("SF1 and SF10 V7 evidence commits disagree")
-    if sf1_identity.get("gpu_uuid") != sf10_identity.get("gpu_uuid"):
-        raise ValueError("SF1 and SF10 V7 evidence GPUs disagree")
+    _validate_cross_scale_identity(sf1_identity, sf10_identity)
 
     values = {
         "VSevenGitCommitShort": str(sf1_identity["git_commit"])[:12],

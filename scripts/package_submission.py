@@ -9,7 +9,13 @@ import io
 import os
 import subprocess
 import tarfile
+import tempfile
 from pathlib import Path, PurePosixPath
+
+try:
+    from scripts.release_audit import audit_compact_profiler_evidence
+except ModuleNotFoundError:
+    from release_audit import audit_compact_profiler_evidence
 
 
 EXCLUDED_ROOTS = {
@@ -51,6 +57,7 @@ REQUIRED_SUBMISSION_PATHS = (
     Path("docs/research/CLAIM_LEDGER.md"),
     Path("scripts/release_audit.py"),
 )
+COMPACT_PROFILER_ROOT = Path("docs/artifacts/v7_profiler")
 
 
 def _under(path: Path, prefix: Path) -> bool:
@@ -102,12 +109,32 @@ def _add_bytes(archive: tarfile.TarFile, name: str, data: bytes, mode: int = 0o6
     archive.addfile(info, io.BytesIO(data))
 
 
+def _audit_compact_source(repo_root: Path, files: list[Path]) -> None:
+    compact = repo_root / COMPACT_PROFILER_ROOT
+    selected = set(files)
+    selected_compact = {path for path in selected if _under(path, COMPACT_PROFILER_ROOT)}
+    if not compact.exists() and not selected_compact:
+        return
+    errors = audit_compact_profiler_evidence(compact)
+    if errors:
+        raise ValueError(f"compact profiler preflight failed: {'; '.join(errors)}")
+    source_compact = {
+        COMPACT_PROFILER_ROOT / path.relative_to(compact)
+        for path in compact.rglob("*")
+        if path.is_file()
+    }
+    omitted = sorted(source_compact - selected, key=lambda path: path.as_posix())
+    if omitted:
+        raise ValueError(f"submission omits compact profiler file: {omitted[0]}")
+
+
 def create_archive(
     repo_root: Path,
     output: Path,
     root_name: str,
     files: list[Path],
 ) -> None:
+    _audit_compact_source(repo_root, files)
     output.parent.mkdir(parents=True, exist_ok=True)
     payloads: list[tuple[Path, bytes, int]] = []
     manifest_lines: list[str] = []
@@ -190,6 +217,37 @@ def audit_archive(
         for path in actual_relative:
             if excluded_from_submission(Path(path)):
                 errors.append(f"archive contains excluded path: {path}")
+
+        compact_prefix = f"{COMPACT_PROFILER_ROOT.as_posix()}/"
+        requires_compact = any(
+            _under(required, COMPACT_PROFILER_ROOT) for required in required_paths
+        )
+        compact_members = [
+            member
+            for member in members
+            if member.isfile()
+            and member.name.startswith(prefix + compact_prefix)
+            and ".." not in PurePosixPath(member.name).parts
+        ]
+        if compact_members or requires_compact:
+            with tempfile.TemporaryDirectory(prefix="memq5-compact-audit-") as temporary:
+                compact_root = Path(temporary)
+                for member in compact_members:
+                    relative_name = member.name[len(prefix + compact_prefix) :]
+                    relative = PurePosixPath(relative_name)
+                    if not relative_name or relative.is_absolute() or ".." in relative.parts:
+                        continue
+                    member_file = archive.extractfile(member)
+                    if member_file is None:
+                        errors.append(f"missing archive payload: {member.name[len(prefix):]}")
+                        continue
+                    destination = compact_root.joinpath(*relative.parts)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes(member_file.read())
+                errors.extend(
+                    f"archive {error}"
+                    for error in audit_compact_profiler_evidence(compact_root)
+                )
 
     sidecar = archive_path.with_suffix(archive_path.suffix + ".sha256")
     expected_sidecar = f"{_sha256(archive_path.read_bytes())}  {archive_path.name}"
