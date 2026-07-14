@@ -36,6 +36,21 @@ def test_parser_reads_realistic_nvtx_range_column() -> None:
     assert [row["name"] for row in rows if row["kind"] == "range"] == ["request", "q5_kernel"]
 
 
+def test_parser_normalizes_default_domain_nvtx_range_prefix(tmp_path: Path) -> None:
+    report = tmp_path / "stats_nvtx_sum.csv"
+    report.write_text(
+        "Time (%),Total Time (ns),Instances,Range\n"
+        "50.0,1000,1,:request\n"
+        "50.0,1000,1,:q5_kernel\n",
+        encoding="utf-8",
+    )
+
+    rows = parse_nsys_csv(report)
+
+    assert validate_ranges(rows, {"request", "q5_kernel"}) == []
+    assert [row["name"] for row in rows] == ["request", "q5_kernel"]
+
+
 def test_validate_ranges_reports_an_absent_required_range() -> None:
     errors = validate_ranges([{"name": "request", "kind": "range", "total_ns": 1}], {"request", "q5_kernel"})
 

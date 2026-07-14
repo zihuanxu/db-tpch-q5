@@ -74,6 +74,8 @@ def parse_nsys_csv(path: Path) -> list[dict[str, object]]:
             if not raw or not any(value and value.strip() for value in raw.values() if value):
                 continue
             range_name = _value(raw, "range", "rangename")
+            if range_name.startswith(":"):
+                range_name = range_name[1:]
             name = range_name or _value(raw, "operation", "name")
             report = path.stem
             rows.append(
