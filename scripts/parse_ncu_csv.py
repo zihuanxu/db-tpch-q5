@@ -18,6 +18,8 @@ def _header(row: dict[str | None, str | None], name: str) -> str:
 
 def _number(value: str, metric: str) -> float:
     normalized = value.strip()
+    if "," in normalized:
+        raise ValueError(f"localized/non-C metric value for {metric}: {value!r}")
     try:
         parsed = float(normalized)
     except ValueError as exc:

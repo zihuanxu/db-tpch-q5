@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 from datetime import datetime, timezone
@@ -32,7 +33,16 @@ def _utc_now() -> str:
 
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    environment = os.environ.copy()
+    environment.update({"LC_ALL": "C", "LANG": "C"})
+    return subprocess.run(
+        command,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        env=environment,
+    )
 
 
 def _sha256(path: Path) -> str:
@@ -78,18 +88,55 @@ def _version(command: list[str]) -> str:
     return (result.stdout or result.stderr).strip()
 
 
-def _gpu_provenance() -> dict[str, str]:
-    command = ["nvidia-smi", "--query-gpu=driver_version,uuid", "--format=csv,noheader"]
+def _gpu_provenance(device_index: int) -> dict[str, object]:
+    command = [
+        "nvidia-smi",
+        f"--id={device_index}",
+        "--query-gpu=index,uuid,driver_version",
+        "--format=csv,noheader,nounits",
+    ]
+    base: dict[str, object] = {
+        "requested_index": device_index,
+        "query_command": command,
+    }
     try:
         result = _run(command)
     except OSError as exc:
-        return {"unavailable": str(exc)}
+        return {**base, "status": "unavailable", "error": str(exc)}
     if result.returncode != 0 or not result.stdout.strip():
-        return {"unavailable": (result.stderr or "nvidia-smi failed").strip()}
-    fields = [field.strip() for field in result.stdout.splitlines()[0].split(",")]
-    if len(fields) != 2:
-        return {"unavailable": f"unexpected nvidia-smi output: {result.stdout.strip()}"}
-    return {"driver_version": fields[0], "uuid": fields[1]}
+        return {
+            **base,
+            "status": "failed",
+            "return_code": result.returncode,
+            "stdout": result.stdout.strip(),
+            "stderr": result.stderr.strip(),
+        }
+    rows = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    fields = [field.strip() for field in rows[0].split(",")] if len(rows) == 1 else []
+    if len(fields) != 3 or not fields[0].isdigit():
+        return {
+            **base,
+            "status": "invalid_output",
+            "return_code": result.returncode,
+            "stdout": result.stdout.strip(),
+            "stderr": result.stderr.strip(),
+        }
+    actual_index = int(fields[0])
+    if actual_index != device_index:
+        return {
+            **base,
+            "status": "device_mismatch",
+            "index": actual_index,
+            "uuid": fields[1],
+            "driver_version": fields[2],
+        }
+    return {
+        **base,
+        "status": "ok",
+        "index": actual_index,
+        "uuid": fields[1],
+        "driver_version": fields[2],
+    }
 
 
 def _write_manifest(output_dir: Path, manifest: dict[str, object]) -> None:
@@ -97,18 +144,32 @@ def _write_manifest(output_dir: Path, manifest: dict[str, object]) -> None:
     (output_dir / "metadata.json").write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
 
 
-def collect_ncu(command: list[str], output_dir: Path, q5_kernel: str, metadata: dict) -> dict:
+def collect_ncu(
+    command: list[str],
+    output_dir: Path,
+    q5_kernel: str,
+    metadata: dict,
+    device_index: int = 0,
+) -> dict:
     """Discover metrics, profile one command, and reject failed replay or invalid CSV."""
     if not command:
         raise ValueError("command must not be empty")
-    try:
-        request_count = command[command.index("--requests") + 1]
-    except (ValueError, IndexError) as exc:
-        raise ValueError("profiled command must include --requests 1") from exc
-    if request_count != "1":
-        raise ValueError("profiled command must include --requests 1")
+    if device_index < 0:
+        raise ValueError("device_index must be non-negative")
+    request_error = (
+        "profiled command must include exactly one --requests option with value 1 (--requests 1)"
+    )
+    request_options = [index for index, value in enumerate(command) if value == "--requests"]
+    if len(request_options) != 1:
+        raise ValueError(request_error)
+    request_option = request_options[0]
+    if request_option + 1 >= len(command) or command[request_option + 1] != "1":
+        raise ValueError(request_error)
     output_dir.mkdir(parents=True, exist_ok=True)
-    query_command = ["ncu", "--query-metrics"]
+    query_command = [
+        "ncu", "--query-metrics", "--query-metrics-mode", "all",
+        "--devices", str(device_index),
+    ]
     try:
         query = _run(query_command)
     except OSError as exc:
@@ -123,17 +184,18 @@ def collect_ncu(command: list[str], output_dir: Path, q5_kernel: str, metadata: 
     profile_command = [
         "ncu", "--csv", "--target-processes", "all", "--replay-mode", "application",
         "--kernel-name-base", "demangled", "--kernel-name", q5_kernel,
-        "--metrics", ",".join(selected.values()), *command,
+        "--metrics", ",".join(selected.values()), "--devices", str(device_index), *command,
     ]
     manifest: dict[str, object] = {
         "metadata": metadata,
         "started_at_utc": _utc_now(),
+        "device_index": device_index,
         "query_command": query_command,
         "supported_metrics": supported,
         "selected_metrics": selected,
         "profile_command": profile_command,
         "tool_versions": {"ncu": _version(["ncu", "--version"])},
-        "gpu": _gpu_provenance(),
+        "gpu": _gpu_provenance(device_index),
     }
     try:
         profile = _run(profile_command)
@@ -150,13 +212,18 @@ def collect_ncu(command: list[str], output_dir: Path, q5_kernel: str, metadata: 
 
     report = output_dir / "report.csv"
     report.write_text(profile.stdout, encoding="utf-8")
-    parsed = parse_ncu_csv(report, q5_kernel)
-    missing = sorted(set(selected.values()) - set(parsed["metrics"]))
-    if missing:
+    manifest["report"] = {"path": report.name, "sha256": _sha256(report)}
+    try:
+        parsed = parse_ncu_csv(report, q5_kernel)
+        missing = sorted(set(selected.values()) - set(parsed["metrics"]))
+        if missing:
+            raise ValueError(f"profile report missing selected metrics: {', '.join(missing)}")
+    except (OSError, ValueError) as exc:
+        manifest["parse_error"] = {"type": type(exc).__name__, "message": str(exc)}
         manifest["finished_at_utc"] = _utc_now()
         _write_manifest(output_dir, manifest)
-        raise ValueError(f"profile report missing selected metrics: {', '.join(missing)}")
-    manifest["report"] = {"path": report.name, "sha256": _sha256(report), "parsed": parsed}
+        raise
+    manifest["report"]["parsed"] = parsed
     manifest["finished_at_utc"] = _utc_now()
     _write_manifest(output_dir, manifest)
     return manifest
@@ -166,6 +233,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Capture one Q5 Nsight Compute CSV report")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--kernel-name", default="q5_kernel")
+    parser.add_argument("--device-index", type=int, default=0)
     parser.add_argument("--metadata-json", default="{}")
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
@@ -176,7 +244,7 @@ def main() -> int:
         metadata = json.loads(args.metadata_json)
     except json.JSONDecodeError as exc:
         parser.error(f"invalid --metadata-json: {exc}")
-    collect_ncu(command, args.output_dir, args.kernel_name, metadata)
+    collect_ncu(command, args.output_dir, args.kernel_name, metadata, args.device_index)
     return 0
 
 
