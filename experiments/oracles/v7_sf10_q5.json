@@ -1,0 +1,39 @@
+{
+  "date": "1994-01-01",
+  "duckdb_version": "1.4.5",
+  "query_version": "tpch-q5-duckdb-decimal-v1",
+  "region": "ASIA",
+  "result_hash": "b1351a421ba8dcfd",
+  "rows": [
+    {
+      "nation": "INDIA",
+      "revenue_1e4": 5368625879995
+    },
+    {
+      "nation": "CHINA",
+      "revenue_1e4": 5353508299282
+    },
+    {
+      "nation": "VIETNAM",
+      "revenue_1e4": 5322693887176
+    },
+    {
+      "nation": "JAPAN",
+      "revenue_1e4": 5267668371444
+    },
+    {
+      "nation": "INDONESIA",
+      "revenue_1e4": 5231768523189
+    }
+  ],
+  "source_table_hashes": {
+    "customer": "d4ba00a59ddb3bdaabeb1bcf560a182f8874366c9db51cedc3bd5ec9d64d03bd",
+    "lineitem": "9a7b308b6ca31a88880421f5d1a8a540c6b9ff377d698b0401ed688534c7344d",
+    "nation": "66f96949939fa8fdf1c4ffed1e5f6c2842fe11a14b51fdc6ed1e17460031e8c5",
+    "orders": "f226ed1f69337bfd0dd2db00aa1c53d31ffb58dc03aa9386a80c7efcc24802c2",
+    "region": "6022658d673924389b54dcb70fa8c3d6da1b0d7afa3c1c017bab62a019df404f",
+    "supplier": "5de31112f00febc38aaa35581a7acf269b55f77b368c6ec3179fc138bf1fc996"
+  },
+  "sql": "select\n  n.n_name,\n  cast(sum(\n    cast(l.l_extendedprice * 100 as bigint) *\n    (100 - cast(l.l_discount * 100 as bigint))\n  ) as bigint) as revenue_1e4\nfrom customer c\njoin orders o on c.c_custkey = o.o_custkey\njoin lineitem l on l.l_orderkey = o.o_orderkey\njoin supplier s on l.l_suppkey = s.s_suppkey\njoin nation n on s.s_nationkey = n.n_nationkey\njoin region r on n.n_regionkey = r.r_regionkey\nwhere c.c_nationkey = s.s_nationkey\n  and r.r_name = ?\n  and o.o_orderdate >= cast(? as date)\n  and o.o_orderdate < cast(? as date)\ngroup by n.n_name\norder by revenue_1e4 desc, n.n_name",
+  "sql_sha256": "7baf3029afd2db52f88da8c9ebcb8e3722475d0fa6651fc1f58a1cad50e14743"
+}

@@ -8,7 +8,7 @@
     "expected_hash": "b1351a421ba8dcfd"
   },
   "oracle": {
-    "path": "data/tpch_sf10/oracle.json",
+    "path": "experiments/oracles/v7_sf10_q5.json",
     "sha256": "a397078a8896f22ce16d41ad17f1de0dc04fd1ef1de26ed78f8b01de62a351ec"
   },
   "query": {"region": "ASIA", "date": "1994-01-01"},

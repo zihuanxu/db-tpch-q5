@@ -534,6 +534,12 @@ software identities are validated rather than trusted from generated files.
 - [ ] Rotate the affected external API key in its provider account.
 - [x] Rewrite the unpublished branch history, push it, and create draft PR #2:
   `https://github.com/zihuanxu/db-tpch-q5/pull/2`.
+- [x] Fix the first GitHub Actions failure: the SF10 matrix referenced an
+  ignored runtime oracle under `data/`; it now references a committed oracle
+  with the same SHA-256 and rows as the frozen formal evidence.
+- [x] Pass the exact CPU Arrow CI script locally: 30/30 CTest and 449 Python
+  tests passed, with 4 environment-dependent tests skipped.
+- [x] Rebuild the submission after the CI fix: 1035 files, archive audit passed.
 
 The first GitHub push was rejected before the branch was published. Public
 artifacts now contain no `sk-`-shaped values. Raw local profiler bundles remain
