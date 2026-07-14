@@ -228,6 +228,9 @@ def test_hybrid_auto_filters_to_worker_thread_measured_kernel(
 
     manifest = json.loads((tmp_path / "metadata.json").read_text(encoding="utf-8"))
     profile_command = manifest["profile_command"]
+    replay_index = profile_command.index("--replay-mode")
+    assert profile_command[replay_index + 1] == "kernel"
+    assert manifest["replay"]["mode"] == "kernel"
     assert "--launch-skip" not in profile_command
     count_index = profile_command.index("--launch-count")
     assert profile_command[count_index + 1] == "1"

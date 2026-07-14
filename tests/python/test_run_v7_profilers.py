@@ -38,7 +38,7 @@ def _make_inputs(tmp_path: Path) -> dict[str, Path]:
     executable.chmod(0o755)
 
     values: dict[str, Path] = {"session_cli": executable}
-    for scale, auto_ratio in (("1", 0.30), ("10", 0.40)):
+    for scale, auto_ratio, threads in (("1", 0.30, 8), ("10", 0.40, 16)):
         data = tmp_path / f"source-data/sf{scale}"
         data.mkdir(parents=True)
         table = data / "lineitem.arrow"
@@ -86,8 +86,8 @@ def _make_inputs(tmp_path: Path) -> dict[str, Path]:
             f"{_sha256(evidence / 'manifest.json')}  manifest.json\n", encoding="ascii"
         )
         (evidence / "setups.csv").write_text(
-            "config_id,ratio_mode,status,selected_cpu_ratio\n"
-            f"hybrid-auto-t16,auto,ok,{auto_ratio}\n",
+            "config_id,ratio_mode,status,selected_cpu_ratio,threads\n"
+            f"hybrid-auto-t{threads:02d},auto,ok,{auto_ratio},{threads}\n",
             encoding="utf-8",
         )
         values[f"sf{scale}_data"] = data
@@ -301,6 +301,7 @@ def test_dry_run_prints_exact_commands_and_ten_bound_identities(
     assert auto["identity"]["cpu_ratio"] == pytest.approx(0.30)
     assert auto["identity_binding"]["cpu_ratio"] == "evidence_setup_then_nsys_observed"
     assert "--cpu-ratio" not in auto["app_command"]
+    assert auto["app_command"][auto["app_command"].index("--threads") + 1] == "8"
     assert auto["app_command"][-2:] == ["--hybrid-selection", "auto"]
 
 

@@ -275,6 +275,7 @@ def collect_ncu(
     (output_dir / "selected_metrics.json").write_text(json.dumps(selected, indent=2, sort_keys=True), encoding="utf-8")
 
     hybrid_auto = _is_hybrid_auto(command)
+    replay_mode = "kernel" if hybrid_auto else "application"
     launch_control = ["--launch-count", "1"]
     nvtx_filter = (
         ["--nvtx", "--nvtx-include", "hybrid_gpu_request/"]
@@ -282,7 +283,7 @@ def collect_ncu(
         else []
     )
     profile_command = [
-        "ncu", "--csv", "--target-processes", "all", "--replay-mode", "application",
+        "ncu", "--csv", "--target-processes", "all", "--replay-mode", replay_mode,
         "--kernel-name-base", "demangled", "--kernel-name",
         f"regex:.*{re.escape(q5_kernel)}.*",
         *nvtx_filter,
@@ -316,7 +317,7 @@ def collect_ncu(
     (output_dir / "profile.stdout.log").write_text(profile.stdout or "", encoding="utf-8")
     (output_dir / "profile.stderr.log").write_text(profile.stderr or "", encoding="utf-8")
     manifest["return_code"] = profile.returncode
-    manifest["replay"] = {"mode": "application", "return_code": profile.returncode, "succeeded": profile.returncode == 0}
+    manifest["replay"] = {"mode": replay_mode, "return_code": profile.returncode, "succeeded": profile.returncode == 0}
     if profile.returncode != 0:
         manifest["finished_at_utc"] = _utc_now()
         _write_manifest(output_dir, manifest)

@@ -421,7 +421,7 @@ class BundleFixture:
             "--target-processes",
             "all",
             "--replay-mode",
-            "application",
+            "kernel" if identity["engine"] == "hybrid-auto" else "application",
             "--kernel-name-base",
             "demangled",
             "--kernel-name",
@@ -489,7 +489,7 @@ class BundleFixture:
             },
             "return_code": 0 if status == "ok" else 13,
             "replay": {
-                "mode": "application",
+                "mode": "kernel" if identity["engine"] == "hybrid-auto" else "application",
                 "return_code": 0 if status == "ok" else 13,
                 "succeeded": status == "ok",
             },

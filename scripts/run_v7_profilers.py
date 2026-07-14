@@ -54,6 +54,7 @@ class ScaleInput:
     evidence: Path
     fixed_ratio: float
     auto_ratio: float
+    hybrid_threads: int
     session_commit: str
     result_hash: str
     dataset_manifest_sha256: str
@@ -140,7 +141,7 @@ def _ratio(value: float, label: str, *, interior: bool = False) -> float:
     return value
 
 
-def _auto_ratio(evidence: Path, manifest: dict[str, object]) -> float:
+def _auto_setup(evidence: Path, manifest: dict[str, object]) -> tuple[float, int]:
     matrix = manifest.get("matrix")
     auto_ids: set[str] = set()
     if isinstance(matrix, dict) and isinstance(matrix.get("configurations"), list):
@@ -167,13 +168,17 @@ def _auto_ratio(evidence: Path, manifest: dict[str, object]) -> float:
             f"evidence must contain exactly one successful hybrid-auto setup: {setups}"
         )
     try:
-        return _ratio(
+        ratio = _ratio(
             float(candidates[0]["selected_cpu_ratio"]),
             f"hybrid-auto selected ratio in {setups}",
             interior=True,
         )
+        threads = int(candidates[0]["threads"])
     except (KeyError, TypeError, ValueError) as exc:
-        raise OrchestrationError(f"invalid hybrid-auto selected ratio in {setups}") from exc
+        raise OrchestrationError(f"invalid hybrid-auto setup in {setups}") from exc
+    if threads < 1 or str(threads) != candidates[0]["threads"]:
+        raise OrchestrationError(f"invalid hybrid-auto threads in {setups}")
+    return ratio, threads
 
 
 def _validate_evidence(
@@ -233,12 +238,14 @@ def _validate_evidence(
             f"SF{scale} hybrid fixed ratio must be {HYBRID_FIXED_CPU_RATIO} "
             "for the current profiler bundle schema"
         )
+    auto_ratio, hybrid_threads = _auto_setup(evidence, manifest)
     return ScaleInput(
         scale=scale,
         data=data,
         evidence=evidence,
         fixed_ratio=fixed_ratio,
-        auto_ratio=_auto_ratio(evidence, manifest),
+        auto_ratio=auto_ratio,
+        hybrid_threads=hybrid_threads,
         session_commit=session_commit,
         result_hash=result_hash,
         dataset_manifest_sha256=dataset_sha,
@@ -313,7 +320,7 @@ def _ratio_text(value: float) -> str:
 
 
 def _app_command(
-    executable: Path, dataset: Path, engine: str, cpu_ratio: float
+    executable: Path, dataset: Path, engine: str, cpu_ratio: float, hybrid_threads: int
 ) -> list[str]:
     engine_command = dict(ENGINES)[engine]
     command = [
@@ -329,7 +336,12 @@ def _app_command(
         command.extend(["--cpu-ratio", _ratio_text(cpu_ratio)])
     if engine.startswith("hybrid-"):
         command.extend(
-            ["--hybrid-selection", "auto" if engine == "hybrid-auto" else "fixed"]
+            [
+                "--threads",
+                str(hybrid_threads),
+                "--hybrid-selection",
+                "auto" if engine == "hybrid-auto" else "fixed",
+            ]
         )
     return command
 
@@ -410,7 +422,9 @@ def _profile_plan(
                 },
             }
             profile_id = f"sf{scale.scale}-{engine}"
-            app = _app_command(executable, staged_dataset, engine, cpu_ratio)
+            app = _app_command(
+                executable, staged_dataset, engine, cpu_ratio, scale.hybrid_threads
+            )
             nsys_dir = root / "captures" / profile_id / "nsys"
             ncu_dir = root / "captures" / profile_id / "ncu"
             profiles.append(

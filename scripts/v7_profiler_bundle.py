@@ -1215,13 +1215,14 @@ def _ncu_profile_command(
         if engine == "hybrid-auto"
         else []
     )
+    replay_mode = "kernel" if engine == "hybrid-auto" else "application"
     return [
         "ncu",
         "--csv",
         "--target-processes",
         "all",
         "--replay-mode",
-        "application",
+        replay_mode,
         "--kernel-name-base",
         "demangled",
         "--kernel-name",
@@ -1285,9 +1286,13 @@ def _compile_ncu_ok(
     if metadata.get("launch_selection") != expected_launch_selection:
         raise ValueError("ncu launch selection does not match profiler engine")
     replay = metadata.get("replay")
+    expected_replay_mode = (
+        "kernel" if identity["engine"] == "hybrid-auto" else "application"
+    )
     if (
         metadata.get("return_code") != 0
-        or replay != {"mode": "application", "return_code": 0, "succeeded": True}
+        or replay
+        != {"mode": expected_replay_mode, "return_code": 0, "succeeded": True}
     ):
         raise ValueError("Nsight Compute replay did not succeed")
     stdout_path = _required_file(paths, "profile.stdout.log", "Nsight Compute stdout log")
@@ -1385,8 +1390,12 @@ def _compile_ncu_unavailable(
         raise ValueError("unavailable NCU claim lacks failed collector evidence")
     replay = metadata.get("replay")
     if isinstance(return_code, int) and return_code != 0:
+        expected_replay_mode = (
+            "kernel" if identity["engine"] == "hybrid-auto" else "application"
+        )
         if (
             not isinstance(replay, dict)
+            or replay.get("mode") != expected_replay_mode
             or replay.get("return_code") != return_code
             or replay.get("succeeded") is not False
         ):
