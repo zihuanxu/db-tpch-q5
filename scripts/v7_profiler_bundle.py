@@ -908,11 +908,16 @@ def _replay_nsys_exports(
             f"return_code={version_result.returncode}"
         )
     with tempfile.TemporaryDirectory(prefix="v7-nsys-replay-") as temporary:
-        output_prefix = Path(temporary) / "stats"
+        temporary_root = Path(temporary)
+        replay_report = temporary_root / raw_report.name
+        shutil.copyfile(raw_report, replay_report)
+        for original in exports.values():
+            shutil.copyfile(original, temporary_root / original.name)
+        output_prefix = temporary_root / "stats"
         replay_command = list(stats_command)
         replay_command[0] = executable
         replay_command[replay_command.index("--output") + 1] = str(output_prefix)
-        replay_command[-1] = str(raw_report)
+        replay_command[-1] = str(replay_report)
         try:
             completed = subprocess.run(
                 replay_command,

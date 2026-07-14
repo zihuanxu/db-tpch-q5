@@ -1370,6 +1370,38 @@ def test_nsys_reexport_mismatch_fails_when_compatible_tool_is_available(
         finalize(_args(tmp_path))
 
 
+def test_nsys_reexport_does_not_modify_original_report_sidecars(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundle = _single_bundle(tmp_path)
+    metadata_path = tmp_path / bundle.profiles[0]["nsys"]["metadata_path"]
+    sqlite = metadata_path.parent / "profile.sqlite"
+    sqlite.write_bytes(b"original sqlite evidence")
+    _refresh_metadata_files(metadata_path)
+
+    def fake_run(
+        command: list[str], **_: object
+    ) -> subprocess.CompletedProcess[str]:
+        if command == ["/test/bin/nsys", "--version"]:
+            return subprocess.CompletedProcess(
+                command, 0, "NVIDIA Nsight Systems 2026.1\n", ""
+            )
+        output_prefix = Path(command[command.index("--output") + 1])
+        source = Path(command[-1]).parent
+        (source / "profile.sqlite").write_bytes(b"rewritten by nsys stats")
+        for report in NSYS_REPORTS:
+            data = (source / f"stats_{report}.csv").read_bytes()
+            (output_prefix.parent / f"{output_prefix.name}_{report}.csv").write_bytes(
+                data
+            )
+        return subprocess.CompletedProcess(command, 0, "re-exported\n", "")
+
+    monkeypatch.setattr(v7_profiler_bundle.subprocess, "run", fake_run)
+
+    assert finalize(_args(tmp_path)) == 0
+    assert sqlite.read_bytes() == b"original sqlite evidence"
+
+
 def test_finalize_requires_nsys_on_the_current_audit_machine(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
