@@ -10,6 +10,8 @@ from pathlib import Path
 import pytest
 
 from scripts import v7_profiler_bundle
+from scripts.profile_ncu import collect_ncu
+from scripts.profile_nsys import collect_nsys
 from scripts.v7_profiler_bundle import artifact_checksums, audit, finalize, sha256_file
 
 
@@ -50,6 +52,27 @@ NCU_REPORT = """\
 """
 
 
+def _emit_nsys_exports(
+    output_prefix: Path, ranges: set[str] | None = None
+) -> None:
+    ranges = ranges or {"request", "q5_kernel"}
+    nvtx_rows = "".join(f'"1000","{name}"\n' for name in sorted(ranges))
+    contents = {
+        "cuda_api_sum": '"Total Time (ns)","Name"\n"100","cudaLaunchKernel"\n',
+        "cuda_gpu_kern_sum": (
+            '"Total Time (ns)","Operation"\n"1250","void q5_kernel()"\n'
+        ),
+        "cuda_gpu_mem_time_sum": (
+            '"Total Time (ns)","Operation"\n"500","[CUDA memcpy HtoD]"\n'
+        ),
+        "nvtx_sum": f'"Total Time (ns)","Range"\n{nvtx_rows}',
+    }
+    for report, content in contents.items():
+        (output_prefix.parent / f"{output_prefix.name}_{report}.csv").write_text(
+            content, encoding="utf-8"
+        )
+
+
 def _write_json(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -81,7 +104,25 @@ def _option(command: list[str], name: str) -> str:
 
 @pytest.fixture(autouse=True)
 def _dependency_free_nsys_replay(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(v7_profiler_bundle, "_find_nsys", lambda: None, raising=False)
+    executable = "/test/bin/nsys"
+    monkeypatch.setattr(v7_profiler_bundle, "_find_nsys", lambda: executable, raising=False)
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        if command == [executable, "--version"]:
+            return subprocess.CompletedProcess(
+                command, 0, "NVIDIA Nsight Systems 2026.1\n", ""
+            )
+        if len(command) > 1 and command[0] == executable and command[1] == "stats":
+            output_prefix = Path(command[command.index("--output") + 1])
+            source = Path(command[-1]).parent
+            for report in NSYS_REPORTS:
+                source_path = source / f"stats_{report}.csv"
+                destination = output_prefix.parent / f"{output_prefix.name}_{report}.csv"
+                destination.write_bytes(source_path.read_bytes())
+            return subprocess.CompletedProcess(command, 0, "re-exported\n", "")
+        raise AssertionError(command)
+
+    monkeypatch.setattr(v7_profiler_bundle.subprocess, "run", fake_run)
 
 
 class BundleFixture:
@@ -103,6 +144,13 @@ class BundleFixture:
                 "sha256": sha256_file(executable),
                 "build_commit": SESSION_COMMIT,
             },
+        }
+        self.collector_execution = {
+            "status": "ok",
+            "cwd": str(root.resolve()),
+            "command_path": "bin/memq5_arrow_session",
+            "resolved_path": str(executable.resolve()),
+            "executable_sha256": sha256_file(executable),
         }
         self.expected: list[dict[str, object]] = []
         self.profiles: list[dict[str, object]] = []
@@ -170,11 +218,11 @@ class BundleFixture:
             str(dataset_dir),
             "--engine",
             ENGINE_COMMANDS[engine],
-            "--cpu-ratio",
-            str(cpu),
             "--requests",
             "1",
         ]
+        if engine != "hybrid-auto":
+            command.extend(["--cpu-ratio", str(cpu)])
         command.extend(
             ["--hybrid-selection", "auto" if engine == "hybrid-auto" else "fixed"]
             if engine.startswith("hybrid-")
@@ -293,6 +341,9 @@ class BundleFixture:
             "--force-overwrite=true",
             "--trace=cuda,nvtx,osrt",
             "--sample=none",
+            "--capture-range=nvtx",
+            "--nvtx-capture=measured_request",
+            "--capture-range-end=stop",
             "--output",
             str(directory / "profile"),
             *command,
@@ -311,6 +362,7 @@ class BundleFixture:
         ]
         metadata = {
             "metadata": identity,
+            "collector_execution": self.collector_execution,
             "profile_command": profile_command,
             "stats_commands": [stats_command],
             "return_code": 0,
@@ -371,6 +423,9 @@ class BundleFixture:
             "demangled",
             "--kernel-name",
             "regex:.*q5_kernel.*",
+            *(["--launch-skip", "1"] if identity["engine"] == "hybrid-auto" else []),
+            "--launch-count",
+            "1",
             "--metrics",
             ",".join(SELECTED_METRICS.values()),
             "--devices",
@@ -379,6 +434,7 @@ class BundleFixture:
         ]
         metadata: dict[str, object] = {
             "metadata": identity,
+            "collector_execution": self.collector_execution,
             "device_index": 0,
             "query_command": query_command,
             "metric_query": {
@@ -389,6 +445,10 @@ class BundleFixture:
             },
             "supported_metrics": sorted(SELECTED_METRICS.values()),
             "selected_metrics": SELECTED_METRICS,
+            "launch_selection": {
+                "skip_matching_kernels": 1 if identity["engine"] == "hybrid-auto" else 0,
+                "profile_matching_kernels": 1,
+            },
             "profile_command": profile_command,
             "tool_versions": {"ncu": "NVIDIA Nsight Compute 2026.1"},
             "tool_version_provenance": {
@@ -452,11 +512,7 @@ class BundleFixture:
     ) -> None:
         expected_profiles = self.expected if expected is None else expected
         if hybrid_auto_status is None:
-            hybrid_auto_status = (
-                "enabled"
-                if any(item["engine"] == "hybrid-auto" for item in expected_profiles)
-                else "disabled"
-            )
+            hybrid_auto_status = "enabled"
         _write_json(
             self.root / "profiles.json",
             {
@@ -473,7 +529,7 @@ class BundleFixture:
                     "reason": (
                         "canonical hybrid-auto profiles captured"
                         if hybrid_auto_status == "enabled"
-                        else "trusted profiler policy permits omission"
+                        else "invalid test-only policy"
                     ),
                 },
                 "expected_profiles": expected_profiles,
@@ -486,7 +542,7 @@ def _args(root: Path) -> argparse.Namespace:
     return argparse.Namespace(directory=root, index=None)
 
 
-def _canonical_specs(*, include_auto: bool = False) -> list[tuple[str, str]]:
+def _canonical_specs(*, include_auto: bool = True) -> list[tuple[str, str]]:
     specs = [
         (scale, engine)
         for scale in ("1", "10")
@@ -505,7 +561,7 @@ def _single_bundle(
     ranges: set[str] | None = None,
 ) -> BundleFixture:
     bundle = BundleFixture(root)
-    specs = _canonical_specs(include_auto=engine == "hybrid-auto")
+    specs = _canonical_specs()
     target = ("1", engine)
     specs.remove(target)
     for scale, current_engine in [target, *specs]:
@@ -582,22 +638,146 @@ def test_finalize_and_audit_freeze_exact_two_by_five_coverage(tmp_path: Path) ->
     assert manifest["profile_count"] == 10
     assert len(manifest["expected_profiles"]) == 10
     assert manifest["coverage_policy"] == {
-        "fixed_matrix": "SF1/SF10 x copy/managed/mapped/hybrid-fixed",
+        "canonical_matrix": "SF1/SF10 x copy/managed/mapped/hybrid-fixed/hybrid-auto",
         "hybrid_fixed_cpu_ratio": 0.5,
-        "hybrid_auto": "optional",
+        "hybrid_auto": "mandatory",
     }
     artifacts = manifest["artifacts"]
     assert isinstance(artifacts, dict)
     assert "datasets/1/manifest.json" in artifacts
     assert "evidence/10/manifest.json" in artifacts
     first = manifest["profiles"][0]
-    assert first["nsys"]["derivation"]["status"] == "residual"
-    assert first["nsys"]["derivation"]["replay_validation"] == "unavailable"
+    assert first["nsys"]["derivation"]["status"] == "verified"
+    assert first["nsys"]["derivation"]["replay_validation"] == "matched"
     assert {item["id"] for item in manifest["residuals"]} >= {
         "nsys-export-linkage",
         "executable-build-commit",
         "concurrent-bundle-root-replacement",
     }
+
+
+@pytest.mark.parametrize("ncu_status", ["ok", "unavailable"])
+def test_collectors_generate_bundle_compatible_provenance_directly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ncu_status: str
+) -> None:
+    bundle = _two_by_five(tmp_path)
+    profile = next(
+        item
+        for item in bundle.profiles
+        if item["scale_factor"] == "1" and item["engine"] == "hybrid-auto"
+    )
+    command = list(profile["command"])
+    old_nsys = profile["nsys"]
+    assert isinstance(old_nsys, dict)
+    old_nsys_dir = (tmp_path / str(old_nsys["metadata_path"])).parent
+    app_stdout = (old_nsys_dir / "profile.stdout.log").read_text(encoding="utf-8")
+    identity = {
+        key: copy.deepcopy(profile[key])
+        for key in (
+            "scale_factor",
+            "engine",
+            "cpu_ratio",
+            "gpu_ratio",
+            "session_commit",
+            "dataset_manifest",
+            "evidence_manifest",
+            "oracle_hash",
+            "result_hash",
+            "gpu_uuid",
+            "execution",
+        )
+    }
+    direct_nsys = tmp_path / "captures/direct-collector/nsys"
+    direct_ncu = tmp_path / "captures/direct-collector/ncu"
+    supported = "\n".join(sorted(SELECTED_METRICS.values())) + "\n"
+    monkeypatch.chdir(tmp_path)
+
+    def fake_run(command_line: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        tool = command_line[0]
+        if tool in {"nsys", "/test/bin/nsys"}:
+            if command_line[1:] == ["--version"]:
+                return subprocess.CompletedProcess(
+                    command_line, 0, "NVIDIA Nsight Systems 2026.1\n", ""
+                )
+            if command_line[1] == "profile":
+                prefix = Path(command_line[command_line.index("--output") + 1])
+                prefix.with_suffix(".nsys-rep").write_bytes(
+                    NSYS_REPORT_MAGIC + b"2026@1@collector\n" + b"\x00" * 8192
+                )
+                return subprocess.CompletedProcess(command_line, 0, app_stdout, "")
+            if command_line[1] == "stats":
+                prefix = Path(command_line[command_line.index("--output") + 1])
+                source = Path(command_line[-1]).parent
+                source_exports = [source / f"stats_{report}.csv" for report in NSYS_REPORTS]
+                if all(path.exists() for path in source_exports):
+                    for report, source_path in zip(NSYS_REPORTS, source_exports, strict=True):
+                        (prefix.parent / f"{prefix.name}_{report}.csv").write_bytes(
+                            source_path.read_bytes()
+                        )
+                else:
+                    _emit_nsys_exports(prefix, ENGINE_RANGES[str(profile["engine"])])
+                return subprocess.CompletedProcess(command_line, 0, "stats exported\n", "")
+        if tool == "ncu":
+            if command_line[1:] == ["--version"]:
+                return subprocess.CompletedProcess(
+                    command_line, 0, "NVIDIA Nsight Compute 2026.1", ""
+                )
+            if command_line[1:2] == ["--query-metrics"]:
+                return subprocess.CompletedProcess(command_line, 0, supported, "")
+            if command_line[1] == "--csv":
+                if ncu_status == "unavailable":
+                    return subprocess.CompletedProcess(
+                        command_line,
+                        13,
+                        "",
+                        "ERR_NVGPUCTRPERM: performance counter permission denied\n",
+                    )
+                return subprocess.CompletedProcess(command_line, 0, NCU_REPORT, "")
+        if tool == "nvidia-smi":
+            return subprocess.CompletedProcess(
+                command_line, 0, f"0, {GPU_UUID}, 555.1\n", ""
+            )
+        raise AssertionError(command_line)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    collect_nsys(command, direct_nsys, identity)
+    if ncu_status == "ok":
+        collect_ncu(command, direct_ncu, "q5_kernel", identity)
+    else:
+        with pytest.raises(RuntimeError, match="replay failed"):
+            collect_ncu(command, direct_ncu, "q5_kernel", identity)
+    profile["nsys"] = {
+        "metadata_path": (direct_nsys / "metadata.json").relative_to(tmp_path).as_posix()
+    }
+    profile["ncu"] = {
+        "status": ncu_status,
+        "metadata_path": (direct_ncu / "metadata.json").relative_to(tmp_path).as_posix(),
+    }
+    bundle.write_index()
+
+    assert finalize(_args(tmp_path)) == 0
+    assert audit(_args(tmp_path)) == 0
+    nsys_metadata = _read_json(direct_nsys / "metadata.json")
+    ncu_metadata = _read_json(direct_ncu / "metadata.json")
+    assert nsys_metadata["stats"][0]["command"] == nsys_metadata["stats_commands"][0]
+    assert ncu_metadata["metric_query"]["stdout"] == supported
+    assert ncu_metadata["gpu"]["stdout"] == f"0, {GPU_UUID}, 555.1\n"
+    assert ncu_metadata["launch_selection"] == {
+        "skip_matching_kernels": 1,
+        "profile_matching_kernels": 1,
+    }
+
+
+def test_hybrid_auto_command_binds_selected_ratio_without_a_fixed_ratio_option(
+    tmp_path: Path,
+) -> None:
+    bundle = _single_bundle(tmp_path, engine="hybrid-auto")
+    profile = bundle.profiles[0]
+
+    assert profile["engine"] == "hybrid-auto"
+    assert "--cpu-ratio" not in profile["command"]
+    assert finalize(_args(tmp_path)) == 0
+    assert audit(_args(tmp_path)) == 0
 
 
 def test_complete_coverage_must_equal_the_explicit_matrix(tmp_path: Path) -> None:
@@ -620,7 +800,7 @@ def test_self_declared_expected_profiles_cannot_shrink_canonical_fixed_matrix(
 
 def test_enabled_hybrid_auto_requires_both_canonical_scales(tmp_path: Path) -> None:
     bundle = BundleFixture(tmp_path)
-    for scale, engine in _canonical_specs():
+    for scale, engine in _canonical_specs(include_auto=False):
         bundle.add_profile(scale, engine)
     bundle.add_profile("1", "hybrid-auto")
     bundle.write_index(hybrid_auto_status="enabled")
@@ -649,7 +829,7 @@ def test_fixed_matrix_rejects_noncanonical_hybrid_ratio(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("status", ["disabled", "unavailable"])
-def test_hybrid_auto_can_be_explicitly_disabled_or_unavailable(
+def test_hybrid_auto_cannot_be_disabled_or_unavailable(
     tmp_path: Path, status: str
 ) -> None:
     bundle = BundleFixture(tmp_path)
@@ -658,17 +838,20 @@ def test_hybrid_auto_can_be_explicitly_disabled_or_unavailable(
             bundle.add_profile(scale, engine)
     bundle.write_index(hybrid_auto_status=status)
 
-    assert finalize(_args(tmp_path)) == 0
-    assert audit(_args(tmp_path)) == 0
+    with pytest.raises(ValueError, match="hybrid_auto.status must be enabled"):
+        finalize(_args(tmp_path))
 
 
-def test_hybrid_auto_omission_requires_an_explicit_policy_reason(tmp_path: Path) -> None:
+def test_hybrid_auto_omission_fails_even_with_an_explicit_policy_reason(tmp_path: Path) -> None:
     bundle = _single_bundle(tmp_path)
     index = _read_json(tmp_path / "profiles.json")
-    index["hybrid_auto"] = {"status": "disabled", "reason": ""}
+    index["hybrid_auto"] = {
+        "status": "disabled",
+        "reason": "capture deliberately omitted",
+    }
     _write_json(tmp_path / "profiles.json", index)
 
-    with pytest.raises(ValueError, match="hybrid_auto.reason"):
+    with pytest.raises(ValueError, match="hybrid_auto.status must be enabled"):
         finalize(_args(tmp_path))
 
 
@@ -894,6 +1077,48 @@ def test_unrelated_executable_cannot_be_relabelled_with_valid_hash(tmp_path: Pat
         finalize(_args(tmp_path))
 
 
+def test_profiled_executable_must_be_elf(tmp_path: Path) -> None:
+    bundle = _single_bundle(tmp_path)
+    profile = bundle.profiles[0]
+    executable = tmp_path / "bin/memq5_arrow_session"
+    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    execution = copy.deepcopy(profile["execution"])
+    assert isinstance(execution, dict)
+    executable_provenance = execution["executable"]
+    assert isinstance(executable_provenance, dict)
+    executable_provenance["sha256"] = sha256_file(executable)
+    _set_profile_identity(tmp_path, profile, "execution", execution)
+    for tool in ("nsys", "ncu"):
+        config = profile[tool]
+        assert isinstance(config, dict)
+        metadata_path = tmp_path / str(config["metadata_path"])
+        metadata = _read_json(metadata_path)
+        collector_execution = metadata["collector_execution"]
+        assert isinstance(collector_execution, dict)
+        collector_execution["executable_sha256"] = sha256_file(executable)
+        _write_json(metadata_path, metadata)
+    bundle.write_index()
+
+    with pytest.raises(ValueError, match="ELF"):
+        finalize(_args(tmp_path))
+
+
+def test_collector_executable_path_must_match_frozen_execution(tmp_path: Path) -> None:
+    bundle = _single_bundle(tmp_path)
+    profile = bundle.profiles[0]
+    config = profile["nsys"]
+    assert isinstance(config, dict)
+    metadata_path = tmp_path / str(config["metadata_path"])
+    metadata = _read_json(metadata_path)
+    collector_execution = metadata["collector_execution"]
+    assert isinstance(collector_execution, dict)
+    collector_execution["resolved_path"] = str((tmp_path / "bin/other").resolve())
+    _write_json(metadata_path, metadata)
+
+    with pytest.raises(ValueError, match="collector executable"):
+        finalize(_args(tmp_path))
+
+
 def test_dataset_and_evidence_manifest_digests_are_recomputed(tmp_path: Path) -> None:
     bundle = _single_bundle(tmp_path)
     dataset_path = tmp_path / bundle.profiles[0]["dataset_manifest"]["path"]
@@ -1113,6 +1338,10 @@ def test_nsys_reexport_mismatch_fails_when_compatible_tool_is_available(
     def fake_run(
         command: list[str], **_: object
     ) -> subprocess.CompletedProcess[str]:
+        if command == ["/usr/bin/nsys", "--version"]:
+            return subprocess.CompletedProcess(
+                command, 0, "NVIDIA Nsight Systems 2026.1\n", ""
+            )
         output_prefix = Path(command[command.index("--output") + 1])
         source = Path(command[-1]).parent
         for report in NSYS_REPORTS:
@@ -1125,6 +1354,43 @@ def test_nsys_reexport_mismatch_fails_when_compatible_tool_is_available(
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     with pytest.raises(ValueError, match="Nsight Systems re-export mismatch"):
+        finalize(_args(tmp_path))
+
+
+def test_finalize_requires_nsys_on_the_current_audit_machine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _single_bundle(tmp_path)
+    monkeypatch.setattr(v7_profiler_bundle, "_find_nsys", lambda: None)
+
+    with pytest.raises(ValueError, match="compatible nsys.*required"):
+        finalize(_args(tmp_path))
+
+
+def test_audit_is_unverified_without_nsys_on_the_current_machine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _single_bundle(tmp_path)
+    assert finalize(_args(tmp_path)) == 0
+    monkeypatch.setattr(v7_profiler_bundle, "_find_nsys", lambda: None)
+
+    assert audit(_args(tmp_path)) == 1
+
+
+def test_finalize_rejects_an_incompatible_nsys_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _single_bundle(tmp_path)
+
+    def incompatible_version(
+        command: list[str], **_: object
+    ) -> subprocess.CompletedProcess[str]:
+        assert command == ["/test/bin/nsys", "--version"]
+        return subprocess.CompletedProcess(command, 0, "NVIDIA Nsight Systems 2025.1\n", "")
+
+    monkeypatch.setattr(v7_profiler_bundle.subprocess, "run", incompatible_version)
+
+    with pytest.raises(ValueError, match="version.*not compatible"):
         finalize(_args(tmp_path))
 
 
@@ -1230,6 +1496,11 @@ def test_ncu_unavailable_requires_failed_collector_evidence(tmp_path: Path) -> N
     [
         (-11, "Segmentation fault"),
         (139, "Segmentation fault (core dumped)"),
+        (13, "segfaulted while attaching to target"),
+        (13, "target application crashed"),
+        (13, "ERR_NVGPUCTRPERM: target application crashed"),
+        (13, "failed to launch application"),
+        (13, "application exited with an error"),
         (2, "Error: unknown option --metricz"),
     ],
 )
@@ -1251,6 +1522,23 @@ def test_ncu_unavailable_rejects_crashes_and_command_errors(
     (metadata_path.parent / "profile.stderr.log").write_text(message + "\n", encoding="utf-8")
     metadata["files"] = _files(metadata_path.parent)
     _write_json(metadata_path, metadata)
+
+    with pytest.raises(ValueError, match="recognized counter permission or hardware support failure"):
+        finalize(_args(tmp_path))
+
+
+def test_ncu_return_code_13_without_known_diagnostic_is_not_unavailable(
+    tmp_path: Path,
+) -> None:
+    bundle = _single_bundle(tmp_path, ncu_status="unavailable")
+    profile = bundle.profiles[0]
+    config = profile["ncu"]
+    assert isinstance(config, dict)
+    metadata_path = tmp_path / str(config["metadata_path"])
+    (metadata_path.parent / "profile.stderr.log").write_text(
+        "collector returned status 13\n", encoding="utf-8"
+    )
+    _refresh_metadata_files(metadata_path)
 
     with pytest.raises(ValueError, match="recognized counter permission or hardware support failure"):
         finalize(_args(tmp_path))

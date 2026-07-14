@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -91,8 +92,10 @@ def test_collector_records_argv_logs_hashes_versions_and_failed_command(
     result = collect_nsys(["resident-q5", "--requests", "1"], tmp_path, {"scale_factor": "SF1"})
 
     assert result["return_code"] == 9
-    assert result["profile_command"][:6] == [
-        "nsys", "profile", "--force-overwrite=true", "--trace=cuda,nvtx,osrt", "--sample=none", "--output"
+    assert result["profile_command"][:9] == [
+        "nsys", "profile", "--force-overwrite=true", "--trace=cuda,nvtx,osrt", "--sample=none",
+        "--capture-range=nvtx", "--nvtx-capture=measured_request",
+        "--capture-range-end=stop", "--output",
     ]
     assert result["profile_command"][-3:] == ["resident-q5", "--requests", "1"]
     assert result["tool_versions"]["nsys"] == "nsys 2026.1"
@@ -127,8 +130,15 @@ def test_collector_uses_one_stats_command_for_all_required_reports(
         "cuda_api_sum,cuda_gpu_kern_sum,cuda_gpu_mem_time_sum,nvtx_sum",
         "--format", "csv", "--output", str(tmp_path / "stats"), str(tmp_path / "profile.nsys-rep"),
     ]]
-    assert result["stats"] == [{"return_code": 0}]
+    assert result["stats"] == [{
+        "command": result["stats_commands"][0],
+        "return_code": 0,
+        "stdout": "output",
+        "stderr": "",
+    }]
     assert result["files"]["cuda_gpu_kern_sum.csv"]["sha256"]
+    assert (tmp_path / "stats.stdout.log").read_text(encoding="utf-8") == "output"
+    assert (tmp_path / "stats.stderr.log").read_text(encoding="utf-8") == ""
 
 
 def test_collector_forces_c_locale_for_every_subprocess(
@@ -168,3 +178,29 @@ def test_collector_records_version_argv_and_return_code(
     provenance = json.loads((tmp_path / "metadata.json").read_text(encoding="utf-8"))
     assert provenance["tool_version_provenance"]["nsys"]["command"] == ["nsys", "--version"]
     assert provenance["tool_version_provenance"]["nsys"]["return_code"] == 3
+
+
+def test_collector_records_the_actual_profiled_executable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    executable = tmp_path / "memq5_arrow_session"
+    executable.write_bytes(b"\x7fELF\x02\x01collector-test\n")
+    executable.chmod(0o755)
+    monkeypatch.chdir(tmp_path)
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if command[1:2] == ["--version"]:
+            return subprocess.CompletedProcess(command, 0, "nsys 2026.1\n", "")
+        return subprocess.CompletedProcess(command, 9, "", "capture failed")
+
+    monkeypatch.setattr("scripts.profile_nsys.subprocess.run", fake_run)
+
+    result = collect_nsys(["./memq5_arrow_session", "--requests", "1"], tmp_path / "capture", {})
+
+    assert result["collector_execution"] == {
+        "status": "ok",
+        "cwd": str(tmp_path.resolve()),
+        "command_path": "./memq5_arrow_session",
+        "resolved_path": str(executable.resolve()),
+        "executable_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
+    }

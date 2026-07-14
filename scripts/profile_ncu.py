@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -80,12 +81,58 @@ def select_metrics(supported_metrics: set[str]) -> dict[str, str]:
     return selection
 
 
-def _version(command: list[str]) -> str:
+def _version(command: list[str]) -> tuple[str, dict[str, object]]:
     try:
         result = _run(command)
     except OSError as exc:
-        return f"unavailable: {exc}"
-    return (result.stdout or result.stderr).strip()
+        result = subprocess.CompletedProcess(command, 127, "", f"launch failed: {exc}")
+    provenance: dict[str, object] = {
+        "command": command,
+        "return_code": result.returncode,
+        "stdout": result.stdout or "",
+        "stderr": result.stderr or "",
+    }
+    return (result.stdout or result.stderr).strip(), provenance
+
+
+def _profiled_execution(command: list[str]) -> dict[str, object]:
+    cwd = Path.cwd().resolve()
+    command_path = command[0]
+    candidate: str | None
+    if Path(command_path).is_absolute() or os.sep in command_path:
+        candidate = str(
+            Path(command_path) if Path(command_path).is_absolute() else cwd / command_path
+        )
+    else:
+        candidate = shutil.which(command_path)
+    base: dict[str, object] = {"cwd": str(cwd), "command_path": command_path}
+    if candidate is None:
+        return {
+            **base,
+            "status": "unavailable",
+            "reason": "executable was not found on PATH",
+        }
+    resolved = Path(candidate).resolve()
+    if not resolved.is_file():
+        return {
+            **base,
+            "status": "unavailable",
+            "resolved_path": str(resolved),
+            "reason": "resolved executable is not a regular file",
+        }
+    if not os.access(resolved, os.X_OK):
+        return {
+            **base,
+            "status": "unavailable",
+            "resolved_path": str(resolved),
+            "reason": "resolved executable is not executable",
+        }
+    return {
+        **base,
+        "status": "ok",
+        "resolved_path": str(resolved),
+        "executable_sha256": _sha256(resolved),
+    }
 
 
 def _gpu_provenance(device_index: int) -> dict[str, object]:
@@ -102,14 +149,20 @@ def _gpu_provenance(device_index: int) -> dict[str, object]:
     try:
         result = _run(command)
     except OSError as exc:
-        return {**base, "status": "unavailable", "error": str(exc)}
+        return {
+            **base,
+            "status": "unavailable",
+            "return_code": 127,
+            "stdout": "",
+            "stderr": f"launch failed: {exc}",
+        }
     if result.returncode != 0 or not result.stdout.strip():
         return {
             **base,
             "status": "failed",
             "return_code": result.returncode,
-            "stdout": result.stdout.strip(),
-            "stderr": result.stderr.strip(),
+            "stdout": result.stdout or "",
+            "stderr": result.stderr or "",
         }
     rows = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     fields = [field.strip() for field in rows[0].split(",")] if len(rows) == 1 else []
@@ -118,8 +171,8 @@ def _gpu_provenance(device_index: int) -> dict[str, object]:
             **base,
             "status": "invalid_output",
             "return_code": result.returncode,
-            "stdout": result.stdout.strip(),
-            "stderr": result.stderr.strip(),
+            "stdout": result.stdout or "",
+            "stderr": result.stderr or "",
         }
     actual_index = int(fields[0])
     if actual_index != device_index:
@@ -129,6 +182,9 @@ def _gpu_provenance(device_index: int) -> dict[str, object]:
             "index": actual_index,
             "uuid": fields[1],
             "driver_version": fields[2],
+            "return_code": result.returncode,
+            "stdout": result.stdout or "",
+            "stderr": result.stderr or "",
         }
     return {
         **base,
@@ -136,12 +192,24 @@ def _gpu_provenance(device_index: int) -> dict[str, object]:
         "index": actual_index,
         "uuid": fields[1],
         "driver_version": fields[2],
+        "return_code": result.returncode,
+        "stdout": result.stdout or "",
+        "stderr": result.stderr or "",
     }
 
 
 def _write_manifest(output_dir: Path, manifest: dict[str, object]) -> None:
     manifest["files"] = _files(output_dir)
     (output_dir / "metadata.json").write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _is_hybrid_auto(command: list[str]) -> bool:
+    return any(
+        value == "--hybrid-selection"
+        and index + 1 < len(command)
+        and command[index + 1] == "auto"
+        for index, value in enumerate(command)
+    )
 
 
 def collect_ncu(
@@ -166,6 +234,8 @@ def collect_ncu(
     if request_option + 1 >= len(command) or command[request_option + 1] != "1":
         raise ValueError(request_error)
     output_dir.mkdir(parents=True, exist_ok=True)
+    started_at = _utc_now()
+    collector_execution = _profiled_execution(command)
     query_command = [
         "ncu", "--query-metrics", "--query-metrics-mode", "all",
         "--devices", str(device_index),
@@ -173,29 +243,65 @@ def collect_ncu(
     try:
         query = _run(query_command)
     except OSError as exc:
-        raise RuntimeError(f"ncu metric discovery failed: {exc}") from exc
+        query = subprocess.CompletedProcess(query_command, 127, "", f"launch failed: {exc}")
+    metric_query = {
+        "command": query_command,
+        "return_code": query.returncode,
+        "stdout": query.stdout or "",
+        "stderr": query.stderr or "",
+    }
     if query.returncode != 0:
+        ncu_version, ncu_version_provenance = _version(["ncu", "--version"])
+        failed_manifest: dict[str, object] = {
+            "metadata": metadata,
+            "started_at_utc": started_at,
+            "finished_at_utc": _utc_now(),
+            "collector_execution": collector_execution,
+            "device_index": device_index,
+            "query_command": query_command,
+            "metric_query": metric_query,
+            "supported_metrics": [],
+            "selected_metrics": {},
+            "tool_versions": {"ncu": ncu_version},
+            "tool_version_provenance": {"ncu": ncu_version_provenance},
+            "gpu": _gpu_provenance(device_index),
+            "query_failure": True,
+        }
+        _write_manifest(output_dir, failed_manifest)
         raise RuntimeError(f"ncu metric discovery failed: {(query.stderr or query.stdout).strip()}")
     supported = sorted(_metric_names(query.stdout))
     selected = select_metrics(set(supported))
     (output_dir / "supported_metrics.txt").write_text("\n".join(supported) + "\n", encoding="utf-8")
     (output_dir / "selected_metrics.json").write_text(json.dumps(selected, indent=2, sort_keys=True), encoding="utf-8")
 
+    hybrid_auto = _is_hybrid_auto(command)
+    launch_control = ["--launch-count", "1"]
+    if hybrid_auto:
+        launch_control = ["--launch-skip", "1", *launch_control]
     profile_command = [
         "ncu", "--csv", "--target-processes", "all", "--replay-mode", "application",
         "--kernel-name-base", "demangled", "--kernel-name",
         f"regex:.*{re.escape(q5_kernel)}.*",
+        *launch_control,
         "--metrics", ",".join(selected.values()), "--devices", str(device_index), *command,
     ]
+    ncu_version, ncu_version_provenance = _version(["ncu", "--version"])
     manifest: dict[str, object] = {
         "metadata": metadata,
-        "started_at_utc": _utc_now(),
+        "started_at_utc": started_at,
+        "collector_execution": collector_execution,
         "device_index": device_index,
         "query_command": query_command,
+        "metric_query": metric_query,
         "supported_metrics": supported,
         "selected_metrics": selected,
+        "launch_selection": {
+            "skip_matching_kernels": 1 if hybrid_auto else 0,
+            "profile_matching_kernels": 1,
+        },
         "profile_command": profile_command,
-        "tool_versions": {"ncu": _version(["ncu", "--version"])},
+        "tool_versions": {"ncu": ncu_version},
+        "tool_version_provenance": {"ncu": ncu_version_provenance},
         "gpu": _gpu_provenance(device_index),
     }
     try:

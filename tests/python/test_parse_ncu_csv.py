@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -158,9 +159,24 @@ def test_collector_persists_discovery_capture_and_replay_failure_provenance(
     assert manifest["profile_command"][:7] == ["ncu", "--csv", "--target-processes", "all", "--replay-mode", "application", "--kernel-name-base"]
     kernel_filter_index = manifest["profile_command"].index("--kernel-name")
     assert manifest["profile_command"][kernel_filter_index + 1] == "regex:.*q5_kernel.*"
+    launch_count_index = manifest["profile_command"].index("--launch-count")
+    assert manifest["profile_command"][launch_count_index + 1] == "1"
+    assert "--launch-skip" not in manifest["profile_command"]
     assert manifest["profile_command"][-3:] == ["resident-q5", "--requests", "1"]
     assert manifest["replay"] == {"mode": "application", "return_code": 1, "succeeded": False}
     assert manifest["tool_versions"]["ncu"] == "NVIDIA Nsight Compute 2026.1"
+    assert manifest["tool_version_provenance"]["ncu"] == {
+        "command": ["ncu", "--version"],
+        "return_code": 0,
+        "stdout": "NVIDIA Nsight Compute 2026.1",
+        "stderr": "",
+    }
+    assert manifest["metric_query"] == {
+        "command": manifest["query_command"],
+        "return_code": 0,
+        "stdout": supported,
+        "stderr": "",
+    }
     assert manifest["gpu"] == {
         "status": "ok",
         "requested_index": 0,
@@ -171,9 +187,52 @@ def test_collector_persists_discovery_capture_and_replay_failure_provenance(
             "nvidia-smi", "--id=0", "--query-gpu=index,uuid,driver_version",
             "--format=csv,noheader,nounits",
         ],
+        "return_code": 0,
+        "stdout": "0, GPU-abc, 555.1",
+        "stderr": "",
     }
     assert (tmp_path / "supported_metrics.txt").read_text(encoding="utf-8") == "\n".join(sorted(supported.splitlines())) + "\n"
     assert all(isinstance(command, list) for command in calls)
+
+
+def test_hybrid_auto_skips_calibration_and_profiles_one_measured_kernel(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    supported = "\n".join([
+        "gpu__time_duration.sum",
+        "dram__bytes_read.sum",
+        "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+        "sm__warps_active.avg.pct_of_peak_sustained_active",
+    ])
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if command[1:2] == ["--query-metrics"]:
+            return subprocess.CompletedProcess(command, 0, supported, "")
+        if command[1:] == ["--version"]:
+            return subprocess.CompletedProcess(command, 0, "NVIDIA Nsight Compute 2026.1", "")
+        if command[0] == "nvidia-smi":
+            return subprocess.CompletedProcess(command, 0, "0, GPU-abc, 555.1", "")
+        if command[1] == "--csv":
+            return subprocess.CompletedProcess(command, 1, "", "Replay failed")
+        raise AssertionError(command)
+
+    monkeypatch.setattr("scripts.profile_ncu.subprocess.run", fake_run)
+    profiled_command = [
+        "resident-q5", "--engine", "hybrid-arrow", "--hybrid-selection",
+        "auto", "--warmup", "0", "--requests", "1",
+    ]
+
+    with pytest.raises(RuntimeError, match="replay failed"):
+        collect_ncu(profiled_command, tmp_path, "q5_kernel", {})
+
+    manifest = json.loads((tmp_path / "metadata.json").read_text(encoding="utf-8"))
+    profile_command = manifest["profile_command"]
+    skip_index = profile_command.index("--launch-skip")
+    count_index = profile_command.index("--launch-count")
+    assert profile_command[skip_index + 1] == "1"
+    assert profile_command[count_index + 1] == "1"
+    assert skip_index < count_index < profile_command.index("resident-q5")
 
 
 def test_collector_persists_parse_error_and_report_log_hashes_after_successful_replay(
@@ -271,7 +330,96 @@ def test_collector_uses_configured_device_for_discovery_profile_and_provenance(
             "nvidia-smi", "--id=2", "--query-gpu=index,uuid,driver_version",
             "--format=csv,noheader,nounits",
         ],
+        "return_code": 0,
+        "stdout": "2, GPU-two, 555.2",
+        "stderr": "",
     }
+
+
+def test_collector_records_the_actual_profiled_executable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    executable = tmp_path / "memq5_arrow_session"
+    executable.write_bytes(b"\x7fELF\x02\x01collector-test\n")
+    executable.chmod(0o755)
+    monkeypatch.chdir(tmp_path)
+    supported = "\n".join([
+        "gpu__time_duration.sum",
+        "dram__bytes_read.sum",
+        "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+        "sm__throughput.avg.pct_of_peak_sustained_elapsed",
+        "sm__warps_active.avg.pct_of_peak_sustained_active",
+    ])
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if command[1:2] == ["--query-metrics"]:
+            return subprocess.CompletedProcess(command, 0, supported, "")
+        if command[1:] == ["--version"]:
+            return subprocess.CompletedProcess(command, 0, "NVIDIA Nsight Compute 2026.1", "")
+        if command[0] == "nvidia-smi":
+            return subprocess.CompletedProcess(command, 0, "0, GPU-zero, 555.1", "")
+        if command[1] == "--csv":
+            return subprocess.CompletedProcess(command, 1, "", "Replay failed")
+        raise AssertionError(command)
+
+    monkeypatch.setattr("scripts.profile_ncu.subprocess.run", fake_run)
+
+    with pytest.raises(RuntimeError, match="replay failed"):
+        collect_ncu(
+            ["./memq5_arrow_session", "--requests", "1"],
+            tmp_path / "capture",
+            "q5_kernel",
+            {},
+        )
+
+    manifest = json.loads((tmp_path / "capture/metadata.json").read_text(encoding="utf-8"))
+    assert manifest["collector_execution"] == {
+        "status": "ok",
+        "cwd": str(tmp_path.resolve()),
+        "command_path": "./memq5_arrow_session",
+        "resolved_path": str(executable.resolve()),
+        "executable_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
+    }
+
+
+def test_collector_persists_failed_metric_query_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if command[1:2] == ["--query-metrics"]:
+            return subprocess.CompletedProcess(
+                command, 13, "", "ERR_NVGPUCTRPERM: permission denied"
+            )
+        if command[1:] == ["--version"]:
+            return subprocess.CompletedProcess(
+                command, 0, "NVIDIA Nsight Compute 2026.1", ""
+            )
+        if command[0] == "nvidia-smi":
+            return subprocess.CompletedProcess(command, 0, "0, GPU-zero, 555.1", "")
+        raise AssertionError(command)
+
+    monkeypatch.setattr("scripts.profile_ncu.subprocess.run", fake_run)
+
+    with pytest.raises(RuntimeError, match="metric discovery failed"):
+        collect_ncu(
+            ["resident-q5", "--requests", "1"],
+            tmp_path,
+            "q5_kernel",
+            {},
+        )
+
+    manifest = json.loads((tmp_path / "metadata.json").read_text(encoding="utf-8"))
+    assert manifest["metric_query"] == {
+        "command": [
+            "ncu", "--query-metrics", "--query-metrics-mode", "all", "--devices", "0",
+        ],
+        "return_code": 13,
+        "stdout": "",
+        "stderr": "ERR_NVGPUCTRPERM: permission denied",
+    }
+    assert manifest["query_failure"] is True
+    assert manifest["tool_version_provenance"]["ncu"]["return_code"] == 0
+    assert manifest["gpu"]["return_code"] == 0
 
 
 def test_cli_passes_configured_device_index_to_collector(

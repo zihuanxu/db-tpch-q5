@@ -50,9 +50,9 @@ ENGINE_NVTX_RANGES = {
 CANONICAL_SCALES = ("1", "10")
 CANONICAL_FIXED_ENGINES = ("copy", "managed", "mapped", "hybrid-fixed")
 HYBRID_FIXED_CPU_RATIO = 0.5
-HYBRID_AUTO_POLICY = "optional"
+HYBRID_AUTO_POLICY = "mandatory"
 CANONICAL_COVERAGE_POLICY = {
-    "fixed_matrix": "SF1/SF10 x copy/managed/mapped/hybrid-fixed",
+    "canonical_matrix": "SF1/SF10 x copy/managed/mapped/hybrid-fixed/hybrid-auto",
     "hybrid_fixed_cpu_ratio": HYBRID_FIXED_CPU_RATIO,
     "hybrid_auto": HYBRID_AUTO_POLICY,
 }
@@ -61,7 +61,7 @@ BUNDLE_RESIDUALS = [
         "id": "nsys-export-linkage",
         "status": "documented",
         "reason": (
-            "When compatible nsys is available, finalize re-exports and compares every CSV hash; "
+            "Finalize and audit require a compatible local nsys, re-export the raw report, and compare every CSV hash; "
             "the external tool's interpretation is not a cryptographic proof of report semantics."
         ),
     },
@@ -69,8 +69,9 @@ BUNDLE_RESIDUALS = [
         "id": "executable-build-commit",
         "status": "documented",
         "reason": (
-            "The executable bytes are hashed and build_commit is cross-checked with evidence git.commit, "
-            "but the commit is not cryptographically embedded in the executable."
+            "The profiled executable must be ELF, executable, hash-pinned, and identical to the path resolved by each collector. "
+            "The declared build_commit is cross-checked with evidence git.commit but is not cryptographically embedded in the binary, "
+            "so this is not source attestation."
         ),
     },
     {
@@ -84,7 +85,6 @@ BUNDLE_RESIDUALS = [
 ]
 NSYS_REPORT_MAGIC = b"NVIDIA Tegra Profiler Report "
 NSYS_MIN_REPORT_BYTES = 4096
-KNOWN_NCU_UNAVAILABLE_CODES = {13}
 KNOWN_NCU_ACCESS_CODES = {
     "ERR_NVGPUCTRPERM",
     "COUNTERS_UNAVAILABLE",
@@ -101,7 +101,16 @@ NCU_UNAVAILABLE_PATTERNS = (
 )
 NCU_FATAL_PATTERNS = (
     re.compile(r"segmentation fault", re.IGNORECASE),
+    re.compile(r"\bsegfault(?:ed)?\b", re.IGNORECASE),
+    re.compile(r"\bcrash(?:ed)?\b", re.IGNORECASE),
     re.compile(r"core dumped", re.IGNORECASE),
+    re.compile(r"(?:failed|unable) to (?:launch|start|execute)", re.IGNORECASE),
+    re.compile(r"launch failed", re.IGNORECASE),
+    re.compile(
+        r"(?:application|app|target (?:application|process)).*(?:failed|error|exited|returned)",
+        re.IGNORECASE,
+    ),
+    re.compile(r"(?:executable|command).*(?:not found|no such file|error)", re.IGNORECASE),
     re.compile(r"unknown (?:option|argument)", re.IGNORECASE),
     re.compile(r"unrecognized (?:option|argument)", re.IGNORECASE),
 )
@@ -214,6 +223,19 @@ def _read_bytes(path: Path, label: str) -> bytes:
     descriptor = _open_regular(path, label)
     with os.fdopen(descriptor, "rb") as handle:
         return handle.read()
+
+
+def _read_prefix(path: Path, size: int, label: str) -> bytes:
+    descriptor = _open_regular(path, label)
+    with os.fdopen(descriptor, "rb") as handle:
+        return handle.read(size)
+
+
+def _size_and_prefix(path: Path, size: int, label: str) -> tuple[int, bytes]:
+    descriptor = _open_regular(path, label)
+    file_size = os.fstat(descriptor).st_size
+    with os.fdopen(descriptor, "rb") as handle:
+        return file_size, handle.read(size)
 
 
 def sha256_file(path: Path) -> str:
@@ -469,15 +491,20 @@ def _validate_app_command(
         raise ValueError("profile command must use --requests 1 without warmup/repeat")
     if _option(command, "--requests") != "1":
         raise ValueError("profile command must contain --requests 1")
-    if _option(command, "--engine") != ENGINE_COMMANDS[str(logical["engine"])]:
-        raise ValueError("profile command engine does not match logical profiler engine")
-    try:
-        command_ratio = float(_option(command, "--cpu-ratio"))
-    except ValueError as exc:
-        raise ValueError("profile command has invalid --cpu-ratio") from exc
-    if not math.isclose(command_ratio, float(logical["cpu_ratio"]), abs_tol=1e-12):
-        raise ValueError("profile command ratio does not match logical profiler ratio")
     engine = str(logical["engine"])
+    if _option(command, "--engine") != ENGINE_COMMANDS[engine]:
+        raise ValueError("profile command engine does not match logical profiler engine")
+    ratio_positions = [index for index, value in enumerate(command) if value == "--cpu-ratio"]
+    if engine == "hybrid-auto":
+        if ratio_positions:
+            raise ValueError("hybrid-auto profile command must not set --cpu-ratio")
+    else:
+        try:
+            command_ratio = float(_option(command, "--cpu-ratio"))
+        except ValueError as exc:
+            raise ValueError("profile command has invalid --cpu-ratio") from exc
+        if not math.isclose(command_ratio, float(logical["cpu_ratio"]), abs_tol=1e-12):
+            raise ValueError("profile command ratio does not match logical profiler ratio")
     selection_positions = [
         index for index, value in enumerate(command) if value == "--hybrid-selection"
     ]
@@ -586,6 +613,8 @@ def _execution_provenance(
         raise ValueError("execution executable sha256 mismatch")
     if not os.access(executable_path, os.X_OK):
         raise ValueError("execution executable is not executable")
+    if _read_prefix(executable_path, 4, "execution executable") != b"\x7fELF":
+        raise ValueError("execution executable must be an ELF binary")
     build_commit = _text(executable.get("build_commit"), "execution build commit")
     if build_commit != session_commit:
         raise ValueError("execution build commit does not match session commit")
@@ -597,6 +626,39 @@ def _execution_provenance(
             "build_commit": build_commit,
         },
     }
+
+
+def _validate_collector_execution(
+    metadata: dict[str, object],
+    identity: dict[str, object],
+    command: list[str],
+    tool: str,
+) -> dict[str, object]:
+    collector = metadata.get("collector_execution")
+    if not isinstance(collector, dict) or collector.get("status") != "ok":
+        raise ValueError(f"{tool} collector execution provenance must be successful")
+    execution = identity["execution"]
+    assert isinstance(execution, dict)
+    executable = execution["executable"]
+    assert isinstance(executable, dict)
+    cwd = Path(str(execution["cwd"]))
+    command_path = str(executable["path"])
+    expected_path_value = Path(command_path)
+    expected_path = _absolute(
+        expected_path_value if expected_path_value.is_absolute() else cwd / expected_path_value
+    )
+    if (
+        collector.get("cwd") != str(cwd)
+        or collector.get("command_path") != command[0]
+        or command[0] != command_path
+        or collector.get("resolved_path") != str(expected_path)
+        or collector.get("executable_sha256") != executable["sha256"]
+    ):
+        raise ValueError(f"{tool} collector executable provenance mismatch")
+    if expected_path.name != "memq5_arrow_session":
+        raise ValueError(f"{tool} collector executable name mismatch")
+    _assert_no_symlink_components(expected_path, f"{tool} collector executable")
+    return dict(collector)
 
 
 def _validate_dataset_manifest(path: Path, logical: dict[str, object]) -> dict[str, object]:
@@ -814,22 +876,41 @@ def _replay_nsys_exports(
     raw_report: Path,
     exports: dict[str, Path],
     cwd: Path,
+    expected_version: str,
 ) -> dict[str, object]:
     executable = _find_nsys()
     if executable is None:
-        return {
-            "status": "residual",
-            "replay_validation": "unavailable",
-            "reason": "A compatible nsys executable was not available during validation.",
-        }
+        raise ValueError(
+            "a compatible nsys executable is required on the current validation machine"
+        )
+    environment = os.environ.copy()
+    environment.update({"LC_ALL": "C", "LANG": "C"})
+    version_command = [executable, "--version"]
+    try:
+        version_result = subprocess.run(
+            version_command,
+            cwd=cwd,
+            env=environment,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except OSError as exc:
+        raise ValueError(f"Nsight Systems version query launch failed: {exc}") from exc
+    current_version = (version_result.stdout or version_result.stderr).strip()
+    if version_result.returncode != 0 or current_version != expected_version:
+        raise ValueError(
+            "current nsys version is not compatible with collector provenance: "
+            f"expected={expected_version!r} actual={current_version!r} "
+            f"return_code={version_result.returncode}"
+        )
     with tempfile.TemporaryDirectory(prefix="v7-nsys-replay-") as temporary:
         output_prefix = Path(temporary) / "stats"
         replay_command = list(stats_command)
         replay_command[0] = executable
         replay_command[replay_command.index("--output") + 1] = str(output_prefix)
         replay_command[-1] = str(raw_report)
-        environment = os.environ.copy()
-        environment.update({"LC_ALL": "C", "LANG": "C"})
         try:
             completed = subprocess.run(
                 replay_command,
@@ -863,6 +944,13 @@ def _replay_nsys_exports(
             "status": "verified",
             "replay_validation": "matched",
             "command": stats_command,
+            "audit_executable": executable,
+            "version_provenance": {
+                "command": version_command,
+                "return_code": version_result.returncode,
+                "stdout": version_result.stdout or "",
+                "stderr": version_result.stderr or "",
+            },
             "return_code": completed.returncode,
             "export_sha256": replay_hashes,
         }
@@ -877,6 +965,7 @@ def _compile_nsys(
 ) -> dict[str, object]:
     metadata_path, metadata = _collector_metadata(root, captures_root, raw.get("nsys"), "nsys")
     _validate_collector_identity(metadata, identity, "nsys")
+    collector_execution = _validate_collector_execution(metadata, identity, command, "nsys")
     directory = metadata_path.parent
     raw_report = directory / "profile.nsys-rep"
     expected_profile_command = [
@@ -885,6 +974,9 @@ def _compile_nsys(
         "--force-overwrite=true",
         "--trace=cuda,nvtx,osrt",
         "--sample=none",
+        "--capture-range=nvtx",
+        "--nvtx-capture=measured_request",
+        "--capture-range-end=stop",
         "--output",
         str(directory / "profile"),
         *command,
@@ -922,8 +1014,10 @@ def _compile_nsys(
     paths = _collector_files(root, captures_root, metadata_path, metadata, "nsys")
     _verify_collector_files(paths, metadata, "nsys")
     raw_path = _required_file(paths, "profile.nsys-rep", "Nsight Systems raw report")
-    raw_bytes = _read_bytes(raw_path, "Nsight Systems raw report")
-    if len(raw_bytes) < NSYS_MIN_REPORT_BYTES or not raw_bytes.startswith(NSYS_REPORT_MAGIC):
+    raw_size, raw_prefix = _size_and_prefix(
+        raw_path, len(NSYS_REPORT_MAGIC), "Nsight Systems raw report"
+    )
+    if raw_size < NSYS_MIN_REPORT_BYTES or raw_prefix != NSYS_REPORT_MAGIC:
         raise ValueError("Nsight Systems raw report signature or size is invalid")
     stats_stdout = _required_file(paths, "stats.stdout.log", "Nsight Systems stats stdout")
     stats_stderr = _required_file(paths, "stats.stderr.log", "Nsight Systems stats stderr")
@@ -971,6 +1065,7 @@ def _compile_nsys(
         raw_path,
         exports,
         Path(str(identity["execution"]["cwd"])),
+        version,
     )
     observed_ranges = sorted(
         str(row["name"])
@@ -985,6 +1080,7 @@ def _compile_nsys(
         "stats_commands": [expected_stats_command],
         "tool_version": version,
         "tool_version_provenance": dict(provenance),
+        "collector_execution": collector_execution,
         "raw_report": _artifact(root, raw_path),
         "exports": {name: _artifact(root, path) for name, path in sorted(exports.items())},
         "required_nvtx_ranges": sorted(required_ranges),
@@ -1107,9 +1203,12 @@ def _ncu_query_command(device_index: int) -> list[str]:
 
 
 def _ncu_profile_command(
-    selected: dict[str, str], device_index: int, command: list[str]
+    selected: dict[str, str], device_index: int, command: list[str], engine: str
 ) -> list[str]:
     canonical_order = [selected[role] for role in METRIC_CANDIDATES]
+    launch_control = ["--launch-count", "1"]
+    if engine == "hybrid-auto":
+        launch_control = ["--launch-skip", "1", *launch_control]
     return [
         "ncu",
         "--csv",
@@ -1121,6 +1220,7 @@ def _ncu_profile_command(
         "demangled",
         "--kernel-name",
         f"regex:.*{re.escape('q5_kernel')}.*",
+        *launch_control,
         "--metrics",
         ",".join(canonical_order),
         "--devices",
@@ -1133,10 +1233,12 @@ def _ncu_common(
     root: Path,
     captures_root: Path,
     raw: dict[str, object],
+    command: list[str],
     identity: dict[str, object],
 ) -> tuple[Path, dict[str, object], dict[str, Path], int, str, dict[str, object]]:
     metadata_path, metadata = _collector_metadata(root, captures_root, raw.get("ncu"), "ncu")
     _validate_collector_identity(metadata, identity, "ncu")
+    _validate_collector_execution(metadata, identity, command, "ncu")
     device_index = metadata.get("device_index")
     if isinstance(device_index, bool) or not isinstance(device_index, int) or device_index < 0:
         raise ValueError("ncu device_index must be non-negative")
@@ -1158,12 +1260,20 @@ def _compile_ncu_ok(
     identity: dict[str, object],
 ) -> dict[str, object]:
     metadata_path, metadata, paths, device_index, version, gpu = _ncu_common(
-        root, captures_root, raw, identity
+        root, captures_root, raw, command, identity
     )
     selected, _ = _ncu_metric_state(metadata, paths, allow_empty=False)
-    expected_profile_command = _ncu_profile_command(selected, device_index, command)
+    expected_profile_command = _ncu_profile_command(
+        selected, device_index, command, str(identity["engine"])
+    )
     if metadata.get("profile_command") != expected_profile_command:
         raise ValueError("ncu profile command options do not match collector contract")
+    expected_launch_selection = {
+        "skip_matching_kernels": 1 if identity["engine"] == "hybrid-auto" else 0,
+        "profile_matching_kernels": 1,
+    }
+    if metadata.get("launch_selection") != expected_launch_selection:
+        raise ValueError("ncu launch selection does not match profiler engine")
     replay = metadata.get("replay")
     if (
         metadata.get("return_code") != 0
@@ -1196,6 +1306,7 @@ def _compile_ncu_ok(
         "profile_command": expected_profile_command,
         "tool_version": version,
         "tool_version_provenance": _tool_provenance(metadata, "ncu", version),
+        "collector_execution": dict(metadata["collector_execution"]),
         "metric_query": dict(metadata["metric_query"]),
         "gpu": gpu,
         "selected_metrics": selected,
@@ -1214,23 +1325,17 @@ def _structured_access_failure(metadata: dict[str, object]) -> dict[str, object]
     message = access.get("message")
     if not isinstance(code, str) or not code or not isinstance(message, str) or not message:
         return None
-    if any(pattern.search(message) for pattern in NCU_FATAL_PATTERNS) or (
-        code not in KNOWN_NCU_ACCESS_CODES
-        and not _recognized_ncu_unavailable(None, message)
-    ):
+    if code not in KNOWN_NCU_ACCESS_CODES or not _recognized_ncu_unavailable(message):
         raise ValueError(
             "unavailable NCU claim is not a recognized counter permission or hardware support failure"
         )
     return dict(access)
 
 
-def _recognized_ncu_unavailable(return_code: int | None, message: str) -> bool:
+def _recognized_ncu_unavailable(message: str) -> bool:
     if any(pattern.search(message) for pattern in NCU_FATAL_PATTERNS):
         return False
-    return (
-        return_code in KNOWN_NCU_UNAVAILABLE_CODES
-        or any(pattern.search(message) for pattern in NCU_UNAVAILABLE_PATTERNS)
-    )
+    return any(pattern.search(message) for pattern in NCU_UNAVAILABLE_PATTERNS)
 
 
 def _compile_ncu_unavailable(
@@ -1241,16 +1346,24 @@ def _compile_ncu_unavailable(
     identity: dict[str, object],
 ) -> dict[str, object]:
     metadata_path, metadata, paths, device_index, version, gpu = _ncu_common(
-        root, captures_root, raw, identity
+        root, captures_root, raw, command, identity
     )
     stdout_path = _required_file(paths, "profile.stdout.log", "Nsight Compute stdout log")
     stderr_path = _required_file(paths, "profile.stderr.log", "Nsight Compute stderr log")
     selected, _ = _ncu_metric_state(metadata, paths, allow_empty=True)
     profile_command: list[str] | None = None
     if selected:
-        profile_command = _ncu_profile_command(selected, device_index, command)
+        profile_command = _ncu_profile_command(
+            selected, device_index, command, str(identity["engine"])
+        )
         if metadata.get("profile_command") != profile_command:
             raise ValueError("ncu profile command options do not match collector contract")
+        expected_launch_selection = {
+            "skip_matching_kernels": 1 if identity["engine"] == "hybrid-auto" else 0,
+            "profile_matching_kernels": 1,
+        }
+        if metadata.get("launch_selection") != expected_launch_selection:
+            raise ValueError("ncu launch selection does not match profiler engine")
     return_code = metadata.get("return_code")
     access_failure = _structured_access_failure(metadata)
     if (not isinstance(return_code, int) or return_code == 0) and access_failure is None:
@@ -1267,8 +1380,12 @@ def _compile_ncu_unavailable(
         stderr = _read_bytes(stderr_path, "ncu stderr log")
         if not stdout and not stderr:
             raise ValueError("unavailable NCU claim requires nonempty failure logs")
-        message = (stderr or stdout).decode("utf-8", errors="replace").strip()
-        if not _recognized_ncu_unavailable(return_code, message):
+        message = "\n".join(
+            value.decode("utf-8", errors="replace").strip()
+            for value in (stderr, stdout)
+            if value
+        ).strip()
+        if not _recognized_ncu_unavailable(message):
             raise ValueError(
                 "unavailable NCU claim is not a recognized counter permission or hardware support failure"
             )
@@ -1289,6 +1406,7 @@ def _compile_ncu_unavailable(
         "profile_command": profile_command,
         "tool_version": version,
         "tool_version_provenance": _tool_provenance(metadata, "ncu", version),
+        "collector_execution": dict(metadata["collector_execution"]),
         "metric_query": dict(metadata["metric_query"]),
         "gpu": gpu,
         "selected_metrics": selected,
@@ -1373,10 +1491,10 @@ def _compile_bundle(
         raise ValueError("profiles must be a non-empty array")
     hybrid_auto = index.get("hybrid_auto")
     hybrid_status = hybrid_auto.get("status") if isinstance(hybrid_auto, dict) else None
-    if hybrid_status not in {"enabled", "disabled", "unavailable"}:
-        raise ValueError("hybrid_auto.status must be enabled, disabled, or unavailable")
     if not isinstance(hybrid_auto, dict):
         raise ValueError("hybrid_auto policy must be an object")
+    if hybrid_status != "enabled":
+        raise ValueError("hybrid_auto.status must be enabled for canonical coverage")
     _text(hybrid_auto.get("reason"), "hybrid_auto.reason")
 
     raw_with_logical: list[tuple[dict[str, object], dict[str, object]]] = []
@@ -1419,14 +1537,11 @@ def _compile_bundle(
         logical for _, logical in raw_with_logical if logical["engine"] == "hybrid-auto"
     ]
     auto_scales = [str(profile["scale_factor"]) for profile in auto_profiles]
-    if hybrid_status == "enabled":
-        if sorted(auto_scales) != sorted(CANONICAL_SCALES):
-            raise ValueError(
-                f"hybrid-auto coverage mismatch expected={list(CANONICAL_SCALES)} "
-                f"actual={auto_scales}"
-            )
-    elif auto_profiles:
-        raise ValueError("disabled/unavailable hybrid-auto appears in profiler coverage")
+    if sorted(auto_scales) != sorted(CANONICAL_SCALES):
+        raise ValueError(
+            f"hybrid-auto coverage mismatch expected={list(CANONICAL_SCALES)} "
+            f"actual={auto_scales}"
+        )
 
     expected = [*canonical_fixed, *sorted(auto_profiles, key=lambda item: str(item["scale_factor"]))]
     expected_keys = {_logical_key(profile) for profile in expected}

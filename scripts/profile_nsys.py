@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -63,6 +64,46 @@ def _files(output_dir: Path) -> dict[str, dict[str, object]]:
     }
 
 
+def _profiled_execution(command: list[str]) -> dict[str, object]:
+    cwd = Path.cwd().resolve()
+    command_path = command[0]
+    candidate: str | None
+    if Path(command_path).is_absolute() or os.sep in command_path:
+        candidate = str(
+            Path(command_path) if Path(command_path).is_absolute() else cwd / command_path
+        )
+    else:
+        candidate = shutil.which(command_path)
+    base: dict[str, object] = {"cwd": str(cwd), "command_path": command_path}
+    if candidate is None:
+        return {
+            **base,
+            "status": "unavailable",
+            "reason": "executable was not found on PATH",
+        }
+    resolved = Path(candidate).resolve()
+    if not resolved.is_file():
+        return {
+            **base,
+            "status": "unavailable",
+            "resolved_path": str(resolved),
+            "reason": "resolved executable is not a regular file",
+        }
+    if not os.access(resolved, os.X_OK):
+        return {
+            **base,
+            "status": "unavailable",
+            "resolved_path": str(resolved),
+            "reason": "resolved executable is not executable",
+        }
+    return {
+        **base,
+        "status": "ok",
+        "resolved_path": str(resolved),
+        "executable_sha256": _sha256(resolved),
+    }
+
+
 def collect_nsys(command: list[str], output_dir: Path, metadata: dict) -> dict:
     """Profile `command`, export stats on success, and write a provenance manifest."""
     if not command:
@@ -75,11 +116,15 @@ def collect_nsys(command: list[str], output_dir: Path, metadata: dict) -> dict:
         "--force-overwrite=true",
         "--trace=cuda,nvtx,osrt",
         "--sample=none",
+        "--capture-range=nvtx",
+        "--nvtx-capture=measured_request",
+        "--capture-range-end=stop",
         "--output",
         str(prefix),
         *command,
     ]
     started_at = _utc_now()
+    collector_execution = _profiled_execution(command)
     try:
         profile = _run(profile_command)
     except OSError as exc:
@@ -102,11 +147,19 @@ def collect_nsys(command: list[str], output_dir: Path, metadata: dict) -> dict:
             stats = subprocess.CompletedProcess(stats_command, 127, "", f"launch failed: {exc}")
         (output_dir / "stats.stdout.log").write_text(stats.stdout or "", encoding="utf-8")
         (output_dir / "stats.stderr.log").write_text(stats.stderr or "", encoding="utf-8")
-        stats_results.append({"return_code": stats.returncode})
+        stats_results.append(
+            {
+                "command": stats_command,
+                "return_code": stats.returncode,
+                "stdout": stats.stdout or "",
+                "stderr": stats.stderr or "",
+            }
+        )
 
     nsys_version, nsys_version_provenance = _nsys_version()
     result: dict[str, object] = {
         "metadata": metadata,
+        "collector_execution": collector_execution,
         "started_at_utc": started_at,
         "finished_at_utc": _utc_now(),
         "profile_command": profile_command,
@@ -117,5 +170,7 @@ def collect_nsys(command: list[str], output_dir: Path, metadata: dict) -> dict:
         "tool_version_provenance": {"nsys": nsys_version_provenance},
         "files": _files(output_dir),
     }
-    (output_dir / "metadata.json").write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
+    (output_dir / "metadata.json").write_text(
+        json.dumps(result, indent=2, sort_keys=True), encoding="utf-8"
+    )
     return result
