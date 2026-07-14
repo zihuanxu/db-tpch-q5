@@ -351,6 +351,18 @@ Audited SF10 evidence recorded on 2026-07-14:
   and hashes. The one warmup request took 392.866 ms and the two diagnostic
   measured requests took 288.542 and 274.886 ms. These values validate the
   lifecycle implementation only; they remain outside the formal bundle.
+- The merged C++ resident implementation was rebuilt from current HEAD. All
+  37 Arrow+CUDA CTests ran on GPU 0 and passed; both the CUDA-session and
+  hybrid-session binaries then completed compute-sanitizer memcheck with zero
+  errors. This supersedes the transient 35/37 result observed while two agents
+  were editing the build concurrently.
+- Current-head SF10 resident diagnostics used one warmup and two measured
+  requests. Specialized CPU measured 25.430/25.348 ms, copy 29.864/28.849 ms,
+  managed 38.377/38.433 ms, mapped 502.818/481.885 ms, and 50/50 hybrid
+  17.397/14.375 ms. All requests emitted the same five exact rows and hash.
+  Setup records now separate dataset load, plan/build/allocation/initial H2D,
+  and resident host/GPU/pinned bytes. These two-sample values are diagnostic,
+  not the formal median results used for paper claims.
 
 - [x] Add a manifest-validated SF10 preparation orchestrator that rejects
   incomplete, unmanifested, wrong-scale, and SF1-reused data before reuse.
