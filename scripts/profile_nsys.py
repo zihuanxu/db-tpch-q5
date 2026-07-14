@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,15 +27,32 @@ def _sha256(path: Path) -> str:
 
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    environment = os.environ.copy()
+    environment.update({"LC_ALL": "C", "LANG": "C"})
+    return subprocess.run(
+        command,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        env=environment,
+    )
 
 
-def _nsys_version() -> str:
+def _nsys_version() -> tuple[str, dict[str, object]]:
+    command = ["nsys", "--version"]
     try:
-        result = _run(["nsys", "--version"])
+        result = _run(command)
     except OSError as exc:
-        return f"unavailable: {exc}"
-    return (result.stdout or result.stderr).strip()
+        result = subprocess.CompletedProcess(command, 127, "", f"launch failed: {exc}")
+    version = (result.stdout or result.stderr).strip()
+    provenance: dict[str, object] = {
+        "command": command,
+        "return_code": result.returncode,
+        "stdout": result.stdout or "",
+        "stderr": result.stderr or "",
+    }
+    return version, provenance
 
 
 def _files(output_dir: Path) -> dict[str, dict[str, object]]:
@@ -86,6 +104,7 @@ def collect_nsys(command: list[str], output_dir: Path, metadata: dict) -> dict:
         (output_dir / "stats.stderr.log").write_text(stats.stderr or "", encoding="utf-8")
         stats_results.append({"return_code": stats.returncode})
 
+    nsys_version, nsys_version_provenance = _nsys_version()
     result: dict[str, object] = {
         "metadata": metadata,
         "started_at_utc": started_at,
@@ -94,7 +113,8 @@ def collect_nsys(command: list[str], output_dir: Path, metadata: dict) -> dict:
         "stats_commands": stats_commands,
         "return_code": profile.returncode,
         "stats": stats_results,
-        "tool_versions": {"nsys": _nsys_version()},
+        "tool_versions": {"nsys": nsys_version},
+        "tool_version_provenance": {"nsys": nsys_version_provenance},
         "files": _files(output_dir),
     }
     (output_dir / "metadata.json").write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")

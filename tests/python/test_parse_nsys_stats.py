@@ -29,6 +29,13 @@ def test_parser_calculates_cuda_kernel_and_memcpy_totals() -> None:
     assert sum(row["total_ns"] for row in rows if row["kind"] == "memcpy") == 750_000
 
 
+def test_parser_reads_realistic_nvtx_range_column() -> None:
+    rows = parse_nsys_csv(FIXTURE)
+
+    assert validate_ranges(rows, {"request", "q5_kernel"}) == []
+    assert [row["name"] for row in rows if row["kind"] == "range"] == ["request", "q5_kernel"]
+
+
 def test_validate_ranges_reports_an_absent_required_range() -> None:
     errors = validate_ranges([{"name": "request", "kind": "range", "total_ns": 1}], {"request", "q5_kernel"})
 
@@ -107,3 +114,42 @@ def test_collector_uses_one_stats_command_for_all_required_reports(
     ]]
     assert result["stats"] == [{"return_code": 0}]
     assert result["files"]["cuda_gpu_kern_sum.csv"]["sha256"]
+
+
+def test_collector_forces_c_locale_for_every_subprocess(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[dict[str, object]] = []
+    monkeypatch.setenv("NSYS_TEST_PARENT", "preserved")
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(kwargs)
+        if command[1] == "profile":
+            Path(command[command.index("--output") + 1]).with_suffix(".nsys-rep").write_bytes(b"report")
+        return subprocess.CompletedProcess(command, 0, "nsys 2026.1\n", "")
+
+    monkeypatch.setattr("scripts.profile_nsys.subprocess.run", fake_run)
+
+    collect_nsys(["resident-q5"], tmp_path, {})
+
+    assert len(calls) == 3
+    assert all(call.get("env", {}).get("LC_ALL") == "C" for call in calls)
+    assert all(call.get("env", {}).get("LANG") == "C" for call in calls)
+    assert all(call.get("env", {}).get("NSYS_TEST_PARENT") == "preserved" for call in calls)
+
+
+def test_collector_records_version_argv_and_return_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if command[1:2] == ["--version"]:
+            return subprocess.CompletedProcess(command, 3, "", "version failed")
+        return subprocess.CompletedProcess(command, 9, "", "profile failed")
+
+    monkeypatch.setattr("scripts.profile_nsys.subprocess.run", fake_run)
+
+    collect_nsys(["resident-q5"], tmp_path, {})
+
+    provenance = json.loads((tmp_path / "metadata.json").read_text(encoding="utf-8"))
+    assert provenance["tool_version_provenance"]["nsys"]["command"] == ["nsys", "--version"]
+    assert provenance["tool_version_provenance"]["nsys"]["return_code"] == 3

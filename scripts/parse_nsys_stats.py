@@ -12,7 +12,7 @@ def _normalise_header(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", value.lower())
 
 
-def _number(value: str) -> int | float:
+def _number(value: str, *, single_separator_decimal: bool = False) -> int | float:
     value = value.strip().replace("\u00a0", "").replace(" ", "")
     if not value:
         return 0
@@ -26,7 +26,9 @@ def _number(value: str) -> int | float:
     elif comma >= 0 or dot >= 0:
         marker = "," if comma >= 0 else "."
         groups = value.split(marker)
-        if len(groups) > 2 and all(len(group) == 3 for group in groups[1:]):
+        if single_separator_decimal and len(groups) == 2:
+            value = value.replace(marker, ".")
+        elif len(groups) > 2 and all(len(group) == 3 for group in groups[1:]):
             value = "".join(groups)
         elif len(groups) == 2 and len(groups[1]) == 3 and len(groups[0]) <= 3:
             value = "".join(groups)
@@ -71,17 +73,20 @@ def parse_nsys_csv(path: Path) -> list[dict[str, object]]:
         for raw in reader:
             if not raw or not any(value and value.strip() for value in raw.values() if value):
                 continue
-            name = _value(raw, "operation", "name", "rangename")
+            range_name = _value(raw, "range", "rangename")
+            name = range_name or _value(raw, "operation", "name")
             report = path.stem
             rows.append(
                 {
                     "report": report,
                     "name": name,
-                    "kind": _kind(name, report),
+                    "kind": "range" if range_name else _kind(name, report),
                     "total_ns": _number(_value(raw, "totaltimens", "totaltimens", "durationns")),
                     "average_ns": _number(_value(raw, "averagens", "averagetimens")),
                     "instances": _number(_value(raw, "instances", "calls")),
-                    "time_percent": _number(_value(raw, "time", "timepercent")),
+                    "time_percent": _number(
+                        _value(raw, "time", "timepercent"), single_separator_decimal=True
+                    ),
                 }
             )
     if not rows:
