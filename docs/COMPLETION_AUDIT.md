@@ -65,7 +65,7 @@ python3 scripts/release_audit.py --json
 
 ## 最终回归
 
-- 默认Python环境：397 passed、6 skipped；Arrow/cuDF Python 3.11环境：22 passed。
+- 默认Python环境：417 passed、6 skipped；Arrow/cuDF Python 3.11环境：22 passed。
 - Arrow+CUDA构建：CTest 45项、0 failed。最终shell不再暴露CUDA设备，因此15项
   runtime测试按返回码77明确跳过；正式GPU矩阵和profiler来自此前同机RTX 4090
   的完整运行，不能用本轮skip替代真实GPU证据。

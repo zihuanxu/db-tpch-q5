@@ -492,7 +492,7 @@ produced 183 files; every line in `checksums.sha256` verified.
 - [x] Rebuild the four-page CjC paper with evidence-bound provenance.
 - [x] Validate the 21-claim ledger, process records, and learning links.
 - [x] Pass the default Python suite excluding environment-specific modules:
-  397 passed and 6 skipped.
+  417 passed and 6 skipped.
 - [x] Pass the Arrow/cuDF Python 3.11 suite: 22 passed.
 - [x] Pass all 45 CTest entries with zero failures in the current environment;
   15 CUDA runtime entries were explicitly skipped because the final shell no
@@ -506,3 +506,11 @@ skip check and aborted. The guard was moved to the CUDA test entry point, the
 target was rebuilt, and both the focused test and the complete 45-test CTest
 run then passed. This affects only test behavior without a visible GPU; it does
 not alter the formal benchmark implementation or evidence.
+
+The final publication review also closed five evidence-gate bypasses. Release
+audit now validates compact profiler schema, canonical coverage, identity, and
+required captures in addition to checksums; package audit repeats that check
+inside the archive. Paper checking regenerates all macros from both audited
+bundles, the hybrid model, setups, and the claim ledger. Model regret,
+predicted/selected/realized ratios, samples, statuses, fixed curves, binary and
+software identities are validated rather than trusted from generated files.
