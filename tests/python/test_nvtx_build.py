@@ -20,6 +20,7 @@ RANGE_NAMES = {
     "output_reset",
     "managed_prefetch",
     "q5_kernel",
+    "hybrid_gpu_request",
     "d2h",
     "merge",
 }
@@ -154,4 +155,9 @@ def test_nvtx_on_cuda_build_contains_all_declared_ranges(tmp_path: Path) -> None
     )
 
     binary_strings = _binary_strings(build_dir / "memq5_arrow_session")
-    assert not sorted(RANGE_NAMES - binary_strings)
+    missing = {
+        name
+        for name in RANGE_NAMES
+        if not any(value == name or value.endswith("_" + name) for value in binary_strings)
+    }
+    assert not sorted(missing)

@@ -8,10 +8,35 @@ from pathlib import Path
 import pytest
 
 from scripts.parse_nsys_stats import parse_nsys_csv, validate_ranges
-from scripts.profile_nsys import collect_nsys
+from scripts.profile_nsys import collect_nsys, main
 
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "nsys_stats_sample.csv"
+
+
+def test_collector_cli_forwards_command_metadata_and_reports_stats_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observed: dict[str, object] = {}
+
+    def fake_collect(command: list[str], output_dir: Path, metadata: dict) -> dict:
+        observed.update(command=command, output_dir=output_dir, metadata=metadata)
+        return {"return_code": 0, "stats": [{"return_code": 7}]}
+
+    monkeypatch.setattr("scripts.profile_nsys.collect_nsys", fake_collect)
+
+    status = main([
+        "--output-dir", str(tmp_path),
+        "--metadata-json", '{"scale_factor":"SF1"}',
+        "--", "resident-q5", "--requests", "1",
+    ])
+
+    assert status == 1
+    assert observed == {
+        "command": ["resident-q5", "--requests", "1"],
+        "output_dir": tmp_path,
+        "metadata": {"scale_factor": "SF1"},
+    }
 
 
 def test_parser_handles_localized_numbers_and_quoted_kernel_names() -> None:
@@ -92,8 +117,9 @@ def test_collector_records_argv_logs_hashes_versions_and_failed_command(
     result = collect_nsys(["resident-q5", "--requests", "1"], tmp_path, {"scale_factor": "SF1"})
 
     assert result["return_code"] == 9
-    assert result["profile_command"][:9] == [
+    assert result["profile_command"][:10] == [
         "nsys", "profile", "--force-overwrite=true", "--trace=cuda,nvtx,osrt", "--sample=none",
+        "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
         "--capture-range=nvtx", "--nvtx-capture=measured_request",
         "--capture-range-end=stop", "--output",
     ]

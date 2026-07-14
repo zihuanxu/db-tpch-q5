@@ -822,14 +822,13 @@ struct ArrowCudaQ5Session::Impl {
     check_cuda(cudaEventRecord(start.get()),
                "cudaEventRecord managed prefetch start");
     prefetch_managed_inputs(device);
-    prefetch_managed_outputs(device);
     check_cuda(cudaEventRecord(stop.get()),
                "cudaEventRecord managed prefetch stop");
     setup.initial_h2d_ms = elapsed_ms(start, stop);
-    initial_h2d_bytes = checked_counter_bytes(
-        checked_add(static_cast<std::size_t>(input_bytes(input)),
-                    static_cast<std::size_t>(output_bytes(nation_count))));
-    managed_output_on_device = true;
+    initial_h2d_bytes = input_bytes(input);
+    // Outputs remain host-resident after zeroing. Every request therefore
+    // resets from the same residency state before the measured prefetch.
+    managed_output_on_device = false;
   }
 
   void initialize_mapped() {

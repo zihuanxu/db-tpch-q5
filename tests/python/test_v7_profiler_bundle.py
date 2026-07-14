@@ -38,7 +38,9 @@ ENGINE_RANGES = {
     "managed": {"request", "managed_prefetch", "q5_kernel"},
     "mapped": {"request", "q5_kernel"},
     "hybrid-fixed": {"request", "cpu_scan", "q5_kernel", "merge"},
-    "hybrid-auto": {"request", "cpu_scan", "q5_kernel", "merge"},
+    "hybrid-auto": {
+        "request", "cpu_scan", "q5_kernel", "hybrid_gpu_request", "merge"
+    },
 }
 NSYS_REPORTS = ["cuda_api_sum", "cuda_gpu_kern_sum", "cuda_gpu_mem_time_sum", "nvtx_sum"]
 NSYS_REPORT_MAGIC = b"NVIDIA Tegra Profiler Report "
@@ -341,6 +343,7 @@ class BundleFixture:
             "--force-overwrite=true",
             "--trace=cuda,nvtx,osrt",
             "--sample=none",
+            "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
             "--capture-range=nvtx",
             "--nvtx-capture=measured_request",
             "--capture-range-end=stop",
@@ -423,7 +426,11 @@ class BundleFixture:
             "demangled",
             "--kernel-name",
             "regex:.*q5_kernel.*",
-            *(["--launch-skip", "1"] if identity["engine"] == "hybrid-auto" else []),
+            *(
+                ["--nvtx", "--nvtx-include", "hybrid_gpu_request/"]
+                if identity["engine"] == "hybrid-auto"
+                else []
+            ),
             "--launch-count",
             "1",
             "--metrics",
@@ -446,8 +453,13 @@ class BundleFixture:
             "supported_metrics": sorted(SELECTED_METRICS.values()),
             "selected_metrics": SELECTED_METRICS,
             "launch_selection": {
-                "skip_matching_kernels": 1 if identity["engine"] == "hybrid-auto" else 0,
+                "skip_matching_kernels": 0,
                 "profile_matching_kernels": 1,
+                "nvtx_include": (
+                    "hybrid_gpu_request/"
+                    if identity["engine"] == "hybrid-auto"
+                    else None
+                ),
             },
             "profile_command": profile_command,
             "tool_versions": {"ncu": "NVIDIA Nsight Compute 2026.1"},
@@ -763,8 +775,9 @@ def test_collectors_generate_bundle_compatible_provenance_directly(
     assert ncu_metadata["metric_query"]["stdout"] == supported
     assert ncu_metadata["gpu"]["stdout"] == f"0, {GPU_UUID}, 555.1\n"
     assert ncu_metadata["launch_selection"] == {
-        "skip_matching_kernels": 1,
+        "skip_matching_kernels": 0,
         "profile_matching_kernels": 1,
+        "nvtx_include": "hybrid_gpu_request/",
     }
 
 

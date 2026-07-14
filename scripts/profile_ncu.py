@@ -276,12 +276,16 @@ def collect_ncu(
 
     hybrid_auto = _is_hybrid_auto(command)
     launch_control = ["--launch-count", "1"]
-    if hybrid_auto:
-        launch_control = ["--launch-skip", "1", *launch_control]
+    nvtx_filter = (
+        ["--nvtx", "--nvtx-include", "hybrid_gpu_request/"]
+        if hybrid_auto
+        else []
+    )
     profile_command = [
         "ncu", "--csv", "--target-processes", "all", "--replay-mode", "application",
         "--kernel-name-base", "demangled", "--kernel-name",
         f"regex:.*{re.escape(q5_kernel)}.*",
+        *nvtx_filter,
         *launch_control,
         "--metrics", ",".join(selected.values()), "--devices", str(device_index), *command,
     ]
@@ -296,8 +300,9 @@ def collect_ncu(
         "supported_metrics": supported,
         "selected_metrics": selected,
         "launch_selection": {
-            "skip_matching_kernels": 1 if hybrid_auto else 0,
+            "skip_matching_kernels": 0,
             "profile_matching_kernels": 1,
+            "nvtx_include": "hybrid_gpu_request/" if hybrid_auto else None,
         },
         "profile_command": profile_command,
         "tool_versions": {"ncu": ncu_version},

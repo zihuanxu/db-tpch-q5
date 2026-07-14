@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -116,6 +117,7 @@ def collect_nsys(command: list[str], output_dir: Path, metadata: dict) -> dict:
         "--force-overwrite=true",
         "--trace=cuda,nvtx,osrt",
         "--sample=none",
+        "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
         "--capture-range=nvtx",
         "--nvtx-capture=measured_request",
         "--capture-range-end=stop",
@@ -174,3 +176,31 @@ def collect_nsys(command: list[str], output_dir: Path, metadata: dict) -> dict:
         json.dumps(result, indent=2, sort_keys=True), encoding="utf-8"
     )
     return result
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Capture one Q5 Nsight Systems report")
+    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--metadata-json", default="{}")
+    parser.add_argument("command", nargs=argparse.REMAINDER)
+    args = parser.parse_args(argv)
+    command = args.command[1:] if args.command[:1] == ["--"] else args.command
+    if not command:
+        parser.error("a profiled command is required after --")
+    try:
+        metadata = json.loads(args.metadata_json)
+    except json.JSONDecodeError as exc:
+        parser.error(f"invalid --metadata-json: {exc}")
+    if not isinstance(metadata, dict):
+        parser.error("--metadata-json must decode to a JSON object")
+
+    result = collect_nsys(command, args.output_dir, metadata)
+    if result["return_code"] != 0:
+        return 1
+    if any(stats["return_code"] != 0 for stats in result["stats"]):
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

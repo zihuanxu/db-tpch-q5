@@ -45,7 +45,9 @@ ENGINE_NVTX_RANGES = {
     "managed": {"request", "managed_prefetch", "q5_kernel"},
     "mapped": {"request", "q5_kernel"},
     "hybrid-fixed": {"request", "cpu_scan", "q5_kernel", "merge"},
-    "hybrid-auto": {"request", "cpu_scan", "q5_kernel", "merge"},
+    "hybrid-auto": {
+        "request", "cpu_scan", "q5_kernel", "hybrid_gpu_request", "merge"
+    },
 }
 CANONICAL_SCALES = ("1", "10")
 CANONICAL_FIXED_ENGINES = ("copy", "managed", "mapped", "hybrid-fixed")
@@ -974,6 +976,7 @@ def _compile_nsys(
         "--force-overwrite=true",
         "--trace=cuda,nvtx,osrt",
         "--sample=none",
+        "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
         "--capture-range=nvtx",
         "--nvtx-capture=measured_request",
         "--capture-range-end=stop",
@@ -1207,8 +1210,11 @@ def _ncu_profile_command(
 ) -> list[str]:
     canonical_order = [selected[role] for role in METRIC_CANDIDATES]
     launch_control = ["--launch-count", "1"]
-    if engine == "hybrid-auto":
-        launch_control = ["--launch-skip", "1", *launch_control]
+    nvtx_filter = (
+        ["--nvtx", "--nvtx-include", "hybrid_gpu_request/"]
+        if engine == "hybrid-auto"
+        else []
+    )
     return [
         "ncu",
         "--csv",
@@ -1220,6 +1226,7 @@ def _ncu_profile_command(
         "demangled",
         "--kernel-name",
         f"regex:.*{re.escape('q5_kernel')}.*",
+        *nvtx_filter,
         *launch_control,
         "--metrics",
         ",".join(canonical_order),
@@ -1269,8 +1276,11 @@ def _compile_ncu_ok(
     if metadata.get("profile_command") != expected_profile_command:
         raise ValueError("ncu profile command options do not match collector contract")
     expected_launch_selection = {
-        "skip_matching_kernels": 1 if identity["engine"] == "hybrid-auto" else 0,
+        "skip_matching_kernels": 0,
         "profile_matching_kernels": 1,
+        "nvtx_include": (
+            "hybrid_gpu_request/" if identity["engine"] == "hybrid-auto" else None
+        ),
     }
     if metadata.get("launch_selection") != expected_launch_selection:
         raise ValueError("ncu launch selection does not match profiler engine")
@@ -1359,8 +1369,13 @@ def _compile_ncu_unavailable(
         if metadata.get("profile_command") != profile_command:
             raise ValueError("ncu profile command options do not match collector contract")
         expected_launch_selection = {
-            "skip_matching_kernels": 1 if identity["engine"] == "hybrid-auto" else 0,
+            "skip_matching_kernels": 0,
             "profile_matching_kernels": 1,
+            "nvtx_include": (
+                "hybrid_gpu_request/"
+                if identity["engine"] == "hybrid-auto"
+                else None
+            ),
         }
         if metadata.get("launch_selection") != expected_launch_selection:
             raise ValueError("ncu launch selection does not match profiler engine")

@@ -373,6 +373,7 @@ arrow::Result<Q5Result> HybridQ5Session::Execute() {
       return finish_empty_result(total_timer);
     }
     if (cpu_session_ == nullptr) {
+      NvtxRange gpu_request_range("hybrid_gpu_request");
       ARROW_ASSIGN_OR_RAISE(Q5Result gpu_result, gpu_session_->Execute());
       return finish_endpoint_result(std::move(gpu_result), false, total_timer);
     }
@@ -383,6 +384,7 @@ arrow::Result<Q5Result> HybridQ5Session::Execute() {
 
     Stopwatch execution_timer;
     auto gpu_future = std::async(std::launch::async, [this]() {
+      NvtxRange gpu_request_range("hybrid_gpu_request");
       return gpu_session_->Execute();
     });
     arrow::Result<Q5Result> cpu_result = cpu_session_->Execute();

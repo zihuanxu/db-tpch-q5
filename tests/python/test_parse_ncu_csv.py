@@ -195,7 +195,7 @@ def test_collector_persists_discovery_capture_and_replay_failure_provenance(
     assert all(isinstance(command, list) for command in calls)
 
 
-def test_hybrid_auto_skips_calibration_and_profiles_one_measured_kernel(
+def test_hybrid_auto_filters_to_worker_thread_measured_kernel(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     supported = "\n".join([
@@ -228,11 +228,13 @@ def test_hybrid_auto_skips_calibration_and_profiles_one_measured_kernel(
 
     manifest = json.loads((tmp_path / "metadata.json").read_text(encoding="utf-8"))
     profile_command = manifest["profile_command"]
-    skip_index = profile_command.index("--launch-skip")
+    assert "--launch-skip" not in profile_command
     count_index = profile_command.index("--launch-count")
-    assert profile_command[skip_index + 1] == "1"
     assert profile_command[count_index + 1] == "1"
-    assert skip_index < count_index < profile_command.index("resident-q5")
+    nvtx_index = profile_command.index("--nvtx")
+    include_index = profile_command.index("--nvtx-include")
+    assert profile_command[include_index + 1] == "hybrid_gpu_request/"
+    assert nvtx_index < include_index < count_index < profile_command.index("resident-q5")
 
 
 def test_collector_persists_parse_error_and_report_log_hashes_after_successful_replay(
