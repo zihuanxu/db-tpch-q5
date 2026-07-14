@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import time
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -24,6 +23,7 @@ class CudfBenchmarkResult:
     query_ms: float
     input_lineitem_rows: int
     matched_lineitem_rows: int
+    resident_gpu_bytes: int = 0
 
 
 def add_year(value: str) -> str:
@@ -55,7 +55,7 @@ def _decimal_column_to_scaled_int(
     return pc.cast(scaled, integer_type)
 
 
-def _load_cudf_tables(dataset_path: Path, cudf):
+def _load_cudf_tables(dataset_path: Path, cudf, on_arrow_tables_prepared=None):
     tables = load_arrow_dataset(dataset_path)
     tables["region"] = _decode_name_column(tables["region"], "r_name")
     tables["nation"] = _decode_name_column(tables["nation"], "n_name")
@@ -71,12 +71,12 @@ def _load_cudf_tables(dataset_path: Path, cudf):
         _decimal_column_to_scaled_int(tables["lineitem"]["l_discount"], 100, pa.int32()),
     )
     tables["lineitem"] = lineitem
+    if on_arrow_tables_prepared is not None:
+        on_arrow_tables_prepared()
     return {name: _cudf_from_arrow(cudf, table) for name, table in tables.items()}
 
 
 def _cudf_from_arrow(cudf, table: pa.Table):
-    if hasattr(cudf, "from_arrow"):
-        return cudf.from_arrow(table)
     return cudf.DataFrame.from_arrow(table)
 
 
@@ -138,26 +138,17 @@ def _execute_q5(tables, cudf, region_name: str, start_date: str) -> tuple[list[R
 def run_benchmark(
     dataset_path: Path, region_name: str, start_date: str
 ) -> CudfBenchmarkResult:
-    try:
-        import cudf
-    except ImportError as exc:
-        raise SystemExit("RAPIDS cudf Python package is not installed") from exc
+    from cudf_q5_session import CudfQ5Session
 
-    load_started = time.perf_counter()
-    tables = _load_cudf_tables(dataset_path, cudf)
-    load_ms = (time.perf_counter() - load_started) * 1000.0
-    input_lineitem_rows = len(tables["lineitem"])
-    query_started = time.perf_counter()
-    rows, matched_lineitem_rows = _execute_q5(
-        tables, cudf, region_name, start_date
-    )
-    query_ms = (time.perf_counter() - query_started) * 1000.0
+    session = CudfQ5Session(dataset_path, region_name, start_date)
+    request = session.execute()
     return CudfBenchmarkResult(
-        rows=rows,
-        load_ms=load_ms,
-        query_ms=query_ms,
-        input_lineitem_rows=input_lineitem_rows,
-        matched_lineitem_rows=matched_lineitem_rows,
+        rows=request.rows,
+        load_ms=session.dataset_load_ms + session.session_setup_ms,
+        query_ms=request.query_ms,
+        input_lineitem_rows=request.input_lineitem_rows,
+        matched_lineitem_rows=request.matched_lineitem_rows,
+        resident_gpu_bytes=session.resident_gpu_bytes,
     )
 
 
