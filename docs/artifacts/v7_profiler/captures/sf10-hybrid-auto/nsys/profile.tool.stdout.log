@@ -1,0 +1,18 @@
+Capture range started in the application.
+Capture range ended in the application.
+Generating '/tmp/nsys-report-3acd.qdstrm'
+
+[1/1] [0%                          ] profile.nsys-repProcessing events...
+
+[1/1] [0%                          ] profile.nsys-rep
+[1/1] [10%                         ] profile.nsys-rep
+[1/1] [==20%                       ] profile.nsys-rep
+[1/1] [=============58%            ] profile.nsys-rep
+[1/1] [=======================96%  ] profile.nsys-rep
+[1/1] [========================98% ] profile.nsys-rep
+[1/1] [========================100%] profile.nsys-rep
+[1/1] [========================100%] profile.nsys-rep
+{"allocation_ms":1.238783,"calibration_rows":59986052,"cpu_calibration_ms":34.778093,"cpu_calibration_requests":1,"cpu_rows_per_ms":1724822.9222919152,"dataset":"/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10","dataset_load_ms":2886.750478,"date":"1994-01-01","engine":"hybrid-arrow","error_class":"","gpu_calibration_ms":16.101856,"gpu_calibration_requests":1,"gpu_fixed_ms":0.09011245446777494,"gpu_kernel_calibration_ms":16.011743545532227,"gpu_kernel_rows_per_ms":3746378.514583315,"host_staging_ms":994.5314899999998,"hybrid_model_version":"hybrid-cost-v1-batch-v1","initial_h2d_ms":45.629920959472656,"lifecycle":"resident","plan_build_ms":1204.5442400000002,"predicted_cpu_ratio":0.317029096669074,"realized_cpu_ratio":0.31901602725913686,"record_type":"session_setup","region":"ASIA","repeat":1,"resident_gpu_bytes":1057391020,"resident_host_bytes":2063251862,"resident_pinned_bytes":0,"selected_batch_boundary_rows":19136512,"selected_cpu_ratio":0.31901602725913686,"session_id":"7eb5e9b5-7e9d-414f-8353-9e62750345ac","session_setup_ms":5284.725333,"status":"ok","threads":16,"tune_ms":3024.3189,"warmup":0}
+{"build_ms":0.0,"cpu_input_rows":19136512,"cpu_ms":21.53388,"d2h_bytes":212,"d2h_ms":0.05500800162553787,"error_class":"","error_message":"","gpu_input_rows":40849540,"gpu_ms":10.847845,"h2d_bytes":0,"h2d_ms":0.0,"input_lineitem_rows":59986052,"is_warmup":false,"kernel_ms":10.640800476074219,"lifecycle":"resident","mapped_remote_read_bytes":0,"matched_lineitem_rows":72985,"overlap_wall_ms":10.670510000000004,"query_total_ms":21.717744,"record_type":"request","request_index":0,"result_hash":"b1351a421ba8dcfd","result_rows":5,"rows":[{"nation":"INDIA","revenue_1e4":5368625879995},{"nation":"CHINA","revenue_1e4":5353508299282},{"nation":"VIETNAM","revenue_1e4":5322693887176},{"nation":"JAPAN","revenue_1e4":5267668371444},{"nation":"INDONESIA","revenue_1e4":5231768523189}],"scan_ms":21.711215,"selected_cpu_ratio":0.31901602725913686,"session_id":"7eb5e9b5-7e9d-414f-8353-9e62750345ac","status":"ok"}
+Generated:
+    /tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-hybrid-auto/nsys/profile.nsys-rep

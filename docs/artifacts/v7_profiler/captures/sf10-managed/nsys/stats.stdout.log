@@ -1,0 +1,9 @@
+Generating SQLite file /tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-managed/nsys/profile.sqlite from /tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-managed/nsys/profile.nsys-rep
+Processing [/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-managed/nsys/profile.sqlite] with [/opt/nvidia/nsight-systems/2024.5.1/host-linux-x64/reports/cuda_api_sum.py] to [/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-managed/nsys/stats_cuda_api_sum.csv]... PROCESSED
+
+Processing [/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-managed/nsys/profile.sqlite] with [/opt/nvidia/nsight-systems/2024.5.1/host-linux-x64/reports/cuda_gpu_kern_sum.py] to [/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-managed/nsys/stats_cuda_gpu_kern_sum.csv]... PROCESSED
+
+Processing [/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-managed/nsys/profile.sqlite] with [/opt/nvidia/nsight-systems/2024.5.1/host-linux-x64/reports/cuda_gpu_mem_time_sum.py] to [/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-managed/nsys/stats_cuda_gpu_mem_time_sum.csv]... PROCESSED
+
+Processing [/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-managed/nsys/profile.sqlite] with [/opt/nvidia/nsight-systems/2024.5.1/host-linux-x64/reports/nvtx_sum.py] to [/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-managed/nsys/stats_nvtx_sum.csv]... PROCESSED
+

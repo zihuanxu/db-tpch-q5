@@ -1,0 +1,18 @@
+Capture range started in the application.
+Capture range ended in the application.
+Generating '/tmp/nsys-report-742c.qdstrm'
+
+[1/1] [0%                          ] profile.nsys-repProcessing events...
+
+[1/1] [0%                          ] profile.nsys-rep
+[1/1] [10%                         ] profile.nsys-rep
+[1/1] [==21%                       ] profile.nsys-rep
+[1/1] [=============58%            ] profile.nsys-rep
+[1/1] [=======================96%  ] profile.nsys-rep
+[1/1] [========================98% ] profile.nsys-rep
+[1/1] [========================100%] profile.nsys-rep
+[1/1] [========================100%] profile.nsys-rep
+{"allocation_ms":126.723682,"dataset":"/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10","dataset_load_ms":2890.371702,"date":"1994-01-01","engine":"gpu-managed","error_class":"","host_staging_ms":72432.564766,"initial_h2d_ms":58.015167236328125,"lifecycle":"resident","plan_build_ms":596.290145,"predicted_cpu_ratio":0.0,"record_type":"session_setup","region":"ASIA","repeat":1,"resident_gpu_bytes":1440121260,"resident_host_bytes":1440121437,"resident_pinned_bytes":0,"selected_cpu_ratio":0.0,"session_id":"efd6db19-45b1-4a2d-8c30-72bd40756a56","session_setup_ms":73229.396154,"status":"ok","threads":1,"tune_ms":0.0,"warmup":0}
+{"build_ms":0.0,"cpu_input_rows":0,"cpu_ms":0.0,"d2h_bytes":212,"d2h_ms":55.78956985473633,"error_class":"","error_message":"","gpu_input_rows":59986052,"gpu_ms":0.0,"h2d_bytes":212,"h2d_ms":0.13769599795341492,"input_lineitem_rows":59986052,"is_warmup":false,"kernel_ms":16.038496017456055,"lifecycle":"resident","mapped_remote_read_bytes":0,"matched_lineitem_rows":72985,"overlap_wall_ms":0.0,"query_total_ms":102.091706,"record_type":"request","request_index":0,"result_hash":"b1351a421ba8dcfd","result_rows":5,"rows":[{"nation":"INDIA","revenue_1e4":5368625879995},{"nation":"CHINA","revenue_1e4":5353508299282},{"nation":"VIETNAM","revenue_1e4":5322693887176},{"nation":"JAPAN","revenue_1e4":5267668371444},{"nation":"INDONESIA","revenue_1e4":5231768523189}],"scan_ms":71.9657618701458,"selected_cpu_ratio":0.0,"session_id":"efd6db19-45b1-4a2d-8c30-72bd40756a56","status":"ok"}
+Generated:
+    /tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-managed/nsys/profile.nsys-rep

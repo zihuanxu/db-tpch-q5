@@ -1,0 +1,6 @@
+Time (%),Total Time (ns),Instances,Avg (ns),Med (ns),Min (ns),Max (ns),StdDev (ns),Style,Range
+47.0,24857208,1,24857208.0,24857208.0,24857208,24857208,0.0,PushPop,:measured_request
+47.0,24841935,1,24841935.0,24841935.0,24841935,24841935,0.0,PushPop,:request
+5.7,3013360,1,3013360.0,3013360.0,3013360,3013360,0.0,PushPop,:q5_kernel
+0.1,71997,1,71997.0,71997.0,71997,71997,0.0,PushPop,:d2h
+0.1,66118,1,66118.0,66118.0,66118,66118,0.0,PushPop,:output_reset

@@ -1,0 +1,19 @@
+Capture range started in the application.
+Capture range ended in the application.
+Generating '/tmp/nsys-report-139b.qdstrm'
+
+[1/1] [0%                          ] profile.nsys-repProcessing events...
+
+[1/1] [0%                          ] profile.nsys-rep
+[1/1] [8%                          ] profile.nsys-rep
+[1/1] [===22%                      ] profile.nsys-rep
+[1/1] [======35%                   ] profile.nsys-rep
+[1/1] [===============67%          ] profile.nsys-rep
+[1/1] [========================98% ] profile.nsys-rep
+[1/1] [========================99% ] profile.nsys-rep
+[1/1] [========================100%] profile.nsys-rep
+[1/1] [========================100%] profile.nsys-rep
+{"allocation_ms":881.369519,"dataset":"/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10","dataset_load_ms":2898.855469,"date":"1994-01-01","engine":"gpu-mapped","error_class":"","host_staging_ms":1524.922284,"initial_h2d_ms":0.0,"lifecycle":"resident","plan_build_ms":600.251245,"predicted_cpu_ratio":0.0,"record_type":"session_setup","region":"ASIA","repeat":1,"resident_gpu_bytes":212,"resident_host_bytes":1440121437,"resident_pinned_bytes":1440121048,"selected_cpu_ratio":0.0,"session_id":"e96db238-b840-45b4-8d62-ab71aa7b27dd","session_setup_ms":3013.861282,"status":"ok","threads":1,"tune_ms":0.0,"warmup":0}
+{"build_ms":0.0,"cpu_input_rows":0,"cpu_ms":0.0,"d2h_bytes":212,"d2h_ms":0.08207999914884567,"error_class":"","error_message":"","gpu_input_rows":59986052,"gpu_ms":0.0,"h2d_bytes":0,"h2d_ms":0.0,"input_lineitem_rows":59986052,"is_warmup":false,"kernel_ms":135.61328125,"lifecycle":"resident","mapped_remote_read_bytes":960652652,"matched_lineitem_rows":72985,"overlap_wall_ms":0.0,"query_total_ms":372.674297,"record_type":"request","request_index":0,"result_hash":"b1351a421ba8dcfd","result_rows":5,"rows":[{"nation":"INDIA","revenue_1e4":5368625879995},{"nation":"CHINA","revenue_1e4":5353508299282},{"nation":"VIETNAM","revenue_1e4":5322693887176},{"nation":"JAPAN","revenue_1e4":5267668371444},{"nation":"INDONESIA","revenue_1e4":5231768523189}],"scan_ms":135.69536124914885,"selected_cpu_ratio":0.0,"session_id":"e96db238-b840-45b4-8d62-ab71aa7b27dd","status":"ok"}
+Generated:
+    /tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-mapped/nsys/profile.nsys-rep

@@ -1,0 +1,1948 @@
+{
+  "canonical_coverage": [
+    {
+      "cpu_ratio": 0.0,
+      "engine": "copy",
+      "gpu_ratio": 1.0,
+      "scale_factor": "1"
+    },
+    {
+      "cpu_ratio": 0.0,
+      "engine": "managed",
+      "gpu_ratio": 1.0,
+      "scale_factor": "1"
+    },
+    {
+      "cpu_ratio": 0.0,
+      "engine": "mapped",
+      "gpu_ratio": 1.0,
+      "scale_factor": "1"
+    },
+    {
+      "cpu_ratio": 0.5,
+      "engine": "hybrid-fixed",
+      "gpu_ratio": 0.5,
+      "scale_factor": "1"
+    },
+    {
+      "cpu_ratio": 0.2184091054894717,
+      "engine": "hybrid-auto",
+      "gpu_ratio": 0.7815908945105283,
+      "scale_factor": "1"
+    },
+    {
+      "cpu_ratio": 0.0,
+      "engine": "copy",
+      "gpu_ratio": 1.0,
+      "scale_factor": "10"
+    },
+    {
+      "cpu_ratio": 0.0,
+      "engine": "managed",
+      "gpu_ratio": 1.0,
+      "scale_factor": "10"
+    },
+    {
+      "cpu_ratio": 0.0,
+      "engine": "mapped",
+      "gpu_ratio": 1.0,
+      "scale_factor": "10"
+    },
+    {
+      "cpu_ratio": 0.5,
+      "engine": "hybrid-fixed",
+      "gpu_ratio": 0.5,
+      "scale_factor": "10"
+    },
+    {
+      "cpu_ratio": 0.31901602725913686,
+      "engine": "hybrid-auto",
+      "gpu_ratio": 0.6809839727408631,
+      "scale_factor": "10"
+    }
+  ],
+  "canonical_profile_count": 10,
+  "profiles": [
+    {
+      "app_command": [
+        "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+        "--dataset",
+        "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/1",
+        "--engine",
+        "gpu-copy",
+        "--requests",
+        "1",
+        "--cpu-ratio",
+        "0"
+      ],
+      "copied_files": {
+        "captures/sf1-copy/ncu/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-copy/ncu/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-copy/ncu/profile.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-copy/ncu/profile.stdout.log": "6ab08d6ff473f428b47660a552fc2de4092a0805be4fc4ea4b999662a8309ee0",
+        "captures/sf1-copy/ncu/report.csv": "6ab08d6ff473f428b47660a552fc2de4092a0805be4fc4ea4b999662a8309ee0",
+        "captures/sf1-copy/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
+        "captures/sf1-copy/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-copy/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-copy/nsys/profile.nsys-rep": "8e401cfbe75a49a8b201cf9954ded49c1242961556e0d2e57a7bcdbd9849c3b7",
+        "captures/sf1-copy/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
+        "captures/sf1-copy/nsys/profile.stdout.log": "1390bcb641842a2a7fdeac44c5aff125465bb44f7945260ad520f13f902992c9",
+        "captures/sf1-copy/nsys/profile.tool.stdout.log": "9a6b3163ea0b727c59490624c9a35ed39ffcb4a4010361f384a46a466f519e8c",
+        "captures/sf1-copy/nsys/stats.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-copy/nsys/stats.stdout.log": "01de0ac80c1cd2f47be1223941d68a0c2dd33b4f0739a09297fd25f3ede12206",
+        "captures/sf1-copy/nsys/stats_cuda_api_sum.csv": "74c6d5803f077042c21b1d144453e2f90c4055aa554f926f446ca075811cca41",
+        "captures/sf1-copy/nsys/stats_cuda_gpu_kern_sum.csv": "b5b5dfe5f6c57724012d88921f6082eb9e79f0e648c311894ac95b0955f4bc93",
+        "captures/sf1-copy/nsys/stats_cuda_gpu_mem_time_sum.csv": "1ea1a5d16af08b4c96af0ee6eadefbe941ff0a0ff9af0d2a425433f47d78237f",
+        "captures/sf1-copy/nsys/stats_nvtx_sum.csv": "384c2342b5db5031b3b53d27a6d80342ac70b8d66bfd2501c29f0d392492cc7f"
+      },
+      "id": "sf1-copy",
+      "identity": {
+        "cpu_ratio": 0.0,
+        "dataset_manifest": {
+          "path": "datasets/1/manifest.json",
+          "sha256": "0d7899db921b223a3f94625fa910191485f6fb050054447025b9f2abbc2729a5"
+        },
+        "engine": "copy",
+        "evidence_manifest": {
+          "path": "evidence/1/manifest.json",
+          "sha256": "cd5b2a212c0be63aac7b28216de6c94abb24fa472a2abd998131a501bbc6df89"
+        },
+        "execution": {
+          "cwd": "/home/xuzihuan/db-tpch-q5",
+          "executable": {
+            "build_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc",
+            "path": "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+            "sha256": "01a07a46017ced9212906abac7030aaa62158570ad4a724e1dde24c9b061407c"
+          }
+        },
+        "gpu_ratio": 1.0,
+        "gpu_uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e",
+        "oracle_hash": "542abf4003633c7c",
+        "result_hash": "542abf4003633c7c",
+        "scale_factor": "1",
+        "session_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc"
+      },
+      "ncu": {
+        "gpu": {
+          "driver_version": "595.71.05",
+          "index": 0,
+          "query_command": [
+            "nvidia-smi",
+            "--id=0",
+            "--query-gpu=index,uuid,driver_version",
+            "--format=csv,noheader,nounits"
+          ],
+          "requested_index": 0,
+          "return_code": 0,
+          "status": "ok",
+          "stderr": "",
+          "stdout": "0, GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e, 595.71.05\n",
+          "uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e"
+        },
+        "kernel_name": "unnamed>::arrow_q5_kernel(const int *, const int *, const long *, const int *, long, const int *, int, const int *, int, unsigned long long *, int, unsigned long long *, int *)",
+        "metrics": {
+          "dram__bytes_read.sum": 54495232.0,
+          "dram__throughput.avg.pct_of_peak_sustained_elapsed": 4.38,
+          "gpu__time_duration.sum": 1308640.0,
+          "sm__throughput.avg.pct_of_peak_sustained_elapsed": 3.13,
+          "sm__warps_active.avg.pct_of_peak_sustained_active": 38.62
+        },
+        "profile_command": [
+          "ncu",
+          "--csv",
+          "--target-processes",
+          "all",
+          "--replay-mode",
+          "application",
+          "--kernel-name-base",
+          "demangled",
+          "--kernel-name",
+          "regex:.*q5_kernel.*",
+          "--launch-count",
+          "1",
+          "--metrics",
+          "gpu__time_duration.sum,dram__bytes_read.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__throughput.avg.pct_of_peak_sustained_elapsed,sm__warps_active.avg.pct_of_peak_sustained_active",
+          "--devices",
+          "0",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/1",
+          "--engine",
+          "gpu-copy",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0"
+        ],
+        "replay_mode": "application",
+        "selected_metric_values": {
+          "achieved_occupancy": 38.62,
+          "dram_read_bytes": 54495232.0,
+          "dram_throughput": 4.38,
+          "duration": 1308640.0,
+          "sm_throughput": 3.13
+        },
+        "selected_metrics": {
+          "achieved_occupancy": "sm__warps_active.avg.pct_of_peak_sustained_active",
+          "dram_read_bytes": "dram__bytes_read.sum",
+          "dram_throughput": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "duration": "gpu__time_duration.sum",
+          "sm_throughput": "sm__throughput.avg.pct_of_peak_sustained_elapsed"
+        },
+        "tool_version": "NVIDIA (R) Nsight Compute Command Line Profiler\nCopyright (c) 2018-2024 NVIDIA Corporation\nVersion 2024.3.2.0 (build 34861637) (public-release)"
+      },
+      "nsys": {
+        "cuda_memory_operation_rows": [
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "memcpy",
+            "name": "[CUDA memcpy Device-to-Host]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 71.4,
+            "total_ns": 3200
+          },
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "other",
+            "name": "[CUDA memset]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 28.6,
+            "total_ns": 1280
+          }
+        ],
+        "observed_nvtx_ranges": [
+          "d2h",
+          "measured_request",
+          "output_reset",
+          "q5_kernel",
+          "request"
+        ],
+        "profile_command": [
+          "nsys",
+          "profile",
+          "--force-overwrite=true",
+          "--trace=cuda,nvtx,osrt",
+          "--sample=none",
+          "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
+          "--capture-range=nvtx",
+          "--nvtx-capture=measured_request",
+          "--capture-range-end=stop",
+          "--output",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf1-copy/nsys/profile",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/1",
+          "--engine",
+          "gpu-copy",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0"
+        ],
+        "q5_kernel_total_time_ns": 1208067,
+        "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
+      }
+    },
+    {
+      "app_command": [
+        "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+        "--dataset",
+        "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/1",
+        "--engine",
+        "gpu-managed",
+        "--requests",
+        "1",
+        "--cpu-ratio",
+        "0"
+      ],
+      "copied_files": {
+        "captures/sf1-managed/ncu/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-managed/ncu/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-managed/ncu/profile.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-managed/ncu/profile.stdout.log": "b48c1f2624ce8c5befa215163b05a2bb2ce1f59c70001011124b3ac7f1f1ef5b",
+        "captures/sf1-managed/ncu/report.csv": "b48c1f2624ce8c5befa215163b05a2bb2ce1f59c70001011124b3ac7f1f1ef5b",
+        "captures/sf1-managed/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
+        "captures/sf1-managed/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-managed/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-managed/nsys/profile.nsys-rep": "c51c0739090d004fda4e763c1828721e1b4cf04f62a574088d13d3a9262f0b34",
+        "captures/sf1-managed/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
+        "captures/sf1-managed/nsys/profile.stdout.log": "025d3f8117cc283045a5ee2aa1278ed4d3d51b9c812653b981644b732acfaae8",
+        "captures/sf1-managed/nsys/profile.tool.stdout.log": "878014e2ae51b5178783bd823bc0aa637eb1b0d4fd4e0e281ab445f560e70e80",
+        "captures/sf1-managed/nsys/stats.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-managed/nsys/stats.stdout.log": "a5c34d7e7bb90bdfaadda26552185efc592f6e30753e58461fdc99e665aaa049",
+        "captures/sf1-managed/nsys/stats_cuda_api_sum.csv": "60f50b638264ea8f705b0af67db3723d613b49fad3643a48d3db737d3db799b6",
+        "captures/sf1-managed/nsys/stats_cuda_gpu_kern_sum.csv": "31e05838b813136a0a4d9409149ef5c463e6b0356c26be8d4152abff3a5146e9",
+        "captures/sf1-managed/nsys/stats_cuda_gpu_mem_time_sum.csv": "f6db0be6772ef21752c0d6ab677bb25a840a5ebc4ed3d0f3d193406e21440e44",
+        "captures/sf1-managed/nsys/stats_nvtx_sum.csv": "d5a78602dfdddd5b8400f50267395cd65b663176ba0f54254be78a1f214b17a1"
+      },
+      "id": "sf1-managed",
+      "identity": {
+        "cpu_ratio": 0.0,
+        "dataset_manifest": {
+          "path": "datasets/1/manifest.json",
+          "sha256": "0d7899db921b223a3f94625fa910191485f6fb050054447025b9f2abbc2729a5"
+        },
+        "engine": "managed",
+        "evidence_manifest": {
+          "path": "evidence/1/manifest.json",
+          "sha256": "cd5b2a212c0be63aac7b28216de6c94abb24fa472a2abd998131a501bbc6df89"
+        },
+        "execution": {
+          "cwd": "/home/xuzihuan/db-tpch-q5",
+          "executable": {
+            "build_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc",
+            "path": "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+            "sha256": "01a07a46017ced9212906abac7030aaa62158570ad4a724e1dde24c9b061407c"
+          }
+        },
+        "gpu_ratio": 1.0,
+        "gpu_uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e",
+        "oracle_hash": "542abf4003633c7c",
+        "result_hash": "542abf4003633c7c",
+        "scale_factor": "1",
+        "session_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc"
+      },
+      "ncu": {
+        "gpu": {
+          "driver_version": "595.71.05",
+          "index": 0,
+          "query_command": [
+            "nvidia-smi",
+            "--id=0",
+            "--query-gpu=index,uuid,driver_version",
+            "--format=csv,noheader,nounits"
+          ],
+          "requested_index": 0,
+          "return_code": 0,
+          "status": "ok",
+          "stderr": "",
+          "stdout": "0, GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e, 595.71.05\n",
+          "uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e"
+        },
+        "kernel_name": "unnamed>::arrow_q5_kernel(const int *, const int *, const long *, const int *, long, const int *, int, const int *, int, unsigned long long *, int, unsigned long long *, int *)",
+        "metrics": {
+          "dram__bytes_read.sum": 54461696.0,
+          "dram__throughput.avg.pct_of_peak_sustained_elapsed": 3.38,
+          "gpu__time_duration.sum": 1699712.0,
+          "sm__throughput.avg.pct_of_peak_sustained_elapsed": 2.37,
+          "sm__warps_active.avg.pct_of_peak_sustained_active": 54.6
+        },
+        "profile_command": [
+          "ncu",
+          "--csv",
+          "--target-processes",
+          "all",
+          "--replay-mode",
+          "application",
+          "--kernel-name-base",
+          "demangled",
+          "--kernel-name",
+          "regex:.*q5_kernel.*",
+          "--launch-count",
+          "1",
+          "--metrics",
+          "gpu__time_duration.sum,dram__bytes_read.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__throughput.avg.pct_of_peak_sustained_elapsed,sm__warps_active.avg.pct_of_peak_sustained_active",
+          "--devices",
+          "0",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/1",
+          "--engine",
+          "gpu-managed",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0"
+        ],
+        "replay_mode": "application",
+        "selected_metric_values": {
+          "achieved_occupancy": 54.6,
+          "dram_read_bytes": 54461696.0,
+          "dram_throughput": 3.38,
+          "duration": 1699712.0,
+          "sm_throughput": 2.37
+        },
+        "selected_metrics": {
+          "achieved_occupancy": "sm__warps_active.avg.pct_of_peak_sustained_active",
+          "dram_read_bytes": "dram__bytes_read.sum",
+          "dram_throughput": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "duration": "gpu__time_duration.sum",
+          "sm_throughput": "sm__throughput.avg.pct_of_peak_sustained_elapsed"
+        },
+        "tool_version": "NVIDIA (R) Nsight Compute Command Line Profiler\nCopyright (c) 2018-2024 NVIDIA Corporation\nVersion 2024.3.2.0 (build 34861637) (public-release)"
+      },
+      "nsys": {
+        "cuda_memory_operation_rows": [
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "memcpy",
+            "name": "[CUDA memcpy Unified Host-to-Device]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 61,
+            "total_ns": 8350
+          },
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "memcpy",
+            "name": "[CUDA memcpy Unified Device-to-Host]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 39,
+            "total_ns": 5343
+          }
+        ],
+        "observed_nvtx_ranges": [
+          "d2h",
+          "managed_prefetch",
+          "measured_request",
+          "output_reset",
+          "q5_kernel",
+          "request"
+        ],
+        "profile_command": [
+          "nsys",
+          "profile",
+          "--force-overwrite=true",
+          "--trace=cuda,nvtx,osrt",
+          "--sample=none",
+          "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
+          "--capture-range=nvtx",
+          "--nvtx-capture=measured_request",
+          "--capture-range-end=stop",
+          "--output",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf1-managed/nsys/profile",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/1",
+          "--engine",
+          "gpu-managed",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0"
+        ],
+        "q5_kernel_total_time_ns": 1639621,
+        "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
+      }
+    },
+    {
+      "app_command": [
+        "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+        "--dataset",
+        "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/1",
+        "--engine",
+        "gpu-mapped",
+        "--requests",
+        "1",
+        "--cpu-ratio",
+        "0"
+      ],
+      "copied_files": {
+        "captures/sf1-mapped/ncu/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-mapped/ncu/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-mapped/ncu/profile.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-mapped/ncu/profile.stdout.log": "3039d92ff9819f391fbb3502a715488cc9a36ee45a341b29834951219d7dc15e",
+        "captures/sf1-mapped/ncu/report.csv": "3039d92ff9819f391fbb3502a715488cc9a36ee45a341b29834951219d7dc15e",
+        "captures/sf1-mapped/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
+        "captures/sf1-mapped/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-mapped/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-mapped/nsys/profile.nsys-rep": "66cd1987bb9c951a06ca1a780b8e7e90587c94acf67883dca3030f5c0df669ce",
+        "captures/sf1-mapped/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
+        "captures/sf1-mapped/nsys/profile.stdout.log": "5aebdc7f9cf7c1b89e92ddcaa5160a0c5efecdb142b90362aefe3aa9e9d1e09d",
+        "captures/sf1-mapped/nsys/profile.tool.stdout.log": "6b4731f95b4d0db25e9135156088f9e8d772c71245636da54749b5e3eed6f4ed",
+        "captures/sf1-mapped/nsys/stats.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-mapped/nsys/stats.stdout.log": "b84eb27f28271b5b09421a83fb69b74ad3e8b4042112b8a3c79ead8c9aa0d7ea",
+        "captures/sf1-mapped/nsys/stats_cuda_api_sum.csv": "d4970abfa584ead70c6c6992f5dddcdeba9f97c523305339a052cfe5e1c1066b",
+        "captures/sf1-mapped/nsys/stats_cuda_gpu_kern_sum.csv": "6b9dbecd6490953a970068a9b9ca86814e5d9049b13dc279de8abd56fb2d7330",
+        "captures/sf1-mapped/nsys/stats_cuda_gpu_mem_time_sum.csv": "43955d5fcae648f325ac6e9391e237bb13acf990573bf5141ec8e47f45ca324c",
+        "captures/sf1-mapped/nsys/stats_nvtx_sum.csv": "fe5233bd76e7ca68b4400b388af14054f5eb6b9670017ff573b739599353ebba"
+      },
+      "id": "sf1-mapped",
+      "identity": {
+        "cpu_ratio": 0.0,
+        "dataset_manifest": {
+          "path": "datasets/1/manifest.json",
+          "sha256": "0d7899db921b223a3f94625fa910191485f6fb050054447025b9f2abbc2729a5"
+        },
+        "engine": "mapped",
+        "evidence_manifest": {
+          "path": "evidence/1/manifest.json",
+          "sha256": "cd5b2a212c0be63aac7b28216de6c94abb24fa472a2abd998131a501bbc6df89"
+        },
+        "execution": {
+          "cwd": "/home/xuzihuan/db-tpch-q5",
+          "executable": {
+            "build_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc",
+            "path": "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+            "sha256": "01a07a46017ced9212906abac7030aaa62158570ad4a724e1dde24c9b061407c"
+          }
+        },
+        "gpu_ratio": 1.0,
+        "gpu_uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e",
+        "oracle_hash": "542abf4003633c7c",
+        "result_hash": "542abf4003633c7c",
+        "scale_factor": "1",
+        "session_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc"
+      },
+      "ncu": {
+        "gpu": {
+          "driver_version": "595.71.05",
+          "index": 0,
+          "query_command": [
+            "nvidia-smi",
+            "--id=0",
+            "--query-gpu=index,uuid,driver_version",
+            "--format=csv,noheader,nounits"
+          ],
+          "requested_index": 0,
+          "return_code": 0,
+          "status": "ok",
+          "stderr": "",
+          "stdout": "0, GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e, 595.71.05\n",
+          "uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e"
+        },
+        "kernel_name": "unnamed>::arrow_q5_kernel(const int *, const int *, const long *, const int *, long, const int *, int, const int *, int, unsigned long long *, int, unsigned long long *, int *)",
+        "metrics": {
+          "dram__bytes_read.sum": 287232.0,
+          "dram__throughput.avg.pct_of_peak_sustained_elapsed": 0.01,
+          "gpu__time_duration.sum": 2521152.0,
+          "sm__throughput.avg.pct_of_peak_sustained_elapsed": 0.57,
+          "sm__warps_active.avg.pct_of_peak_sustained_active": 62.57
+        },
+        "profile_command": [
+          "ncu",
+          "--csv",
+          "--target-processes",
+          "all",
+          "--replay-mode",
+          "application",
+          "--kernel-name-base",
+          "demangled",
+          "--kernel-name",
+          "regex:.*q5_kernel.*",
+          "--launch-count",
+          "1",
+          "--metrics",
+          "gpu__time_duration.sum,dram__bytes_read.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__throughput.avg.pct_of_peak_sustained_elapsed,sm__warps_active.avg.pct_of_peak_sustained_active",
+          "--devices",
+          "0",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/1",
+          "--engine",
+          "gpu-mapped",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0"
+        ],
+        "replay_mode": "application",
+        "selected_metric_values": {
+          "achieved_occupancy": 62.57,
+          "dram_read_bytes": 287232.0,
+          "dram_throughput": 0.01,
+          "duration": 2521152.0,
+          "sm_throughput": 0.57
+        },
+        "selected_metrics": {
+          "achieved_occupancy": "sm__warps_active.avg.pct_of_peak_sustained_active",
+          "dram_read_bytes": "dram__bytes_read.sum",
+          "dram_throughput": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "duration": "gpu__time_duration.sum",
+          "sm_throughput": "sm__throughput.avg.pct_of_peak_sustained_elapsed"
+        },
+        "tool_version": "NVIDIA (R) Nsight Compute Command Line Profiler\nCopyright (c) 2018-2024 NVIDIA Corporation\nVersion 2024.3.2.0 (build 34861637) (public-release)"
+      },
+      "nsys": {
+        "cuda_memory_operation_rows": [
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "memcpy",
+            "name": "[CUDA memcpy Device-to-Host]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 72.4,
+            "total_ns": 3360
+          },
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "other",
+            "name": "[CUDA memset]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 27.6,
+            "total_ns": 1280
+          }
+        ],
+        "observed_nvtx_ranges": [
+          "d2h",
+          "measured_request",
+          "output_reset",
+          "q5_kernel",
+          "request"
+        ],
+        "profile_command": [
+          "nsys",
+          "profile",
+          "--force-overwrite=true",
+          "--trace=cuda,nvtx,osrt",
+          "--sample=none",
+          "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
+          "--capture-range=nvtx",
+          "--nvtx-capture=measured_request",
+          "--capture-range-end=stop",
+          "--output",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf1-mapped/nsys/profile",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/1",
+          "--engine",
+          "gpu-mapped",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0"
+        ],
+        "q5_kernel_total_time_ns": 2531336,
+        "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
+      }
+    },
+    {
+      "app_command": [
+        "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+        "--dataset",
+        "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/1",
+        "--engine",
+        "hybrid-arrow",
+        "--requests",
+        "1",
+        "--cpu-ratio",
+        "0.5",
+        "--threads",
+        "8",
+        "--hybrid-selection",
+        "fixed"
+      ],
+      "copied_files": {
+        "captures/sf1-hybrid-fixed/ncu/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-hybrid-fixed/ncu/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-hybrid-fixed/ncu/profile.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-hybrid-fixed/ncu/profile.stdout.log": "2fe3eaa286c7c0a80cb916d9802df03cdb93b5d47c2b5bc0863b37be83981b7e",
+        "captures/sf1-hybrid-fixed/ncu/report.csv": "2fe3eaa286c7c0a80cb916d9802df03cdb93b5d47c2b5bc0863b37be83981b7e",
+        "captures/sf1-hybrid-fixed/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
+        "captures/sf1-hybrid-fixed/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-hybrid-fixed/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-hybrid-fixed/nsys/profile.nsys-rep": "2111d0a51f9dfd59f2d5cb4daa35abb4fbbe443b14fa6bf170be34eaa8343719",
+        "captures/sf1-hybrid-fixed/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
+        "captures/sf1-hybrid-fixed/nsys/profile.stdout.log": "f67a9143c2d76983ea8c0e86b392d1577e2364f4723c2236d6958f75fe422842",
+        "captures/sf1-hybrid-fixed/nsys/profile.tool.stdout.log": "56537f9c9665bc1d19ff978541089e937cf2ebe5338157e3e2bfa1ecd9bc53a7",
+        "captures/sf1-hybrid-fixed/nsys/stats.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-hybrid-fixed/nsys/stats.stdout.log": "40e11d6205fb7404be8722dfc4fb90586ada097cdc4d7616f5a8a5b655d8fdeb",
+        "captures/sf1-hybrid-fixed/nsys/stats_cuda_api_sum.csv": "e96cf493f0ce1adafd26ff791b2c0a07a3cbab268bd3a8c5b5f36480c53373b4",
+        "captures/sf1-hybrid-fixed/nsys/stats_cuda_gpu_kern_sum.csv": "5462201ba32d4c6abe4ada19fc265f0c08bebaf8666ada54041bea7189adcf7d",
+        "captures/sf1-hybrid-fixed/nsys/stats_cuda_gpu_mem_time_sum.csv": "fd564293595fdc4715e43c3ecfc604e05e011fc90e64f619a9fd1976457d480b",
+        "captures/sf1-hybrid-fixed/nsys/stats_nvtx_sum.csv": "4bd9aeb570043e0f548b6f6ed9ea035fcbbdbfb8cab641e49557f3845e0de98b"
+      },
+      "id": "sf1-hybrid-fixed",
+      "identity": {
+        "cpu_ratio": 0.5,
+        "dataset_manifest": {
+          "path": "datasets/1/manifest.json",
+          "sha256": "0d7899db921b223a3f94625fa910191485f6fb050054447025b9f2abbc2729a5"
+        },
+        "engine": "hybrid-fixed",
+        "evidence_manifest": {
+          "path": "evidence/1/manifest.json",
+          "sha256": "cd5b2a212c0be63aac7b28216de6c94abb24fa472a2abd998131a501bbc6df89"
+        },
+        "execution": {
+          "cwd": "/home/xuzihuan/db-tpch-q5",
+          "executable": {
+            "build_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc",
+            "path": "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+            "sha256": "01a07a46017ced9212906abac7030aaa62158570ad4a724e1dde24c9b061407c"
+          }
+        },
+        "gpu_ratio": 0.5,
+        "gpu_uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e",
+        "oracle_hash": "542abf4003633c7c",
+        "result_hash": "542abf4003633c7c",
+        "scale_factor": "1",
+        "session_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc"
+      },
+      "ncu": {
+        "gpu": {
+          "driver_version": "595.71.05",
+          "index": 0,
+          "query_command": [
+            "nvidia-smi",
+            "--id=0",
+            "--query-gpu=index,uuid,driver_version",
+            "--format=csv,noheader,nounits"
+          ],
+          "requested_index": 0,
+          "return_code": 0,
+          "status": "ok",
+          "stderr": "",
+          "stdout": "0, GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e, 595.71.05\n",
+          "uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e"
+        },
+        "kernel_name": "unnamed>::arrow_q5_kernel(const int *, const int *, const long *, const int *, long, const int *, int, const int *, int, unsigned long long *, int, unsigned long long *, int *)",
+        "metrics": {
+          "dram__bytes_read.sum": 27267328.0,
+          "dram__throughput.avg.pct_of_peak_sustained_elapsed": 6.52,
+          "gpu__time_duration.sum": 425120.0,
+          "sm__throughput.avg.pct_of_peak_sustained_elapsed": 3.09,
+          "sm__warps_active.avg.pct_of_peak_sustained_active": 39.81
+        },
+        "profile_command": [
+          "ncu",
+          "--csv",
+          "--target-processes",
+          "all",
+          "--replay-mode",
+          "application",
+          "--kernel-name-base",
+          "demangled",
+          "--kernel-name",
+          "regex:.*q5_kernel.*",
+          "--launch-count",
+          "1",
+          "--metrics",
+          "gpu__time_duration.sum,dram__bytes_read.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__throughput.avg.pct_of_peak_sustained_elapsed,sm__warps_active.avg.pct_of_peak_sustained_active",
+          "--devices",
+          "0",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/1",
+          "--engine",
+          "hybrid-arrow",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0.5",
+          "--threads",
+          "8",
+          "--hybrid-selection",
+          "fixed"
+        ],
+        "replay_mode": "application",
+        "selected_metric_values": {
+          "achieved_occupancy": 39.81,
+          "dram_read_bytes": 27267328.0,
+          "dram_throughput": 6.52,
+          "duration": 425120.0,
+          "sm_throughput": 3.09
+        },
+        "selected_metrics": {
+          "achieved_occupancy": "sm__warps_active.avg.pct_of_peak_sustained_active",
+          "dram_read_bytes": "dram__bytes_read.sum",
+          "dram_throughput": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "duration": "gpu__time_duration.sum",
+          "sm_throughput": "sm__throughput.avg.pct_of_peak_sustained_elapsed"
+        },
+        "tool_version": "NVIDIA (R) Nsight Compute Command Line Profiler\nCopyright (c) 2018-2024 NVIDIA Corporation\nVersion 2024.3.2.0 (build 34861637) (public-release)"
+      },
+      "nsys": {
+        "cuda_memory_operation_rows": [
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "memcpy",
+            "name": "[CUDA memcpy Device-to-Host]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 73.7,
+            "total_ns": 3232
+          },
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "other",
+            "name": "[CUDA memset]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 26.3,
+            "total_ns": 1152
+          }
+        ],
+        "observed_nvtx_ranges": [
+          "cpu_scan",
+          "d2h",
+          "hybrid_gpu_request",
+          "measured_request",
+          "merge",
+          "output_reset",
+          "q5_kernel",
+          "request"
+        ],
+        "profile_command": [
+          "nsys",
+          "profile",
+          "--force-overwrite=true",
+          "--trace=cuda,nvtx,osrt",
+          "--sample=none",
+          "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
+          "--capture-range=nvtx",
+          "--nvtx-capture=measured_request",
+          "--capture-range-end=stop",
+          "--output",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf1-hybrid-fixed/nsys/profile",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/1",
+          "--engine",
+          "hybrid-arrow",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0.5",
+          "--threads",
+          "8",
+          "--hybrid-selection",
+          "fixed"
+        ],
+        "q5_kernel_total_time_ns": 439585,
+        "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
+      }
+    },
+    {
+      "app_command": [
+        "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+        "--dataset",
+        "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/1",
+        "--engine",
+        "hybrid-arrow",
+        "--requests",
+        "1",
+        "--threads",
+        "8",
+        "--hybrid-selection",
+        "auto"
+      ],
+      "copied_files": {
+        "captures/sf1-hybrid-auto/ncu/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-hybrid-auto/ncu/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-hybrid-auto/ncu/profile.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-hybrid-auto/ncu/profile.stdout.log": "6e98351a9689154f1ea5c9c0c10a4d016fef082d84179b242cbade6b03f8d2a7",
+        "captures/sf1-hybrid-auto/ncu/report.csv": "6e98351a9689154f1ea5c9c0c10a4d016fef082d84179b242cbade6b03f8d2a7",
+        "captures/sf1-hybrid-auto/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
+        "captures/sf1-hybrid-auto/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-hybrid-auto/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-hybrid-auto/nsys/profile.nsys-rep": "e24068f7aa90b3f7e97ab174ec1be5dbbf2cef6def2f951a0c9223d9dd7e0565",
+        "captures/sf1-hybrid-auto/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
+        "captures/sf1-hybrid-auto/nsys/profile.stdout.log": "9b116ba49aaa9f0676041958cb8fc3d95ec7ef429e366a0378d71c8a8f49212e",
+        "captures/sf1-hybrid-auto/nsys/profile.tool.stdout.log": "82767775770096a40ebd54c2b7d74bec59a1ed802a13b8649d89c21e9a92b8fa",
+        "captures/sf1-hybrid-auto/nsys/stats.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf1-hybrid-auto/nsys/stats.stdout.log": "b987c9a0501f5107e67a7097da7846cb90defec9756f470b9ef5c590b302bf70",
+        "captures/sf1-hybrid-auto/nsys/stats_cuda_api_sum.csv": "e88b03aec1cb94b556f1e3bb55d3e6939ccbe3eab068a72a7a8eff2d843fc9f8",
+        "captures/sf1-hybrid-auto/nsys/stats_cuda_gpu_kern_sum.csv": "949743f8ccb3b72f3b677e7176639348e16e64ccfcbe1d7e9a076e2232bcaf60",
+        "captures/sf1-hybrid-auto/nsys/stats_cuda_gpu_mem_time_sum.csv": "032631363f35b1d932b2ac1cd523b6cfd4fec1a67b203b811ea5fd3c13d2690d",
+        "captures/sf1-hybrid-auto/nsys/stats_nvtx_sum.csv": "d64b5e9ee9c1acd4b5a9df9b4ba93789c2afcfdd3dc45ad9a7a7e780038ccdc6"
+      },
+      "id": "sf1-hybrid-auto",
+      "identity": {
+        "cpu_ratio": 0.2184091054894717,
+        "dataset_manifest": {
+          "path": "datasets/1/manifest.json",
+          "sha256": "0d7899db921b223a3f94625fa910191485f6fb050054447025b9f2abbc2729a5"
+        },
+        "engine": "hybrid-auto",
+        "evidence_manifest": {
+          "path": "evidence/1/manifest.json",
+          "sha256": "cd5b2a212c0be63aac7b28216de6c94abb24fa472a2abd998131a501bbc6df89"
+        },
+        "execution": {
+          "cwd": "/home/xuzihuan/db-tpch-q5",
+          "executable": {
+            "build_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc",
+            "path": "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+            "sha256": "01a07a46017ced9212906abac7030aaa62158570ad4a724e1dde24c9b061407c"
+          }
+        },
+        "gpu_ratio": 0.7815908945105283,
+        "gpu_uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e",
+        "oracle_hash": "542abf4003633c7c",
+        "result_hash": "542abf4003633c7c",
+        "scale_factor": "1",
+        "session_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc"
+      },
+      "ncu": {
+        "gpu": {
+          "driver_version": "595.71.05",
+          "index": 0,
+          "query_command": [
+            "nvidia-smi",
+            "--id=0",
+            "--query-gpu=index,uuid,driver_version",
+            "--format=csv,noheader,nounits"
+          ],
+          "requested_index": 0,
+          "return_code": 0,
+          "status": "ok",
+          "stderr": "",
+          "stdout": "0, GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e, 595.71.05\n",
+          "uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e"
+        },
+        "kernel_name": "unnamed>::arrow_q5_kernel(const int *, const int *, const long *, const int *, long, const int *, int, const int *, int, unsigned long long *, int, unsigned long long *, int *)",
+        "metrics": {
+          "dram__bytes_read.sum": 37843456.0,
+          "dram__throughput.avg.pct_of_peak_sustained_elapsed": 5.13,
+          "gpu__time_duration.sum": 750464.0,
+          "sm__throughput.avg.pct_of_peak_sustained_elapsed": 3.16,
+          "sm__warps_active.avg.pct_of_peak_sustained_active": 38.9
+        },
+        "profile_command": [
+          "ncu",
+          "--csv",
+          "--target-processes",
+          "all",
+          "--replay-mode",
+          "kernel",
+          "--kernel-name-base",
+          "demangled",
+          "--kernel-name",
+          "regex:.*q5_kernel.*",
+          "--nvtx",
+          "--nvtx-include",
+          "hybrid_gpu_request/",
+          "--launch-count",
+          "1",
+          "--metrics",
+          "gpu__time_duration.sum,dram__bytes_read.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__throughput.avg.pct_of_peak_sustained_elapsed,sm__warps_active.avg.pct_of_peak_sustained_active",
+          "--devices",
+          "0",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/1",
+          "--engine",
+          "hybrid-arrow",
+          "--requests",
+          "1",
+          "--threads",
+          "8",
+          "--hybrid-selection",
+          "auto"
+        ],
+        "replay_mode": "kernel",
+        "selected_metric_values": {
+          "achieved_occupancy": 38.9,
+          "dram_read_bytes": 37843456.0,
+          "dram_throughput": 5.13,
+          "duration": 750464.0,
+          "sm_throughput": 3.16
+        },
+        "selected_metrics": {
+          "achieved_occupancy": "sm__warps_active.avg.pct_of_peak_sustained_active",
+          "dram_read_bytes": "dram__bytes_read.sum",
+          "dram_throughput": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "duration": "gpu__time_duration.sum",
+          "sm_throughput": "sm__throughput.avg.pct_of_peak_sustained_elapsed"
+        },
+        "tool_version": "NVIDIA (R) Nsight Compute Command Line Profiler\nCopyright (c) 2018-2024 NVIDIA Corporation\nVersion 2024.3.2.0 (build 34861637) (public-release)"
+      },
+      "nsys": {
+        "cuda_memory_operation_rows": [
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "memcpy",
+            "name": "[CUDA memcpy Device-to-Host]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 72,
+            "total_ns": 3134
+          },
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "other",
+            "name": "[CUDA memset]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 28,
+            "total_ns": 1216
+          }
+        ],
+        "observed_nvtx_ranges": [
+          "cpu_scan",
+          "d2h",
+          "hybrid_gpu_request",
+          "measured_request",
+          "merge",
+          "output_reset",
+          "q5_kernel",
+          "request"
+        ],
+        "profile_command": [
+          "nsys",
+          "profile",
+          "--force-overwrite=true",
+          "--trace=cuda,nvtx,osrt",
+          "--sample=none",
+          "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
+          "--capture-range=nvtx",
+          "--nvtx-capture=measured_request",
+          "--capture-range-end=stop",
+          "--output",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf1-hybrid-auto/nsys/profile",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/1",
+          "--engine",
+          "hybrid-arrow",
+          "--requests",
+          "1",
+          "--threads",
+          "8",
+          "--hybrid-selection",
+          "auto"
+        ],
+        "q5_kernel_total_time_ns": 846787,
+        "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
+      }
+    },
+    {
+      "app_command": [
+        "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+        "--dataset",
+        "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10",
+        "--engine",
+        "gpu-copy",
+        "--requests",
+        "1",
+        "--cpu-ratio",
+        "0"
+      ],
+      "copied_files": {
+        "captures/sf10-copy/ncu/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-copy/ncu/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-copy/ncu/profile.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-copy/ncu/profile.stdout.log": "fafcbe5ef100c603c64dff360e95839114e0012ba987f8601d3f7f3740d9eeea",
+        "captures/sf10-copy/ncu/report.csv": "fafcbe5ef100c603c64dff360e95839114e0012ba987f8601d3f7f3740d9eeea",
+        "captures/sf10-copy/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
+        "captures/sf10-copy/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-copy/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-copy/nsys/profile.nsys-rep": "86f8846839f2c3d4042ac3851f498a65ff6f2283e4d3f62a4507d2acce6fcd2a",
+        "captures/sf10-copy/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
+        "captures/sf10-copy/nsys/profile.stdout.log": "6134017fb30769876020af4cbc3f988c5ce65dcd6f273691f7718b5ce5112df6",
+        "captures/sf10-copy/nsys/profile.tool.stdout.log": "1d24a413af853b9c1224b9037857b91d06703d1b6507539af9c43617f6ceef1d",
+        "captures/sf10-copy/nsys/stats.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-copy/nsys/stats.stdout.log": "b94d79423eb762c1765d883e16c0a12a72dde478d424fa5f9f047cd8cc229183",
+        "captures/sf10-copy/nsys/stats_cuda_api_sum.csv": "17d77e359645c05f3a54ec69ee997126015469765a3bc2f4185a50f4dbcf067e",
+        "captures/sf10-copy/nsys/stats_cuda_gpu_kern_sum.csv": "4699653d5e0f3cf6ecfd9267b01071dd9a828e21b7f387d1368e957b90d4da7d",
+        "captures/sf10-copy/nsys/stats_cuda_gpu_mem_time_sum.csv": "e79b657efec03915c8445915e68f30d5e742607a36a8e2e7ee3eb2feaf51ee1f",
+        "captures/sf10-copy/nsys/stats_nvtx_sum.csv": "a5407ac9a714b1b545a6536626f0dda3969b6439193349257fa57d827cef7d62"
+      },
+      "id": "sf10-copy",
+      "identity": {
+        "cpu_ratio": 0.0,
+        "dataset_manifest": {
+          "path": "datasets/10/manifest.json",
+          "sha256": "44ddfec1e929264542ce28276a900b0dac3968ee102cae3475574a933e7af8ea"
+        },
+        "engine": "copy",
+        "evidence_manifest": {
+          "path": "evidence/10/manifest.json",
+          "sha256": "3853320a67426b9e53ecdb59ab4a3aea95aa82c81b43f5c331f5882d851d90e1"
+        },
+        "execution": {
+          "cwd": "/home/xuzihuan/db-tpch-q5",
+          "executable": {
+            "build_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc",
+            "path": "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+            "sha256": "01a07a46017ced9212906abac7030aaa62158570ad4a724e1dde24c9b061407c"
+          }
+        },
+        "gpu_ratio": 1.0,
+        "gpu_uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e",
+        "oracle_hash": "b1351a421ba8dcfd",
+        "result_hash": "b1351a421ba8dcfd",
+        "scale_factor": "10",
+        "session_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc"
+      },
+      "ncu": {
+        "gpu": {
+          "driver_version": "595.71.05",
+          "index": 0,
+          "query_command": [
+            "nvidia-smi",
+            "--id=0",
+            "--query-gpu=index,uuid,driver_version",
+            "--format=csv,noheader,nounits"
+          ],
+          "requested_index": 0,
+          "return_code": 0,
+          "status": "ok",
+          "stderr": "",
+          "stdout": "0, GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e, 595.71.05\n",
+          "uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e"
+        },
+        "kernel_name": "unnamed>::arrow_q5_kernel(const int *, const int *, const long *, const int *, long, const int *, int, const int *, int, unsigned long long *, int, unsigned long long *, int *)",
+        "metrics": {
+          "dram__bytes_read.sum": 544954880.0,
+          "dram__throughput.avg.pct_of_peak_sustained_elapsed": 3.33,
+          "gpu__time_duration.sum": 16716000.0,
+          "sm__throughput.avg.pct_of_peak_sustained_elapsed": 3.06,
+          "sm__warps_active.avg.pct_of_peak_sustained_active": 39.77
+        },
+        "profile_command": [
+          "ncu",
+          "--csv",
+          "--target-processes",
+          "all",
+          "--replay-mode",
+          "application",
+          "--kernel-name-base",
+          "demangled",
+          "--kernel-name",
+          "regex:.*q5_kernel.*",
+          "--launch-count",
+          "1",
+          "--metrics",
+          "gpu__time_duration.sum,dram__bytes_read.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__throughput.avg.pct_of_peak_sustained_elapsed,sm__warps_active.avg.pct_of_peak_sustained_active",
+          "--devices",
+          "0",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10",
+          "--engine",
+          "gpu-copy",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0"
+        ],
+        "replay_mode": "application",
+        "selected_metric_values": {
+          "achieved_occupancy": 39.77,
+          "dram_read_bytes": 544954880.0,
+          "dram_throughput": 3.33,
+          "duration": 16716000.0,
+          "sm_throughput": 3.06
+        },
+        "selected_metrics": {
+          "achieved_occupancy": "sm__warps_active.avg.pct_of_peak_sustained_active",
+          "dram_read_bytes": "dram__bytes_read.sum",
+          "dram_throughput": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "duration": "gpu__time_duration.sum",
+          "sm_throughput": "sm__throughput.avg.pct_of_peak_sustained_elapsed"
+        },
+        "tool_version": "NVIDIA (R) Nsight Compute Command Line Profiler\nCopyright (c) 2018-2024 NVIDIA Corporation\nVersion 2024.3.2.0 (build 34861637) (public-release)"
+      },
+      "nsys": {
+        "cuda_memory_operation_rows": [
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "memcpy",
+            "name": "[CUDA memcpy Device-to-Host]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 74.2,
+            "total_ns": 3488
+          },
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "other",
+            "name": "[CUDA memset]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 25.8,
+            "total_ns": 1214
+          }
+        ],
+        "observed_nvtx_ranges": [
+          "d2h",
+          "measured_request",
+          "output_reset",
+          "q5_kernel",
+          "request"
+        ],
+        "profile_command": [
+          "nsys",
+          "profile",
+          "--force-overwrite=true",
+          "--trace=cuda,nvtx,osrt",
+          "--sample=none",
+          "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
+          "--capture-range=nvtx",
+          "--nvtx-capture=measured_request",
+          "--capture-range-end=stop",
+          "--output",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-copy/nsys/profile",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10",
+          "--engine",
+          "gpu-copy",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0"
+        ],
+        "q5_kernel_total_time_ns": 15343115,
+        "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
+      }
+    },
+    {
+      "app_command": [
+        "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+        "--dataset",
+        "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10",
+        "--engine",
+        "gpu-managed",
+        "--requests",
+        "1",
+        "--cpu-ratio",
+        "0"
+      ],
+      "copied_files": {
+        "captures/sf10-managed/ncu/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-managed/ncu/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-managed/ncu/profile.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-managed/ncu/profile.stdout.log": "73d777402e70b53422900e7881df6923f66f349a737f92dd10e4ca4195d0ae88",
+        "captures/sf10-managed/ncu/report.csv": "73d777402e70b53422900e7881df6923f66f349a737f92dd10e4ca4195d0ae88",
+        "captures/sf10-managed/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
+        "captures/sf10-managed/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-managed/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-managed/nsys/profile.nsys-rep": "3937442c0610d7ba38e440cbd5726a615b7bc9e341c475e7997558c5b2a54d3f",
+        "captures/sf10-managed/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
+        "captures/sf10-managed/nsys/profile.stdout.log": "0e74803d86fd47124fc4c523e532cc246b5b197504c41eadbb24c8b51f822381",
+        "captures/sf10-managed/nsys/profile.tool.stdout.log": "cceccbf5b76d2bb92ed1c5e363de730c88f3840efe2591cb9be2075e717f0f5e",
+        "captures/sf10-managed/nsys/stats.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-managed/nsys/stats.stdout.log": "c0f8103d1601332b65a371da90168d57a03b77aef7826ffd7b004a9be07e03c1",
+        "captures/sf10-managed/nsys/stats_cuda_api_sum.csv": "d64d7fc79358c269d87aaf5e90dd700125742d962d9deda405a52abbca26e42f",
+        "captures/sf10-managed/nsys/stats_cuda_gpu_kern_sum.csv": "527acf3d5317b0efc001b868127bc4f1da837c104fa71f07e5eeec940851b137",
+        "captures/sf10-managed/nsys/stats_cuda_gpu_mem_time_sum.csv": "af2b09ac0cf127e07aad3a65db91566c6993edb3b5b349390adfa22c6a09ff70",
+        "captures/sf10-managed/nsys/stats_nvtx_sum.csv": "9b810425fc8b4845e1fa44794d1fbeba8b038bb3f74407c2daf07f196a0a05e0"
+      },
+      "id": "sf10-managed",
+      "identity": {
+        "cpu_ratio": 0.0,
+        "dataset_manifest": {
+          "path": "datasets/10/manifest.json",
+          "sha256": "44ddfec1e929264542ce28276a900b0dac3968ee102cae3475574a933e7af8ea"
+        },
+        "engine": "managed",
+        "evidence_manifest": {
+          "path": "evidence/10/manifest.json",
+          "sha256": "3853320a67426b9e53ecdb59ab4a3aea95aa82c81b43f5c331f5882d851d90e1"
+        },
+        "execution": {
+          "cwd": "/home/xuzihuan/db-tpch-q5",
+          "executable": {
+            "build_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc",
+            "path": "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+            "sha256": "01a07a46017ced9212906abac7030aaa62158570ad4a724e1dde24c9b061407c"
+          }
+        },
+        "gpu_ratio": 1.0,
+        "gpu_uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e",
+        "oracle_hash": "b1351a421ba8dcfd",
+        "result_hash": "b1351a421ba8dcfd",
+        "scale_factor": "10",
+        "session_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc"
+      },
+      "ncu": {
+        "gpu": {
+          "driver_version": "595.71.05",
+          "index": 0,
+          "query_command": [
+            "nvidia-smi",
+            "--id=0",
+            "--query-gpu=index,uuid,driver_version",
+            "--format=csv,noheader,nounits"
+          ],
+          "requested_index": 0,
+          "return_code": 0,
+          "status": "ok",
+          "stderr": "",
+          "stdout": "0, GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e, 595.71.05\n",
+          "uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e"
+        },
+        "kernel_name": "unnamed>::arrow_q5_kernel(const int *, const int *, const long *, const int *, long, const int *, int, const int *, int, unsigned long long *, int, unsigned long long *, int *)",
+        "metrics": {
+          "dram__bytes_read.sum": 544933120.0,
+          "dram__throughput.avg.pct_of_peak_sustained_elapsed": 3.29,
+          "gpu__time_duration.sum": 16925248.0,
+          "sm__throughput.avg.pct_of_peak_sustained_elapsed": 3.06,
+          "sm__warps_active.avg.pct_of_peak_sustained_active": 40.49
+        },
+        "profile_command": [
+          "ncu",
+          "--csv",
+          "--target-processes",
+          "all",
+          "--replay-mode",
+          "application",
+          "--kernel-name-base",
+          "demangled",
+          "--kernel-name",
+          "regex:.*q5_kernel.*",
+          "--launch-count",
+          "1",
+          "--metrics",
+          "gpu__time_duration.sum,dram__bytes_read.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__throughput.avg.pct_of_peak_sustained_elapsed,sm__warps_active.avg.pct_of_peak_sustained_active",
+          "--devices",
+          "0",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10",
+          "--engine",
+          "gpu-managed",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0"
+        ],
+        "replay_mode": "application",
+        "selected_metric_values": {
+          "achieved_occupancy": 40.49,
+          "dram_read_bytes": 544933120.0,
+          "dram_throughput": 3.29,
+          "duration": 16925248.0,
+          "sm_throughput": 3.06
+        },
+        "selected_metrics": {
+          "achieved_occupancy": "sm__warps_active.avg.pct_of_peak_sustained_active",
+          "dram_read_bytes": "dram__bytes_read.sum",
+          "dram_throughput": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "duration": "gpu__time_duration.sum",
+          "sm_throughput": "sm__throughput.avg.pct_of_peak_sustained_elapsed"
+        },
+        "tool_version": "NVIDIA (R) Nsight Compute Command Line Profiler\nCopyright (c) 2018-2024 NVIDIA Corporation\nVersion 2024.3.2.0 (build 34861637) (public-release)"
+      },
+      "nsys": {
+        "cuda_memory_operation_rows": [
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "memcpy",
+            "name": "[CUDA memcpy Unified Host-to-Device]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 72.6,
+            "total_ns": 10912
+          },
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "memcpy",
+            "name": "[CUDA memcpy Unified Device-to-Host]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 27.4,
+            "total_ns": 4127
+          }
+        ],
+        "observed_nvtx_ranges": [
+          "d2h",
+          "managed_prefetch",
+          "measured_request",
+          "output_reset",
+          "q5_kernel",
+          "request"
+        ],
+        "profile_command": [
+          "nsys",
+          "profile",
+          "--force-overwrite=true",
+          "--trace=cuda,nvtx,osrt",
+          "--sample=none",
+          "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
+          "--capture-range=nvtx",
+          "--nvtx-capture=measured_request",
+          "--capture-range-end=stop",
+          "--output",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-managed/nsys/profile",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10",
+          "--engine",
+          "gpu-managed",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0"
+        ],
+        "q5_kernel_total_time_ns": 15586806,
+        "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
+      }
+    },
+    {
+      "app_command": [
+        "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+        "--dataset",
+        "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10",
+        "--engine",
+        "gpu-mapped",
+        "--requests",
+        "1",
+        "--cpu-ratio",
+        "0"
+      ],
+      "copied_files": {
+        "captures/sf10-mapped/ncu/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-mapped/ncu/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-mapped/ncu/profile.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-mapped/ncu/profile.stdout.log": "744aa67486ecc6c58ba0dab4a6c6842b7b772b12d1515affa53c26b3090d9afb",
+        "captures/sf10-mapped/ncu/report.csv": "744aa67486ecc6c58ba0dab4a6c6842b7b772b12d1515affa53c26b3090d9afb",
+        "captures/sf10-mapped/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
+        "captures/sf10-mapped/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-mapped/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-mapped/nsys/profile.nsys-rep": "7992ac7d14482e2432ad5b548cb95a2a0764eada8076906ec7c95f170cc02034",
+        "captures/sf10-mapped/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
+        "captures/sf10-mapped/nsys/profile.stdout.log": "2e6d059150b0c4a2f49b554be41f05d6931584d7119609b59d16cabbc5d5ce03",
+        "captures/sf10-mapped/nsys/profile.tool.stdout.log": "da37cdbfa5fba7a51c1fded91159ba00b2176c8f3e358675a3133a6b7c488a15",
+        "captures/sf10-mapped/nsys/stats.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-mapped/nsys/stats.stdout.log": "3aa6a7ff8b48a131e4bba612044f90207ac1807e23873ac7fca2eb84378e7235",
+        "captures/sf10-mapped/nsys/stats_cuda_api_sum.csv": "2692768e79ab05b7bbfa2119765145d03fd6fa3b41d75e1d1ea91807976b5e43",
+        "captures/sf10-mapped/nsys/stats_cuda_gpu_kern_sum.csv": "c666ac469deafcb07727b960175fe14fb6ec036a1995349486a71fa487566c12",
+        "captures/sf10-mapped/nsys/stats_cuda_gpu_mem_time_sum.csv": "d750171ca842100a483e1221c2ae7d78d5667072f8c96f1abe2b106f7143c988",
+        "captures/sf10-mapped/nsys/stats_nvtx_sum.csv": "f0e3cf2a3038d2faf81067c306c17df742012b9b735352a841bd10b519336823"
+      },
+      "id": "sf10-mapped",
+      "identity": {
+        "cpu_ratio": 0.0,
+        "dataset_manifest": {
+          "path": "datasets/10/manifest.json",
+          "sha256": "44ddfec1e929264542ce28276a900b0dac3968ee102cae3475574a933e7af8ea"
+        },
+        "engine": "mapped",
+        "evidence_manifest": {
+          "path": "evidence/10/manifest.json",
+          "sha256": "3853320a67426b9e53ecdb59ab4a3aea95aa82c81b43f5c331f5882d851d90e1"
+        },
+        "execution": {
+          "cwd": "/home/xuzihuan/db-tpch-q5",
+          "executable": {
+            "build_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc",
+            "path": "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+            "sha256": "01a07a46017ced9212906abac7030aaa62158570ad4a724e1dde24c9b061407c"
+          }
+        },
+        "gpu_ratio": 1.0,
+        "gpu_uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e",
+        "oracle_hash": "b1351a421ba8dcfd",
+        "result_hash": "b1351a421ba8dcfd",
+        "scale_factor": "10",
+        "session_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc"
+      },
+      "ncu": {
+        "gpu": {
+          "driver_version": "595.71.05",
+          "index": 0,
+          "query_command": [
+            "nvidia-smi",
+            "--id=0",
+            "--query-gpu=index,uuid,driver_version",
+            "--format=csv,noheader,nounits"
+          ],
+          "requested_index": 0,
+          "return_code": 0,
+          "status": "ok",
+          "stderr": "",
+          "stdout": "0, GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e, 595.71.05\n",
+          "uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e"
+        },
+        "kernel_name": "unnamed>::arrow_q5_kernel(const int *, const int *, const long *, const int *, long, const int *, int, const int *, int, unsigned long long *, int, unsigned long long *, int *)",
+        "metrics": {
+          "dram__bytes_read.sum": 2890112.0,
+          "dram__throughput.avg.pct_of_peak_sustained_elapsed": 0.0,
+          "gpu__time_duration.sum": 129811200.0,
+          "sm__throughput.avg.pct_of_peak_sustained_elapsed": 0.25,
+          "sm__warps_active.avg.pct_of_peak_sustained_active": 78.06
+        },
+        "profile_command": [
+          "ncu",
+          "--csv",
+          "--target-processes",
+          "all",
+          "--replay-mode",
+          "application",
+          "--kernel-name-base",
+          "demangled",
+          "--kernel-name",
+          "regex:.*q5_kernel.*",
+          "--launch-count",
+          "1",
+          "--metrics",
+          "gpu__time_duration.sum,dram__bytes_read.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__throughput.avg.pct_of_peak_sustained_elapsed,sm__warps_active.avg.pct_of_peak_sustained_active",
+          "--devices",
+          "0",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10",
+          "--engine",
+          "gpu-mapped",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0"
+        ],
+        "replay_mode": "application",
+        "selected_metric_values": {
+          "achieved_occupancy": 78.06,
+          "dram_read_bytes": 2890112.0,
+          "dram_throughput": 0.0,
+          "duration": 129811200.0,
+          "sm_throughput": 0.25
+        },
+        "selected_metrics": {
+          "achieved_occupancy": "sm__warps_active.avg.pct_of_peak_sustained_active",
+          "dram_read_bytes": "dram__bytes_read.sum",
+          "dram_throughput": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "duration": "gpu__time_duration.sum",
+          "sm_throughput": "sm__throughput.avg.pct_of_peak_sustained_elapsed"
+        },
+        "tool_version": "NVIDIA (R) Nsight Compute Command Line Profiler\nCopyright (c) 2018-2024 NVIDIA Corporation\nVersion 2024.3.2.0 (build 34861637) (public-release)"
+      },
+      "nsys": {
+        "cuda_memory_operation_rows": [
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "memcpy",
+            "name": "[CUDA memcpy Device-to-Host]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 73.1,
+            "total_ns": 3392
+          },
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "other",
+            "name": "[CUDA memset]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 26.9,
+            "total_ns": 1247
+          }
+        ],
+        "observed_nvtx_ranges": [
+          "d2h",
+          "measured_request",
+          "output_reset",
+          "q5_kernel",
+          "request"
+        ],
+        "profile_command": [
+          "nsys",
+          "profile",
+          "--force-overwrite=true",
+          "--trace=cuda,nvtx,osrt",
+          "--sample=none",
+          "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
+          "--capture-range=nvtx",
+          "--nvtx-capture=measured_request",
+          "--capture-range-end=stop",
+          "--output",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-mapped/nsys/profile",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10",
+          "--engine",
+          "gpu-mapped",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0"
+        ],
+        "q5_kernel_total_time_ns": 135247042,
+        "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
+      }
+    },
+    {
+      "app_command": [
+        "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+        "--dataset",
+        "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10",
+        "--engine",
+        "hybrid-arrow",
+        "--requests",
+        "1",
+        "--cpu-ratio",
+        "0.5",
+        "--threads",
+        "16",
+        "--hybrid-selection",
+        "fixed"
+      ],
+      "copied_files": {
+        "captures/sf10-hybrid-fixed/ncu/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-hybrid-fixed/ncu/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-hybrid-fixed/ncu/profile.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-hybrid-fixed/ncu/profile.stdout.log": "7deaf91f3b509b1d12b14c5d0ad5f42e774d94c99f9d9fe8afa081010adbe097",
+        "captures/sf10-hybrid-fixed/ncu/report.csv": "7deaf91f3b509b1d12b14c5d0ad5f42e774d94c99f9d9fe8afa081010adbe097",
+        "captures/sf10-hybrid-fixed/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
+        "captures/sf10-hybrid-fixed/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-hybrid-fixed/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-hybrid-fixed/nsys/profile.nsys-rep": "b6d474eebece499eaa0986cdb8ac4c24a73efe269f4b040365f610cd394b76a1",
+        "captures/sf10-hybrid-fixed/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
+        "captures/sf10-hybrid-fixed/nsys/profile.stdout.log": "b93ac4b83b6e5580045de2a00e88450e936561db7231cfea263c5e5798367956",
+        "captures/sf10-hybrid-fixed/nsys/profile.tool.stdout.log": "74b9ad98f2fb5c746a89d733d44945295d3b7eb95b1bca9af30a197d57d27b34",
+        "captures/sf10-hybrid-fixed/nsys/stats.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-hybrid-fixed/nsys/stats.stdout.log": "20216a7c21901175cdeb9412508bfbc71e177600a30b14dcc32e3eeaf35f42b0",
+        "captures/sf10-hybrid-fixed/nsys/stats_cuda_api_sum.csv": "a00a4fd6a187fe5df49e8ec603ef69ebb0d65b2fd8227310c978288d28811346",
+        "captures/sf10-hybrid-fixed/nsys/stats_cuda_gpu_kern_sum.csv": "1021fba86a140109f884b4e111680fbf46f7a0923b5653729cfeb70afa9a08a4",
+        "captures/sf10-hybrid-fixed/nsys/stats_cuda_gpu_mem_time_sum.csv": "57e6c1238be6b17d936aaaee618853aaab85e983353dfb3cce917b9ca9b43be4",
+        "captures/sf10-hybrid-fixed/nsys/stats_nvtx_sum.csv": "131377953e403b63affd1816843b53c9bd610a177d66c60a0e3c3c594981d2ea"
+      },
+      "id": "sf10-hybrid-fixed",
+      "identity": {
+        "cpu_ratio": 0.5,
+        "dataset_manifest": {
+          "path": "datasets/10/manifest.json",
+          "sha256": "44ddfec1e929264542ce28276a900b0dac3968ee102cae3475574a933e7af8ea"
+        },
+        "engine": "hybrid-fixed",
+        "evidence_manifest": {
+          "path": "evidence/10/manifest.json",
+          "sha256": "3853320a67426b9e53ecdb59ab4a3aea95aa82c81b43f5c331f5882d851d90e1"
+        },
+        "execution": {
+          "cwd": "/home/xuzihuan/db-tpch-q5",
+          "executable": {
+            "build_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc",
+            "path": "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+            "sha256": "01a07a46017ced9212906abac7030aaa62158570ad4a724e1dde24c9b061407c"
+          }
+        },
+        "gpu_ratio": 0.5,
+        "gpu_uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e",
+        "oracle_hash": "b1351a421ba8dcfd",
+        "result_hash": "b1351a421ba8dcfd",
+        "scale_factor": "10",
+        "session_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc"
+      },
+      "ncu": {
+        "gpu": {
+          "driver_version": "595.71.05",
+          "index": 0,
+          "query_command": [
+            "nvidia-smi",
+            "--id=0",
+            "--query-gpu=index,uuid,driver_version",
+            "--format=csv,noheader,nounits"
+          ],
+          "requested_index": 0,
+          "return_code": 0,
+          "status": "ok",
+          "stderr": "",
+          "stdout": "0, GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e, 595.71.05\n",
+          "uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e"
+        },
+        "kernel_name": "unnamed>::arrow_q5_kernel(const int *, const int *, const long *, const int *, long, const int *, int, const int *, int, unsigned long long *, int, unsigned long long *, int *)",
+        "metrics": {
+          "dram__bytes_read.sum": 272848128.0,
+          "dram__throughput.avg.pct_of_peak_sustained_elapsed": 3.44,
+          "gpu__time_duration.sum": 8160416.0,
+          "sm__throughput.avg.pct_of_peak_sustained_elapsed": 3.06,
+          "sm__warps_active.avg.pct_of_peak_sustained_active": 39.73
+        },
+        "profile_command": [
+          "ncu",
+          "--csv",
+          "--target-processes",
+          "all",
+          "--replay-mode",
+          "application",
+          "--kernel-name-base",
+          "demangled",
+          "--kernel-name",
+          "regex:.*q5_kernel.*",
+          "--launch-count",
+          "1",
+          "--metrics",
+          "gpu__time_duration.sum,dram__bytes_read.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__throughput.avg.pct_of_peak_sustained_elapsed,sm__warps_active.avg.pct_of_peak_sustained_active",
+          "--devices",
+          "0",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10",
+          "--engine",
+          "hybrid-arrow",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0.5",
+          "--threads",
+          "16",
+          "--hybrid-selection",
+          "fixed"
+        ],
+        "replay_mode": "application",
+        "selected_metric_values": {
+          "achieved_occupancy": 39.73,
+          "dram_read_bytes": 272848128.0,
+          "dram_throughput": 3.44,
+          "duration": 8160416.0,
+          "sm_throughput": 3.06
+        },
+        "selected_metrics": {
+          "achieved_occupancy": "sm__warps_active.avg.pct_of_peak_sustained_active",
+          "dram_read_bytes": "dram__bytes_read.sum",
+          "dram_throughput": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "duration": "gpu__time_duration.sum",
+          "sm_throughput": "sm__throughput.avg.pct_of_peak_sustained_elapsed"
+        },
+        "tool_version": "NVIDIA (R) Nsight Compute Command Line Profiler\nCopyright (c) 2018-2024 NVIDIA Corporation\nVersion 2024.3.2.0 (build 34861637) (public-release)"
+      },
+      "nsys": {
+        "cuda_memory_operation_rows": [
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "memcpy",
+            "name": "[CUDA memcpy Device-to-Host]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 74.1,
+            "total_ns": 3488
+          },
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "other",
+            "name": "[CUDA memset]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 25.9,
+            "total_ns": 1216
+          }
+        ],
+        "observed_nvtx_ranges": [
+          "cpu_scan",
+          "d2h",
+          "hybrid_gpu_request",
+          "measured_request",
+          "merge",
+          "output_reset",
+          "q5_kernel",
+          "request"
+        ],
+        "profile_command": [
+          "nsys",
+          "profile",
+          "--force-overwrite=true",
+          "--trace=cuda,nvtx,osrt",
+          "--sample=none",
+          "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
+          "--capture-range=nvtx",
+          "--nvtx-capture=measured_request",
+          "--capture-range-end=stop",
+          "--output",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-hybrid-fixed/nsys/profile",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10",
+          "--engine",
+          "hybrid-arrow",
+          "--requests",
+          "1",
+          "--cpu-ratio",
+          "0.5",
+          "--threads",
+          "16",
+          "--hybrid-selection",
+          "fixed"
+        ],
+        "q5_kernel_total_time_ns": 7425986,
+        "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
+      }
+    },
+    {
+      "app_command": [
+        "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+        "--dataset",
+        "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10",
+        "--engine",
+        "hybrid-arrow",
+        "--requests",
+        "1",
+        "--threads",
+        "16",
+        "--hybrid-selection",
+        "auto"
+      ],
+      "copied_files": {
+        "captures/sf10-hybrid-auto/ncu/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-hybrid-auto/ncu/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-hybrid-auto/ncu/profile.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-hybrid-auto/ncu/profile.stdout.log": "1cff0f34e04a7f538f785050d9a608003675a7f9158de8c7a665ba44de959c21",
+        "captures/sf10-hybrid-auto/ncu/report.csv": "1cff0f34e04a7f538f785050d9a608003675a7f9158de8c7a665ba44de959c21",
+        "captures/sf10-hybrid-auto/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
+        "captures/sf10-hybrid-auto/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-hybrid-auto/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-hybrid-auto/nsys/profile.nsys-rep": "40ba6115dc169470843c85d3cc1cb855110d72b9c570a26cb9619324135c32ee",
+        "captures/sf10-hybrid-auto/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
+        "captures/sf10-hybrid-auto/nsys/profile.stdout.log": "3e5771da4b09c45f71141ac7ee12ef0036a596a3271c8b2952c12393e5eef0a6",
+        "captures/sf10-hybrid-auto/nsys/profile.tool.stdout.log": "4bbaef0fea547e6f23ebe06699f78405d770166916cccc68ff8a7ec527ba08ca",
+        "captures/sf10-hybrid-auto/nsys/stats.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "captures/sf10-hybrid-auto/nsys/stats.stdout.log": "e0ca5c4072c9018508d0cea53e3470d5cf4a3640a3f7dd9142149d19c28d2775",
+        "captures/sf10-hybrid-auto/nsys/stats_cuda_api_sum.csv": "d153b51a67a7cf986d3ebfbc29d1656731fd5dbef9f116478be3df499191581a",
+        "captures/sf10-hybrid-auto/nsys/stats_cuda_gpu_kern_sum.csv": "e72a9893656be6ad5e8ae32c8f60f2b1be787c45a0f974fd4be6da2b1a385fce",
+        "captures/sf10-hybrid-auto/nsys/stats_cuda_gpu_mem_time_sum.csv": "790756a7d9f9299c1c350d3dcf19e775851a7cdeaff47b952dd8ce7ea5a0850e",
+        "captures/sf10-hybrid-auto/nsys/stats_nvtx_sum.csv": "7a8981c67eee7be55f91dc2147de0748a716460d471ccdd92e3c6fb3d84f3bb5"
+      },
+      "id": "sf10-hybrid-auto",
+      "identity": {
+        "cpu_ratio": 0.31901602725913686,
+        "dataset_manifest": {
+          "path": "datasets/10/manifest.json",
+          "sha256": "44ddfec1e929264542ce28276a900b0dac3968ee102cae3475574a933e7af8ea"
+        },
+        "engine": "hybrid-auto",
+        "evidence_manifest": {
+          "path": "evidence/10/manifest.json",
+          "sha256": "3853320a67426b9e53ecdb59ab4a3aea95aa82c81b43f5c331f5882d851d90e1"
+        },
+        "execution": {
+          "cwd": "/home/xuzihuan/db-tpch-q5",
+          "executable": {
+            "build_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc",
+            "path": "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+            "sha256": "01a07a46017ced9212906abac7030aaa62158570ad4a724e1dde24c9b061407c"
+          }
+        },
+        "gpu_ratio": 0.6809839727408631,
+        "gpu_uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e",
+        "oracle_hash": "b1351a421ba8dcfd",
+        "result_hash": "b1351a421ba8dcfd",
+        "scale_factor": "10",
+        "session_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc"
+      },
+      "ncu": {
+        "gpu": {
+          "driver_version": "595.71.05",
+          "index": 0,
+          "query_command": [
+            "nvidia-smi",
+            "--id=0",
+            "--query-gpu=index,uuid,driver_version",
+            "--format=csv,noheader,nounits"
+          ],
+          "requested_index": 0,
+          "return_code": 0,
+          "status": "ok",
+          "stderr": "",
+          "stdout": "0, GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e, 595.71.05\n",
+          "uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e"
+        },
+        "kernel_name": "unnamed>::arrow_q5_kernel(const int *, const int *, const long *, const int *, long, const int *, int, const int *, int, unsigned long long *, int, unsigned long long *, int *)",
+        "metrics": {
+          "dram__bytes_read.sum": 314006016.0,
+          "dram__throughput.avg.pct_of_peak_sustained_elapsed": 3.33,
+          "gpu__time_duration.sum": 9688480.0,
+          "sm__throughput.avg.pct_of_peak_sustained_elapsed": 3.07,
+          "sm__warps_active.avg.pct_of_peak_sustained_active": 40.35
+        },
+        "profile_command": [
+          "ncu",
+          "--csv",
+          "--target-processes",
+          "all",
+          "--replay-mode",
+          "kernel",
+          "--kernel-name-base",
+          "demangled",
+          "--kernel-name",
+          "regex:.*q5_kernel.*",
+          "--nvtx",
+          "--nvtx-include",
+          "hybrid_gpu_request/",
+          "--launch-count",
+          "1",
+          "--metrics",
+          "gpu__time_duration.sum,dram__bytes_read.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__throughput.avg.pct_of_peak_sustained_elapsed,sm__warps_active.avg.pct_of_peak_sustained_active",
+          "--devices",
+          "0",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10",
+          "--engine",
+          "hybrid-arrow",
+          "--requests",
+          "1",
+          "--threads",
+          "16",
+          "--hybrid-selection",
+          "auto"
+        ],
+        "replay_mode": "kernel",
+        "selected_metric_values": {
+          "achieved_occupancy": 40.35,
+          "dram_read_bytes": 314006016.0,
+          "dram_throughput": 3.33,
+          "duration": 9688480.0,
+          "sm_throughput": 3.07
+        },
+        "selected_metrics": {
+          "achieved_occupancy": "sm__warps_active.avg.pct_of_peak_sustained_active",
+          "dram_read_bytes": "dram__bytes_read.sum",
+          "dram_throughput": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+          "duration": "gpu__time_duration.sum",
+          "sm_throughput": "sm__throughput.avg.pct_of_peak_sustained_elapsed"
+        },
+        "tool_version": "NVIDIA (R) Nsight Compute Command Line Profiler\nCopyright (c) 2018-2024 NVIDIA Corporation\nVersion 2024.3.2.0 (build 34861637) (public-release)"
+      },
+      "nsys": {
+        "cuda_memory_operation_rows": [
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "memcpy",
+            "name": "[CUDA memcpy Device-to-Host]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 72.5,
+            "total_ns": 3616
+          },
+          {
+            "average_ns": 0,
+            "instances": 0,
+            "kind": "other",
+            "name": "[CUDA memset]",
+            "report": "stats_cuda_gpu_mem_time_sum",
+            "time_percent": 27.5,
+            "total_ns": 1375
+          }
+        ],
+        "observed_nvtx_ranges": [
+          "cpu_scan",
+          "d2h",
+          "hybrid_gpu_request",
+          "measured_request",
+          "merge",
+          "output_reset",
+          "q5_kernel",
+          "request"
+        ],
+        "profile_command": [
+          "nsys",
+          "profile",
+          "--force-overwrite=true",
+          "--trace=cuda,nvtx,osrt",
+          "--sample=none",
+          "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
+          "--capture-range=nvtx",
+          "--nvtx-capture=measured_request",
+          "--capture-range-end=stop",
+          "--output",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/captures/sf10-hybrid-auto/nsys/profile",
+          "/home/xuzihuan/db-tpch-q5/build/v7-nvtx/memq5_arrow_session",
+          "--dataset",
+          "/tmp/memq5-v7-profiler-80dba7a-rerun2/datasets/10",
+          "--engine",
+          "hybrid-arrow",
+          "--requests",
+          "1",
+          "--threads",
+          "16",
+          "--hybrid-selection",
+          "auto"
+        ],
+        "q5_kernel_total_time_ns": 10584240,
+        "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
+      }
+    }
+  ],
+  "schema": "memq5.v7.compact-profiler-evidence",
+  "schema_version": 1,
+  "source_bundle_name": "memq5-v7-profiler-80dba7a-rerun2",
+  "source_manifest_sha256": "fb24875ef52cd00c80cc94985018290d32fbe1b6d8af2eb05d7bfaccbea186a7",
+  "source_orchestration_status": "complete"
+}

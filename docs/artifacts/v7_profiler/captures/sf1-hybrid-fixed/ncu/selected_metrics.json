@@ -1,0 +1,7 @@
+{
+  "achieved_occupancy": "sm__warps_active.avg.pct_of_peak_sustained_active",
+  "dram_read_bytes": "dram__bytes_read.sum",
+  "dram_throughput": "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+  "duration": "gpu__time_duration.sum",
+  "sm_throughput": "sm__throughput.avg.pct_of_peak_sustained_elapsed"
+}
