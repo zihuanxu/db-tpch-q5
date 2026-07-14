@@ -1,0 +1,445 @@
+{
+  "commands": {
+    "cmake": {
+      "available": true,
+      "command": [
+        "cmake",
+        "--version"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "cmake version 4.3.0\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake)."
+    },
+    "lscpu": {
+      "available": true,
+      "command": [
+        "lscpu"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           52 bits physical, 57 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  384\nOn-line CPU(s) list:                     0-383\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 9654 96-Core Processor\nCPU family:                              25\nModel:                                   17\nThread(s) per core:                      2\nCore(s) per socket:                      96\nSocket(s):                               2\nStepping:                                1\nFrequency boost:                         enabled\nCPU(s) scaling MHz:                      66%\nCPU max MHz:                             3709.3569\nCPU min MHz:                             1500.0000\nBogoMIPS:                                4792.36\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid overflow_recov succor smca fsrm flush_l1d debug_swap\nVirtualization:                          AMD-V\nL1d cache:                               6 MiB (192 instances)\nL1i cache:                               6 MiB (192 instances)\nL2 cache:                                192 MiB (192 instances)\nL3 cache:                                768 MiB (24 instances)\nNUMA node(s):                            2\nNUMA node0 CPU(s):                       0-95,192-287\nNUMA node1 CPU(s):                       96-191,288-383\nVulnerability Gather data sampling:      Not affected\nVulnerability Ghostwrite:                Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Old microcode:             Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Mitigation; Safe RET\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; STIBP always-on; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Vulnerable: No microcode\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace"
+    },
+    "nvcc": {
+      "available": true,
+      "command": [
+        "nvcc",
+        "--version"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2024 NVIDIA Corporation\nBuilt on Tue_Oct_29_23:50:19_PDT_2024\nCuda compilation tools, release 12.6, V12.6.85\nBuild cuda_12.6.r12.6/compiler.35059454_0"
+    },
+    "nvidia_smi": {
+      "available": true,
+      "command": [
+        "nvidia-smi"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "Tue Jul 14 14:55:01 2026       \n+-----------------------------------------------------------------------------------------+\n| NVIDIA-SMI 595.71.05              Driver Version: 595.71.05      CUDA Version: 13.2     |\n+-----------------------------------------+------------------------+----------------------+\n| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |\n| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\n|                                         |                        |               MIG M. |\n|=========================================+========================+======================|\n|   0  NVIDIA GeForce RTX 4090        Off |   00000000:01:00.0 Off |                  Off |\n| 44%   26C    P8             26W /  450W |      72MiB /  24564MiB |      0%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n|   1  NVIDIA GeForce RTX 4090        Off |   00000000:21:00.0 Off |                  Off |\n| 44%   26C    P8             13W /  450W |       1MiB /  24564MiB |      0%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n|   2  NVIDIA GeForce RTX 4090        On  |   00000000:41:00.0 Off |                  Off |\n| 44%   27C    P8             13W /  450W |   23756MiB /  24564MiB |      0%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n|   3  NVIDIA GeForce RTX 4090        On  |   00000000:61:00.0 Off |                  Off |\n| 44%   25C    P8             13W /  450W |   23756MiB /  24564MiB |      0%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n|   4  NVIDIA L20                     On  |   00000000:81:00.0 Off |                    0 |\n| N/A   36C    P0             79W /  350W |   42095MiB /  46068MiB |      0%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n|   5  NVIDIA L20                     On  |   00000000:A1:00.0 Off |                    0 |\n| N/A   36C    P0             69W /  350W |   42095MiB /  46068MiB |      0%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n|   6  NVIDIA GeForce RTX 4090        Off |   00000000:C1:00.0 Off |                  Off |\n| 44%   26C    P8             12W /  450W |   23688MiB /  24564MiB |      0%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n|   7  NVIDIA GeForce RTX 4090        On  |   00000000:E1:00.0 Off |                  Off |\n| 44%   25C    P8             18W /  450W |   23688MiB /  24564MiB |      0%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n\n+-----------------------------------------------------------------------------------------+\n| Processes:                                                                              |\n|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |\n|        ID   ID                                                               Usage      |\n|=========================================================================================|\n|    2   N/A  N/A         2550478      C   VLLM::Worker_TP0                      23744MiB |\n|    3   N/A  N/A         2550479      C   VLLM::Worker_TP1                      23744MiB |\n|    4   N/A  N/A          436492      C   VLLM::Worker_TP0                      42052MiB |\n|    5   N/A  N/A          436493      C   VLLM::Worker_TP1                      42052MiB |\n|    6   N/A  N/A         2608129      C   VLLM::Worker_TP0                      23676MiB |\n|    7   N/A  N/A         2608130      C   VLLM::Worker_TP1                      23676MiB |\n+-----------------------------------------------------------------------------------------+"
+    },
+    "uname": {
+      "available": true,
+      "command": [
+        "uname",
+        "-a"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "Linux user-ESC8000A-E12 6.17.0-29-generic #29~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon May 11 10:30:58 UTC 2 x86_64 x86_64 x86_64 GNU/Linux"
+    }
+  },
+  "cudf_environment": {
+    "details": {
+      "cudf": "26.06.00",
+      "prefix": "/home/xuzihuan/miniconda3/envs/memq5-cudf",
+      "python": "3.11.15"
+    },
+    "name": "memq5-cudf",
+    "query": {
+      "available": true,
+      "command": [
+        "conda",
+        "run",
+        "-n",
+        "memq5-cudf",
+        "python",
+        "-c",
+        "import json,sys; import cudf; print(json.dumps({'prefix':sys.prefix,'python':sys.version.split()[0],'cudf':cudf.__version__},sort_keys=True))"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "{\"cudf\": \"26.06.00\", \"prefix\": \"/home/xuzihuan/miniconda3/envs/memq5-cudf\", \"python\": \"3.11.15\"}"
+    }
+  },
+  "git": {
+    "branch": "codex/v7-resident-sf10-profiling",
+    "commit": "021becd1b10f84aaed87858e45eb15a915cf6adc",
+    "dirty": true,
+    "dirty_paths": [
+      "M .superpowers/sdd/resident-task-2-report.md",
+      " M docs/FINAL_REPORT.docx",
+      " M docs/FINAL_REPORT.md",
+      " M progress.md",
+      "?? scripts/evaluate_hybrid_model.py",
+      "?? tests/python/test_evaluate_hybrid_model.py",
+      "?? tests/python/test_run_v7_profilers.py"
+    ]
+  },
+  "gpu": {
+    "cuda_visible_devices": "0",
+    "devices": [
+      {
+        "driver_version": "595.71.05",
+        "index": 0,
+        "name": "NVIDIA GeForce RTX 4090",
+        "uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e"
+      },
+      {
+        "driver_version": "595.71.05",
+        "index": 1,
+        "name": "NVIDIA GeForce RTX 4090",
+        "uuid": "GPU-4e3a8414-ec19-c000-ed69-94ee644c4747"
+      },
+      {
+        "driver_version": "595.71.05",
+        "index": 2,
+        "name": "NVIDIA GeForce RTX 4090",
+        "uuid": "GPU-d3729532-90f7-a6b3-4fa3-011e97ca79bd"
+      },
+      {
+        "driver_version": "595.71.05",
+        "index": 3,
+        "name": "NVIDIA GeForce RTX 4090",
+        "uuid": "GPU-6911b21b-9da0-2967-ff15-16278b1238ae"
+      },
+      {
+        "driver_version": "595.71.05",
+        "index": 4,
+        "name": "NVIDIA L20",
+        "uuid": "GPU-5eb90657-a8bb-dec1-a2c7-7d016440520f"
+      },
+      {
+        "driver_version": "595.71.05",
+        "index": 5,
+        "name": "NVIDIA L20",
+        "uuid": "GPU-d75f73fc-a8d6-1a88-1fd8-aa278e3dd742"
+      },
+      {
+        "driver_version": "595.71.05",
+        "index": 6,
+        "name": "NVIDIA GeForce RTX 4090",
+        "uuid": "GPU-3b1697af-7615-f7c2-9409-37becb4b0cf4"
+      },
+      {
+        "driver_version": "595.71.05",
+        "index": 7,
+        "name": "NVIDIA GeForce RTX 4090",
+        "uuid": "GPU-9fbc1a10-8695-35d7-ffa1-30315c560565"
+      }
+    ],
+    "query": {
+      "available": true,
+      "command": [
+        "nvidia-smi",
+        "--query-gpu=index,uuid,name,driver_version",
+        "--format=csv,noheader,nounits"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "0, GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e, NVIDIA GeForce RTX 4090, 595.71.05\n1, GPU-4e3a8414-ec19-c000-ed69-94ee644c4747, NVIDIA GeForce RTX 4090, 595.71.05\n2, GPU-d3729532-90f7-a6b3-4fa3-011e97ca79bd, NVIDIA GeForce RTX 4090, 595.71.05\n3, GPU-6911b21b-9da0-2967-ff15-16278b1238ae, NVIDIA GeForce RTX 4090, 595.71.05\n4, GPU-5eb90657-a8bb-dec1-a2c7-7d016440520f, NVIDIA L20, 595.71.05\n5, GPU-d75f73fc-a8d6-1a88-1fd8-aa278e3dd742, NVIDIA L20, 595.71.05\n6, GPU-3b1697af-7615-f7c2-9409-37becb4b0cf4, NVIDIA GeForce RTX 4090, 595.71.05\n7, GPU-9fbc1a10-8695-35d7-ffa1-30315c560565, NVIDIA GeForce RTX 4090, 595.71.05"
+    },
+    "requested_index": 0
+  },
+  "platform": {
+    "machine": "x86_64",
+    "processor": "x86_64",
+    "release": "6.17.0-29-generic",
+    "system": "Linux"
+  },
+  "python": {
+    "executable": "/home/xuzihuan/miniconda3/bin/python3",
+    "version": "3.13.9 | packaged by Anaconda, Inc. | (main, Oct 21 2025, 19:16:10) [GCC 11.2.0]"
+  },
+  "python_packages": {
+    "cudf": {
+      "available": false
+    },
+    "duckdb": {
+      "available": false
+    },
+    "pyarrow": {
+      "available": false
+    }
+  },
+  "session_cli": {
+    "path": "/home/xuzihuan/db-tpch-q5/build-arrow-cuda-v3/memq5_arrow_session",
+    "sha256": "0a145828ab8a50778f45dbf2a847fb6257b81da793297b59d3c4d0fcb8d20f61"
+  },
+  "v7_runner": {
+    "cuda_visible_devices": "0",
+    "cudf_env": "memq5-cudf",
+    "dataset": "/home/xuzihuan/db-tpch-q5/data/tpch_sf1_arrow",
+    "git_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc",
+    "gpu_index": 0,
+    "matrix": "/home/xuzihuan/db-tpch-q5/experiments/v7_formal_sf1.yml",
+    "matrix_payload": {
+      "configurations": [
+        {
+          "config_id": "cpu-specialized-t08",
+          "correctness_backend": "cpu-specialized",
+          "cpu_ratio": 1.0,
+          "engine": "cpu-specialized",
+          "mode_options": {
+            "sweep": "threads"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 8
+        },
+        {
+          "config_id": "cpu-specialized-t16",
+          "correctness_backend": "cpu-specialized",
+          "cpu_ratio": 1.0,
+          "engine": "cpu-specialized",
+          "mode_options": {
+            "sweep": "threads"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 16
+        },
+        {
+          "config_id": "cpu-specialized-t32",
+          "correctness_backend": "cpu-specialized",
+          "cpu_ratio": 1.0,
+          "engine": "cpu-specialized",
+          "mode_options": {
+            "sweep": "threads"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 32
+        },
+        {
+          "config_id": "arrow-acero-t08",
+          "correctness_backend": "arrow-acero",
+          "cpu_ratio": 1.0,
+          "engine": "arrow-acero",
+          "mode_options": {
+            "sweep": "threads"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 8
+        },
+        {
+          "config_id": "arrow-acero-t16",
+          "correctness_backend": "arrow-acero",
+          "cpu_ratio": 1.0,
+          "engine": "arrow-acero",
+          "mode_options": {
+            "sweep": "threads"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 16
+        },
+        {
+          "config_id": "arrow-acero-t32",
+          "correctness_backend": "arrow-acero",
+          "cpu_ratio": 1.0,
+          "engine": "arrow-acero",
+          "mode_options": {
+            "sweep": "threads"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 32
+        },
+        {
+          "config_id": "gpu-copy",
+          "correctness_backend": "gpu-copy",
+          "cpu_ratio": 0.0,
+          "engine": "gpu-copy",
+          "mode_options": {
+            "memory_mode": "copy"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 1
+        },
+        {
+          "config_id": "gpu-managed",
+          "correctness_backend": "gpu-managed",
+          "cpu_ratio": 0.0,
+          "engine": "gpu-managed",
+          "mode_options": {
+            "memory_mode": "managed"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 1
+        },
+        {
+          "config_id": "gpu-mapped",
+          "correctness_backend": "gpu-mapped",
+          "cpu_ratio": 0.0,
+          "engine": "gpu-mapped",
+          "mode_options": {
+            "memory_mode": "mapped"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 1
+        },
+        {
+          "config_id": "cudf",
+          "correctness_backend": "cudf",
+          "cpu_ratio": 0.0,
+          "engine": "cudf",
+          "mode_options": {
+            "framework": "cudf"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cudf",
+          "threads": 1
+        },
+        {
+          "config_id": "hybrid-fixed-r0125-t08",
+          "correctness_backend": "hybrid-fixed",
+          "cpu_ratio": 0.125,
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "partition": "fixed",
+            "selection": "fixed",
+            "sweep": "diagnostic"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 8
+        },
+        {
+          "config_id": "hybrid-fixed-r0250-t08",
+          "correctness_backend": "hybrid-fixed",
+          "cpu_ratio": 0.25,
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "partition": "fixed",
+            "selection": "fixed",
+            "sweep": "core"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 8
+        },
+        {
+          "config_id": "hybrid-fixed-r0375-t08",
+          "correctness_backend": "hybrid-fixed",
+          "cpu_ratio": 0.375,
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "partition": "fixed",
+            "selection": "fixed",
+            "sweep": "diagnostic"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 8
+        },
+        {
+          "config_id": "hybrid-fixed-r0500-t08",
+          "correctness_backend": "hybrid-fixed",
+          "cpu_ratio": 0.5,
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "partition": "fixed",
+            "selection": "fixed",
+            "sweep": "core"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 8
+        },
+        {
+          "config_id": "hybrid-fixed-r0625-t08",
+          "correctness_backend": "hybrid-fixed",
+          "cpu_ratio": 0.625,
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "partition": "fixed",
+            "selection": "fixed",
+            "sweep": "diagnostic"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 8
+        },
+        {
+          "config_id": "hybrid-fixed-r0750-t08",
+          "correctness_backend": "hybrid-fixed",
+          "cpu_ratio": 0.75,
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "partition": "fixed",
+            "selection": "fixed",
+            "sweep": "core"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 8
+        },
+        {
+          "config_id": "hybrid-fixed-r0875-t08",
+          "correctness_backend": "hybrid-fixed",
+          "cpu_ratio": 0.875,
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "partition": "fixed",
+            "selection": "fixed",
+            "sweep": "diagnostic"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 8
+        },
+        {
+          "config_id": "hybrid-auto-t08",
+          "correctness_backend": "hybrid-auto",
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "selection": "auto"
+          },
+          "ratio_mode": "auto",
+          "runner": "cpp",
+          "threads": 8
+        }
+      ],
+      "dataset": {
+        "expected_hash": "542abf4003633c7c",
+        "manifest_sha256": "0d7899db921b223a3f94625fa910191485f6fb050054447025b9f2abbc2729a5",
+        "path": "data/tpch_sf1_arrow",
+        "scale_factor": "1"
+      },
+      "experiment_id": "v7-formal-sf1-resident",
+      "oracle": {
+        "path": "experiments/oracles/v7_sf1_q5.json",
+        "sha256": "b8c756f398bc5bce13631f5bc4224b34f2c50a092424cb1d5b0d23c04d3924a8"
+      },
+      "protocol": {
+        "repeat": 10,
+        "timeout_seconds": 1800,
+        "warmup": 3
+      },
+      "query": {
+        "date": "1994-01-01",
+        "region": "ASIA"
+      },
+      "schema_version": 2
+    },
+    "matrix_payload_sha256": "095ec31a8701ee7845f8998a586afb956187f3b9ba54d7ff3f4eb21f934cceff",
+    "matrix_sha256": "7f50d2b7b112959087e73a4386a05de7d66b579caf6ff804e82b2a456aa7ec69",
+    "session_cli": "/home/xuzihuan/db-tpch-q5/build-arrow-cuda-v3/memq5_arrow_session",
+    "session_cli_sha256": "0a145828ab8a50778f45dbf2a847fb6257b81da793297b59d3c4d0fcb8d20f61"
+  }
+}

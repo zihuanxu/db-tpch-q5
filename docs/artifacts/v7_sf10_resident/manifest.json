@@ -1,0 +1,640 @@
+{
+  "artifacts": {
+    "commands.txt": "d02e38e2f807f4e3d9f8e4f750763720e0296b1ad2a197b7e8f3c31b72881e8b",
+    "correctness.json": "32c8e78ea2d9af908a102e7d9b52bedc165f817302902b3f4f61f85973881c22",
+    "dataset-manifest.json": "44ddfec1e929264542ce28276a900b0dac3968ee102cae3475574a933e7af8ea",
+    "environment.json": "80d2efacb4bd4ea416f2fff74c211877a594d7ed77c6c737a70c3eed4df72afb",
+    "logs/arrow-acero-t08.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/arrow-acero-t08.stdout.jsonl": "51f180df91d98821cc778e858a5ecafb70e92cdf85792f2a676a7e5bdce0aaac",
+    "logs/arrow-acero-t16.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/arrow-acero-t16.stdout.jsonl": "8ae472102c188a62862119e5583c54cbf17ce85572efc949aa9e69cd8ba265f8",
+    "logs/arrow-acero-t32.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/arrow-acero-t32.stdout.jsonl": "c91956cd364e4763e31437c106946faed8531eadfe52f06fcb701824c41a93cc",
+    "logs/cpu-specialized-t08.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/cpu-specialized-t08.stdout.jsonl": "dbb7b47fa0f30d7afd37416dafddc619d250bee875d85c17797e2f825fcc083c",
+    "logs/cpu-specialized-t16.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/cpu-specialized-t16.stdout.jsonl": "e279eba2c16fd1a0917a066434d2e6caa4cee890435e3b19db43a14bff549c76",
+    "logs/cpu-specialized-t32.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/cpu-specialized-t32.stdout.jsonl": "272383c4649769d4eb25fe1d065bf2afffd39a44d8eed6810197e1fde0bb98c1",
+    "logs/cudf.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/cudf.stdout.jsonl": "d0104d1f46e3603bc4ed2788347b3e4deaaab765d6ee1c2a53f6b245dbb71774",
+    "logs/gpu-copy.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/gpu-copy.stdout.jsonl": "f2ebfc179e810e7606a7b1aaa17ad580a85abb32c222c71d83dbd8979c44d4ce",
+    "logs/gpu-managed.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/gpu-managed.stdout.jsonl": "731a259378134437fd66b70fb983924ca247ea7eaa10ea47ff2d3790ad893c87",
+    "logs/gpu-mapped.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/gpu-mapped.stdout.jsonl": "eb59bce23724dc3182f21ec19cff2dbeadbc007a81f20e7b7473edd500079a4c",
+    "logs/hybrid-auto-t16.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/hybrid-auto-t16.stdout.jsonl": "e0e13ea706d3fc4512487b718784bbe59df15e7f1e139c7e70e17aac16a02013",
+    "logs/hybrid-fixed-r0125-t16.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/hybrid-fixed-r0125-t16.stdout.jsonl": "902d7ae34b67fd3b40ca653164059c0cd363af16a45287dbf1f936edf7507e75",
+    "logs/hybrid-fixed-r0250-t16.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/hybrid-fixed-r0250-t16.stdout.jsonl": "87d5383f380ead8bc80e0e26356678cdc805c1b2480b78fac5c1311c6a5fa966",
+    "logs/hybrid-fixed-r0375-t16.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/hybrid-fixed-r0375-t16.stdout.jsonl": "9a496658d3efebe216c07a34a2e6e4a4a15bb3a676108c8b1b5f02f807d38d56",
+    "logs/hybrid-fixed-r0500-t16.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/hybrid-fixed-r0500-t16.stdout.jsonl": "d62d289ac6dbbbdef12c1c10b2a8e567d4ee9faac871beecdc0144f93a57090e",
+    "logs/hybrid-fixed-r0625-t16.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/hybrid-fixed-r0625-t16.stdout.jsonl": "2ceedb27d22c65ee321c1246b84ae35a3cdb289cf0624449f050430fb7384c2e",
+    "logs/hybrid-fixed-r0750-t16.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/hybrid-fixed-r0750-t16.stdout.jsonl": "b4864dd206e6cba740b78b8119820b89834997db968fac37e859476b22bd41af",
+    "logs/hybrid-fixed-r0875-t16.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "logs/hybrid-fixed-r0875-t16.stdout.jsonl": "9989639564ec9cd732b3c614391b30b0cd93db755dc4816f0a57721d1730328f",
+    "matrix.yml": "b8cdab7eecd1c1be228d98d06b7c5fa9909843519529c91fdd03fe93350db61c",
+    "oracle.json": "a397078a8896f22ce16d41ad17f1de0dc04fd1ef1de26ed78f8b01de62a351ec",
+    "raw.csv": "1cbba8efbcb5001a7e7cd78da50ec151d93036c8f042b846e8a101e3228d2dd6",
+    "setup.csv": "12b28e01f6ccb08bbe44f5ea9848764e3c24d66d56bcdef43ef20e485f9de2cc",
+    "setups.csv": "12b28e01f6ccb08bbe44f5ea9848764e3c24d66d56bcdef43ef20e485f9de2cc",
+    "summary.csv": "8a0784122f188f42225f4f29d3530a8dc2ba2c2a969918310901af70fe5ba168",
+    "summary.md": "d64b607e706c528a997deb88b0c7bfa0ba7391f6eda48c20d73489002be1c17a",
+    "warmups.csv": "61a267323e8a4b137bd0af9b99e29ec06ac64b83b8f913360973ab73c3ee6be9"
+  },
+  "correctness": {
+    "counts": {
+      "configurations": 18,
+      "correctness_backends": 8,
+      "measured": 180,
+      "setups": 18,
+      "successful_measured": 180,
+      "successful_setups": 18,
+      "successful_warmups": 54,
+      "warmups": 54
+    },
+    "expected_hash": "b1351a421ba8dcfd",
+    "observed_hashes": [
+      "b1351a421ba8dcfd"
+    ],
+    "sha256": "32c8e78ea2d9af908a102e7d9b52bedc165f817302902b3f4f61f85973881c22",
+    "source_file": "correctness.json"
+  },
+  "dataset": {
+    "manifest_sha256": "44ddfec1e929264542ce28276a900b0dac3968ee102cae3475574a933e7af8ea",
+    "path": "data/tpch_sf10_arrow",
+    "scale_factor": "10",
+    "sha256": "44ddfec1e929264542ce28276a900b0dac3968ee102cae3475574a933e7af8ea",
+    "source_file": "dataset-manifest.json"
+  },
+  "experiment_id": "v7-formal-sf10-resident",
+  "identity": {
+    "cuda_visible_devices": "0",
+    "cudf_details": {
+      "cudf": "26.06.00",
+      "prefix": "/home/xuzihuan/miniconda3/envs/memq5-cudf",
+      "python": "3.11.15"
+    },
+    "cudf_env": "memq5-cudf",
+    "dataset": "/home/xuzihuan/db-tpch-q5/data/tpch_sf10_arrow",
+    "git_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc",
+    "gpu_driver": "595.71.05",
+    "gpu_index": 0,
+    "gpu_name": "NVIDIA GeForce RTX 4090",
+    "gpu_uuid": "GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e",
+    "session_cli": "/home/xuzihuan/db-tpch-q5/build-arrow-cuda-v3/memq5_arrow_session",
+    "session_cli_sha256": "0a145828ab8a50778f45dbf2a847fb6257b81da793297b59d3c4d0fcb8d20f61"
+  },
+  "manifest_version": 1,
+  "matrix": {
+    "configuration_count": 18,
+    "configurations": [
+      {
+        "config_id": "cpu-specialized-t08",
+        "correctness_backend": "cpu-specialized",
+        "cpu_ratio": 1.0,
+        "engine": "cpu-specialized",
+        "mode_options": {
+          "sweep": "threads"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 8
+      },
+      {
+        "config_id": "cpu-specialized-t16",
+        "correctness_backend": "cpu-specialized",
+        "cpu_ratio": 1.0,
+        "engine": "cpu-specialized",
+        "mode_options": {
+          "sweep": "threads"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 16
+      },
+      {
+        "config_id": "cpu-specialized-t32",
+        "correctness_backend": "cpu-specialized",
+        "cpu_ratio": 1.0,
+        "engine": "cpu-specialized",
+        "mode_options": {
+          "sweep": "threads"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 32
+      },
+      {
+        "config_id": "arrow-acero-t08",
+        "correctness_backend": "arrow-acero",
+        "cpu_ratio": 1.0,
+        "engine": "arrow-acero",
+        "mode_options": {
+          "sweep": "threads"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 8
+      },
+      {
+        "config_id": "arrow-acero-t16",
+        "correctness_backend": "arrow-acero",
+        "cpu_ratio": 1.0,
+        "engine": "arrow-acero",
+        "mode_options": {
+          "sweep": "threads"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 16
+      },
+      {
+        "config_id": "arrow-acero-t32",
+        "correctness_backend": "arrow-acero",
+        "cpu_ratio": 1.0,
+        "engine": "arrow-acero",
+        "mode_options": {
+          "sweep": "threads"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 32
+      },
+      {
+        "config_id": "gpu-copy",
+        "correctness_backend": "gpu-copy",
+        "cpu_ratio": 0.0,
+        "engine": "gpu-copy",
+        "mode_options": {
+          "memory_mode": "copy"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 1
+      },
+      {
+        "config_id": "gpu-managed",
+        "correctness_backend": "gpu-managed",
+        "cpu_ratio": 0.0,
+        "engine": "gpu-managed",
+        "mode_options": {
+          "memory_mode": "managed"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 1
+      },
+      {
+        "config_id": "gpu-mapped",
+        "correctness_backend": "gpu-mapped",
+        "cpu_ratio": 0.0,
+        "engine": "gpu-mapped",
+        "mode_options": {
+          "memory_mode": "mapped"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 1
+      },
+      {
+        "config_id": "cudf",
+        "correctness_backend": "cudf",
+        "cpu_ratio": 0.0,
+        "engine": "cudf",
+        "mode_options": {
+          "framework": "cudf"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cudf",
+        "threads": 1
+      },
+      {
+        "config_id": "hybrid-fixed-r0125-t16",
+        "correctness_backend": "hybrid-fixed",
+        "cpu_ratio": 0.125,
+        "engine": "hybrid-arrow",
+        "mode_options": {
+          "partition": "fixed",
+          "selection": "fixed",
+          "sweep": "diagnostic"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 16
+      },
+      {
+        "config_id": "hybrid-fixed-r0250-t16",
+        "correctness_backend": "hybrid-fixed",
+        "cpu_ratio": 0.25,
+        "engine": "hybrid-arrow",
+        "mode_options": {
+          "partition": "fixed",
+          "selection": "fixed",
+          "sweep": "core"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 16
+      },
+      {
+        "config_id": "hybrid-fixed-r0375-t16",
+        "correctness_backend": "hybrid-fixed",
+        "cpu_ratio": 0.375,
+        "engine": "hybrid-arrow",
+        "mode_options": {
+          "partition": "fixed",
+          "selection": "fixed",
+          "sweep": "diagnostic"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 16
+      },
+      {
+        "config_id": "hybrid-fixed-r0500-t16",
+        "correctness_backend": "hybrid-fixed",
+        "cpu_ratio": 0.5,
+        "engine": "hybrid-arrow",
+        "mode_options": {
+          "partition": "fixed",
+          "selection": "fixed",
+          "sweep": "core"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 16
+      },
+      {
+        "config_id": "hybrid-fixed-r0625-t16",
+        "correctness_backend": "hybrid-fixed",
+        "cpu_ratio": 0.625,
+        "engine": "hybrid-arrow",
+        "mode_options": {
+          "partition": "fixed",
+          "selection": "fixed",
+          "sweep": "diagnostic"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 16
+      },
+      {
+        "config_id": "hybrid-fixed-r0750-t16",
+        "correctness_backend": "hybrid-fixed",
+        "cpu_ratio": 0.75,
+        "engine": "hybrid-arrow",
+        "mode_options": {
+          "partition": "fixed",
+          "selection": "fixed",
+          "sweep": "core"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 16
+      },
+      {
+        "config_id": "hybrid-fixed-r0875-t16",
+        "correctness_backend": "hybrid-fixed",
+        "cpu_ratio": 0.875,
+        "engine": "hybrid-arrow",
+        "mode_options": {
+          "partition": "fixed",
+          "selection": "fixed",
+          "sweep": "diagnostic"
+        },
+        "ratio_mode": "fixed",
+        "runner": "cpp",
+        "threads": 16
+      },
+      {
+        "config_id": "hybrid-auto-t16",
+        "correctness_backend": "hybrid-auto",
+        "cpu_ratio": 0.0,
+        "engine": "hybrid-arrow",
+        "mode_options": {
+          "selection": "auto"
+        },
+        "ratio_mode": "auto",
+        "runner": "cpp",
+        "threads": 16
+      }
+    ],
+    "payload": {
+      "configurations": [
+        {
+          "config_id": "cpu-specialized-t08",
+          "correctness_backend": "cpu-specialized",
+          "cpu_ratio": 1.0,
+          "engine": "cpu-specialized",
+          "mode_options": {
+            "sweep": "threads"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 8
+        },
+        {
+          "config_id": "cpu-specialized-t16",
+          "correctness_backend": "cpu-specialized",
+          "cpu_ratio": 1.0,
+          "engine": "cpu-specialized",
+          "mode_options": {
+            "sweep": "threads"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 16
+        },
+        {
+          "config_id": "cpu-specialized-t32",
+          "correctness_backend": "cpu-specialized",
+          "cpu_ratio": 1.0,
+          "engine": "cpu-specialized",
+          "mode_options": {
+            "sweep": "threads"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 32
+        },
+        {
+          "config_id": "arrow-acero-t08",
+          "correctness_backend": "arrow-acero",
+          "cpu_ratio": 1.0,
+          "engine": "arrow-acero",
+          "mode_options": {
+            "sweep": "threads"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 8
+        },
+        {
+          "config_id": "arrow-acero-t16",
+          "correctness_backend": "arrow-acero",
+          "cpu_ratio": 1.0,
+          "engine": "arrow-acero",
+          "mode_options": {
+            "sweep": "threads"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 16
+        },
+        {
+          "config_id": "arrow-acero-t32",
+          "correctness_backend": "arrow-acero",
+          "cpu_ratio": 1.0,
+          "engine": "arrow-acero",
+          "mode_options": {
+            "sweep": "threads"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 32
+        },
+        {
+          "config_id": "gpu-copy",
+          "correctness_backend": "gpu-copy",
+          "cpu_ratio": 0.0,
+          "engine": "gpu-copy",
+          "mode_options": {
+            "memory_mode": "copy"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 1
+        },
+        {
+          "config_id": "gpu-managed",
+          "correctness_backend": "gpu-managed",
+          "cpu_ratio": 0.0,
+          "engine": "gpu-managed",
+          "mode_options": {
+            "memory_mode": "managed"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 1
+        },
+        {
+          "config_id": "gpu-mapped",
+          "correctness_backend": "gpu-mapped",
+          "cpu_ratio": 0.0,
+          "engine": "gpu-mapped",
+          "mode_options": {
+            "memory_mode": "mapped"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 1
+        },
+        {
+          "config_id": "cudf",
+          "correctness_backend": "cudf",
+          "cpu_ratio": 0.0,
+          "engine": "cudf",
+          "mode_options": {
+            "framework": "cudf"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cudf",
+          "threads": 1
+        },
+        {
+          "config_id": "hybrid-fixed-r0125-t16",
+          "correctness_backend": "hybrid-fixed",
+          "cpu_ratio": 0.125,
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "partition": "fixed",
+            "selection": "fixed",
+            "sweep": "diagnostic"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 16
+        },
+        {
+          "config_id": "hybrid-fixed-r0250-t16",
+          "correctness_backend": "hybrid-fixed",
+          "cpu_ratio": 0.25,
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "partition": "fixed",
+            "selection": "fixed",
+            "sweep": "core"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 16
+        },
+        {
+          "config_id": "hybrid-fixed-r0375-t16",
+          "correctness_backend": "hybrid-fixed",
+          "cpu_ratio": 0.375,
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "partition": "fixed",
+            "selection": "fixed",
+            "sweep": "diagnostic"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 16
+        },
+        {
+          "config_id": "hybrid-fixed-r0500-t16",
+          "correctness_backend": "hybrid-fixed",
+          "cpu_ratio": 0.5,
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "partition": "fixed",
+            "selection": "fixed",
+            "sweep": "core"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 16
+        },
+        {
+          "config_id": "hybrid-fixed-r0625-t16",
+          "correctness_backend": "hybrid-fixed",
+          "cpu_ratio": 0.625,
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "partition": "fixed",
+            "selection": "fixed",
+            "sweep": "diagnostic"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 16
+        },
+        {
+          "config_id": "hybrid-fixed-r0750-t16",
+          "correctness_backend": "hybrid-fixed",
+          "cpu_ratio": 0.75,
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "partition": "fixed",
+            "selection": "fixed",
+            "sweep": "core"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 16
+        },
+        {
+          "config_id": "hybrid-fixed-r0875-t16",
+          "correctness_backend": "hybrid-fixed",
+          "cpu_ratio": 0.875,
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "partition": "fixed",
+            "selection": "fixed",
+            "sweep": "diagnostic"
+          },
+          "ratio_mode": "fixed",
+          "runner": "cpp",
+          "threads": 16
+        },
+        {
+          "config_id": "hybrid-auto-t16",
+          "correctness_backend": "hybrid-auto",
+          "engine": "hybrid-arrow",
+          "mode_options": {
+            "selection": "auto"
+          },
+          "ratio_mode": "auto",
+          "runner": "cpp",
+          "threads": 16
+        }
+      ],
+      "dataset": {
+        "expected_hash": "b1351a421ba8dcfd",
+        "manifest_sha256": "44ddfec1e929264542ce28276a900b0dac3968ee102cae3475574a933e7af8ea",
+        "path": "data/tpch_sf10_arrow",
+        "scale_factor": "10"
+      },
+      "experiment_id": "v7-formal-sf10-resident",
+      "oracle": {
+        "path": "data/tpch_sf10/oracle.json",
+        "sha256": "a397078a8896f22ce16d41ad17f1de0dc04fd1ef1de26ed78f8b01de62a351ec"
+      },
+      "protocol": {
+        "repeat": 10,
+        "timeout_seconds": 1800,
+        "warmup": 3
+      },
+      "query": {
+        "date": "1994-01-01",
+        "region": "ASIA"
+      },
+      "schema_version": 2
+    },
+    "payload_sha256": "5abd0173fdffc9ece6bbd7635d9622883f5e274c46c89d8235155c0132493908",
+    "sha256": "b8cdab7eecd1c1be228d98d06b7c5fa9909843519529c91fdd03fe93350db61c",
+    "source_file": "matrix.yml"
+  },
+  "oracle": {
+    "path": "data/tpch_sf10/oracle.json",
+    "result_hash": "b1351a421ba8dcfd",
+    "sha256": "a397078a8896f22ce16d41ad17f1de0dc04fd1ef1de26ed78f8b01de62a351ec",
+    "source_file": "oracle.json"
+  },
+  "protocol": {
+    "expected_configurations": 18,
+    "repeat": 10,
+    "warmup": 3
+  },
+  "status": "complete",
+  "summary": {
+    "fields": [
+      "experiment_id",
+      "scale_factor",
+      "config_id",
+      "engine",
+      "threads",
+      "ratio_mode",
+      "cpu_ratio",
+      "gpu_ratio",
+      "lifecycle",
+      "success_count",
+      "failure_count",
+      "result_hash",
+      "query_total_ms_median",
+      "query_total_ms_mean",
+      "query_total_ms_min",
+      "query_total_ms_max",
+      "query_total_ms_pstdev",
+      "query_total_ms_p25",
+      "query_total_ms_p75",
+      "query_total_ms_p95",
+      "dataset_load_ms",
+      "session_setup_ms",
+      "tune_ms",
+      "setup_cost_ms",
+      "resident_host_bytes",
+      "resident_gpu_bytes",
+      "resident_pinned_bytes",
+      "resident_total_bytes",
+      "amortized_1_request_ms",
+      "amortized_10_requests_ms",
+      "amortized_100_requests_ms"
+    ],
+    "row_count": 18,
+    "source_files": [
+      "summary.csv",
+      "summary.md"
+    ]
+  }
+}

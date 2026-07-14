@@ -1,0 +1,57 @@
+{
+  "batch_rows": 262144,
+  "format_version": 1,
+  "scale_factor": "10",
+  "source_command": "dbgen -s 10 -f",
+  "source_kind": "command",
+  "tables": {
+    "customer": {
+      "bytes": 12001714,
+      "file": "customer.arrow",
+      "record_batches": 6,
+      "rows": 1500000,
+      "schema": "c_custkey: int32 not null\nc_nationkey: int32 not null",
+      "sha256": "fbf2a42bba254fa67b08440ec5009f546720dde694d0fd37037d550004b7efb8"
+    },
+    "lineitem": {
+      "bytes": 2399514202,
+      "file": "lineitem.arrow",
+      "record_batches": 229,
+      "rows": 59986052,
+      "schema": "l_orderkey: int32 not null\nl_suppkey: int32 not null\nl_extendedprice: decimal128(15, 2) not null\nl_discount: decimal128(15, 2) not null",
+      "sha256": "463fad8e7bdc97e1f9916b9ee7b63d79b9096766ca2522112d793cc8b27ff3f2"
+    },
+    "nation": {
+      "bytes": 1666,
+      "file": "nation.arrow",
+      "record_batches": 1,
+      "rows": 25,
+      "schema": "n_nationkey: int32 not null\nn_name: dictionary<values=string, indices=int32, ordered=0> not null\nn_regionkey: int32 not null",
+      "sha256": "7e98e9022400e662ca02988ecae6f53ca9ef66b9d535f5ca4b848f45a9fd383a"
+    },
+    "orders": {
+      "bytes": 180015858,
+      "file": "orders.arrow",
+      "record_batches": 58,
+      "rows": 15000000,
+      "schema": "o_orderkey: int32 not null\no_custkey: int32 not null\no_orderdate: date32[day] not null",
+      "sha256": "f32824f7ecf2accc802d6dd926d47ed3c650b9567550b4148235a8560b39a5b9"
+    },
+    "region": {
+      "bytes": 1018,
+      "file": "region.arrow",
+      "record_batches": 1,
+      "rows": 5,
+      "schema": "r_regionkey: int32 not null\nr_name: dictionary<values=string, indices=int32, ordered=0> not null",
+      "sha256": "6af98b8547b5323a869d20c0cb0fea5df5ccbcfc1e73942a252e465a223a00ba"
+    },
+    "supplier": {
+      "bytes": 800634,
+      "file": "supplier.arrow",
+      "record_batches": 1,
+      "rows": 100000,
+      "schema": "s_suppkey: int32 not null\ns_nationkey: int32 not null",
+      "sha256": "94064c0679bdd53c9b573828a2a16c1ba9e6be674b435b8990e48487fdbb17c3"
+    }
+  }
+}

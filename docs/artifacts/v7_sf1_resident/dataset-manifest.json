@@ -1,0 +1,57 @@
+{
+  "batch_rows": 262144,
+  "format_version": 1,
+  "scale_factor": "1",
+  "source_command": "TPC-H V3.0.1 dbgen -s 1",
+  "source_kind": "command",
+  "tables": {
+    "customer": {
+      "bytes": 1200634,
+      "file": "customer.arrow",
+      "record_batches": 1,
+      "rows": 150000,
+      "schema": "c_custkey: int32 not null\nc_nationkey: int32 not null",
+      "sha256": "dfaa8ac86c8d3b7a836db45ead96ddfd05daf32a672e43ab0571c061c4133de2"
+    },
+    "lineitem": {
+      "bytes": 240056458,
+      "file": "lineitem.arrow",
+      "record_batches": 23,
+      "rows": 6001215,
+      "schema": "l_orderkey: int32 not null\nl_suppkey: int32 not null\nl_extendedprice: decimal128(15, 2) not null\nl_discount: decimal128(15, 2) not null",
+      "sha256": "2f16c473bcdfc72085812f9871852bd09dfc7ab1921f8175614006738bd3ccf6"
+    },
+    "nation": {
+      "bytes": 1666,
+      "file": "nation.arrow",
+      "record_batches": 1,
+      "rows": 25,
+      "schema": "n_nationkey: int32 not null\nn_name: dictionary<values=string, indices=int32, ordered=0> not null\nn_regionkey: int32 not null",
+      "sha256": "7e98e9022400e662ca02988ecae6f53ca9ef66b9d535f5ca4b848f45a9fd383a"
+    },
+    "orders": {
+      "bytes": 18002130,
+      "file": "orders.arrow",
+      "record_batches": 6,
+      "rows": 1500000,
+      "schema": "o_orderkey: int32 not null\no_custkey: int32 not null\no_orderdate: date32[day] not null",
+      "sha256": "1b54b9959d6f702e4b056ae6659c419841377114d55077b7741f79190fd280bb"
+    },
+    "region": {
+      "bytes": 1018,
+      "file": "region.arrow",
+      "record_batches": 1,
+      "rows": 5,
+      "schema": "r_regionkey: int32 not null\nr_name: dictionary<values=string, indices=int32, ordered=0> not null",
+      "sha256": "6af98b8547b5323a869d20c0cb0fea5df5ccbcfc1e73942a252e465a223a00ba"
+    },
+    "supplier": {
+      "bytes": 80634,
+      "file": "supplier.arrow",
+      "record_batches": 1,
+      "rows": 10000,
+      "schema": "s_suppkey: int32 not null\ns_nationkey: int32 not null",
+      "sha256": "a15e59e8f1c23930dd87397657bb9dde6f3adf99012871b403b3c488817a2c92"
+    }
+  }
+}

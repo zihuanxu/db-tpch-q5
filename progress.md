@@ -378,6 +378,24 @@ Audited SF10 evidence recorded on 2026-07-14:
   The profiler bundle now rejects path escapes, ambiguous profile identities,
   unverified dataset manifests, and unsupported metric claims; raw-report to
   exported-stat linkage remains documented as a non-cryptographic residual.
+- Hybrid-auto now calibrates one CPU-only and one resident GPU-only request
+  during session setup, evaluates the closed-form model, and maps the predicted
+  split to the nearest Arrow batch boundary. The implementation commit is
+  `7ff9ff3`; focused CPU tests, three real-GPU hybrid tests, and both CUDA builds
+  passed before formal collection.
+- A current-head SF10 3+10 validation predicted a 0.372540 CPU ratio and
+  realized 0.371457 at the 22,282,240-row batch boundary. All ten measured
+  requests returned `b1351a421ba8dcfd`, with request totals from 9.631 to
+  10.076 ms. Session setup was 4,974.422 ms and `tune_ms` was 2,892.435 ms, so
+  any publication claim must report the large one-time calibration cost rather
+  than presenting request latency alone.
+- Independent reviews blocked formal collection until two evidence-boundary
+  fixes are complete. The resident runner must preserve partial failures,
+  reject truncated/mislabeled configurations, distinguish unavailable metrics
+  from true zero, and bind binary/environment/GPU identity. The profiler bundle
+  must enforce its fixed SF1/SF10 matrix and prove command, result, device,
+  metric-discovery, and Q5-kernel provenance. Constructive bypass tests are
+  being added for each issue before new captures are accepted.
 
 - [x] Add a manifest-validated SF10 preparation orchestrator that rejects
   incomplete, unmanifested, wrong-scale, and SF1-reused data before reuse.
@@ -385,3 +403,40 @@ Audited SF10 evidence recorded on 2026-07-14:
   return code, elapsed time, output bytes, and post-stage free space.
 - [x] Add focused temporary-directory tests and a dry-run that reports only
   stages whose valid manifests are absent.
+
+## V7 - Formal Resident Evidence (2026-07-14)
+
+- [x] Freeze and independently audit the SF1 18-configuration resident matrix.
+- [x] Freeze and independently audit the SF10 18-configuration resident matrix.
+- [x] Recompute every warmup and measured result against the canonical oracle.
+- [x] Evaluate hybrid-auto against the seven-point fixed-ratio sweep.
+- [ ] Complete the ten-profile NSYS/NCU matrix and publication refresh.
+
+The formal source commit is `021becd1b10f84aaed87858e45eb15a915cf6adc`.
+Both bundles use one RTX 4090 (`GPU-3bbdf12f-4f01-2280-3744-e42f3544e76e`),
+driver 595.71.05, Arrow resident sessions, cuDF 26.06, three warmups, and ten
+measured requests per configuration. Each bundle contains 18 setups, 54
+warmups, and 180 measured requests. All eight correctness backends passed and
+all requests reproduced the independent hash (`542abf4003633c7c` for SF1 and
+`b1351a421ba8dcfd` for SF10). The copied bundle audits both return `ok=true`.
+
+Selected resident medians are:
+
+- SF1 specialized CPU (16 threads) 3.201 ms, copy 1.267 ms, managed 1.440 ms,
+  mapped 22.971 ms, cuDF 12.773 ms, and Acero (32 threads) 311.461 ms.
+- SF10 specialized CPU (32 threads) 14.955 ms, copy 15.416 ms, managed
+  15.066 ms, mapped 358.582 ms, cuDF 27.906 ms, and Acero (32 threads)
+  3124.388 ms.
+- The best fixed hybrid split was 0.125 CPU at SF1 (1.160 ms) and 0.375 CPU at
+  SF10 (10.054 ms). Hybrid-auto selected 0.262091 and 0.288425 respectively,
+  giving 1.553 ms at SF1 and 10.980 ms at SF10. Its measured regret was
+  33.89% and 9.21%, so the auto model is useful but not optimal.
+- Setup cost is substantial and remains separate from resident request time.
+  For example, SF10 hybrid-auto setup was 7844.079 ms, while its request median
+  was 10.980 ms. The report must state both values and the amortization scope.
+
+The first SF10 formal attempt was interrupted externally during the fifth
+configuration and left one truncated Acero JSON line. Its partial directory
+was not finalized or used. A new empty directory was run to completion in one
+persistent terminal session; only that rerun is copied into the audited
+artifact tree.
