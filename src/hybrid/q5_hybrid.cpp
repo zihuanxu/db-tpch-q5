@@ -208,6 +208,9 @@ arrow::Result<Q5Result> HybridQ5Session::Execute() {
       return gpu_session_->Execute();
     });
     arrow::Result<Q5Result> cpu_result = cpu_session_->Execute();
+    // Inspect neither status until get() has joined the GPU request. The child
+    // APIs return ordinary failures as Result; future destruction also joins
+    // the GPU request if an unexpected CPU exception escapes before get().
     arrow::Result<Q5Result> gpu_result = gpu_future.get();
     const double execution_wall_ms = execution_timer.elapsed_ms();
 
