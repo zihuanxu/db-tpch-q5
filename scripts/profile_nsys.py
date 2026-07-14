@@ -41,6 +41,17 @@ def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _application_stdout(stdout: str) -> str:
+    json_lines = [
+        line.strip()
+        for line in stdout.splitlines()
+        if line.lstrip().startswith("{")
+    ]
+    if not json_lines:
+        return stdout
+    return "\n".join(json_lines) + "\n"
+
+
 def _nsys_version() -> tuple[str, dict[str, object]]:
     command = ["nsys", "--version"]
     try:
@@ -131,7 +142,11 @@ def collect_nsys(command: list[str], output_dir: Path, metadata: dict) -> dict:
         profile = _run(profile_command)
     except OSError as exc:
         profile = subprocess.CompletedProcess(profile_command, 127, "", f"launch failed: {exc}")
-    (output_dir / "profile.stdout.log").write_text(profile.stdout or "", encoding="utf-8")
+    tool_stdout = profile.stdout or ""
+    (output_dir / "profile.tool.stdout.log").write_text(tool_stdout, encoding="utf-8")
+    (output_dir / "profile.stdout.log").write_text(
+        _application_stdout(tool_stdout), encoding="utf-8"
+    )
     (output_dir / "profile.stderr.log").write_text(profile.stderr or "", encoding="utf-8")
 
     stats_commands: list[list[str]] = []

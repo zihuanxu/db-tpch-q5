@@ -167,6 +167,45 @@ def test_collector_uses_one_stats_command_for_all_required_reports(
     assert (tmp_path / "stats.stderr.log").read_text(encoding="utf-8") == ""
 
 
+def test_collector_separates_nsys_progress_from_application_jsonl(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    setup = '{"record_type":"session_setup","status":"ok"}'
+    request = '{"record_type":"request","status":"ok"}'
+    combined = "\n".join(
+        [
+            "Capture range started in the application.",
+            setup,
+            request,
+            "Generated: profile.nsys-rep",
+            "",
+        ]
+    )
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if command[1:2] == ["--version"]:
+            return subprocess.CompletedProcess(command, 0, "nsys 2026.1\n", "")
+        if command[1] == "profile":
+            Path(command[command.index("--output") + 1]).with_suffix(
+                ".nsys-rep"
+            ).write_bytes(b"report")
+            return subprocess.CompletedProcess(command, 0, combined, "")
+        return subprocess.CompletedProcess(command, 0, "stats", "")
+
+    monkeypatch.setattr("scripts.profile_nsys.subprocess.run", fake_run)
+
+    result = collect_nsys(["resident-q5", "--requests", "1"], tmp_path, {})
+
+    assert (tmp_path / "profile.stdout.log").read_text(encoding="utf-8") == (
+        f"{setup}\n{request}\n"
+    )
+    assert (tmp_path / "profile.tool.stdout.log").read_text(
+        encoding="utf-8"
+    ) == combined
+    assert result["files"]["profile.stdout.log"]["sha256"]
+    assert result["files"]["profile.tool.stdout.log"]["sha256"]
+
+
 def test_collector_forces_c_locale_for_every_subprocess(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
