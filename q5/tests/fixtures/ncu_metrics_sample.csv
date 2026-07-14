@@ -1,0 +1,6 @@
+"ID","Process ID","Process Name","Host Name","Kernel Name","Context","Stream","Section Name","Metric Name","Metric Unit","Metric Value"
+"1","42","memq5","host","void memq5::q5_kernel<float>(...) ","1","7","GPU Speed Of Light Throughput","gpu__time_duration.sum","nsecond","1250000"
+"1","42","memq5","host","void memq5::q5_kernel<float>(...) ","1","7","Memory Workload Analysis","dram__bytes_read.sum","byte","1048576"
+"1","42","memq5","host","void memq5::q5_kernel<float>(...) ","1","7","Memory Workload Analysis","dram__throughput.avg.pct_of_peak_sustained_elapsed","%","51.25"
+"1","42","memq5","host","void memq5::q5_kernel<float>(...) ","1","7","Compute Workload Analysis","sm__throughput.avg.pct_of_peak_sustained_elapsed","%","62.5"
+"1","42","memq5","host","void memq5::q5_kernel<float>(...) ","1","7","Compute Workload Analysis","sm__warps_active.avg.pct_of_peak_sustained_active","%","48.0"

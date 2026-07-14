@@ -1,0 +1,34 @@
+build/
+build-cuda/
+build-*/
+.worktrees/
+data/
+dist/
+__pycache__/
+*.pyc
+
+# Formal CSV/JSON results are tracked; generated scratch output is not.
+results/tmp/
+results/**/*.log
+*.nsys-rep
+
+# Imported CPU hashjoin build/generated and unused upstream payloads
+hashjoin-cpu/Makefile
+hashjoin-cpu/src/Makefile
+hashjoin-cpu/config.h
+hashjoin-cpu/config.log
+hashjoin-cpu/config.status
+hashjoin-cpu/stamp-h1
+hashjoin-cpu/src/.deps/
+hashjoin-cpu/src/*.o
+hashjoin-cpu/src/mchashjoins
+hashjoin-cpu/lib/
+hashjoin-cpu/wisconsin-src/
+hashjoin-cpu/doc/
+hashjoin-cpu/pcm.cfg
+hashjoin-cpu/.github/
+hashjoin-cpu/.vscode/
+hashjoin-cpu/.envrc
+hashjoin-cpu/flake.lock
+hashjoin-cpu/flake.nix
+hashjoin-cpu/shell.nix

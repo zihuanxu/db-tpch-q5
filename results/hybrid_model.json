@@ -1,0 +1,156 @@
+{
+  "scales": [
+    {
+      "auto": {
+        "p50_request_ms": 1.5528105,
+        "predicted_cpu_ratio": 0.24319614604075737,
+        "realized_cpu_ratio": 0.26209092658736605,
+        "sample_count": 10,
+        "selected_cpu_ratio": 0.26209092658736605
+      },
+      "best_fixed": {
+        "cpu_ratio": 0.125,
+        "p50_request_ms": 1.1597629999999999,
+        "sample_count": 10
+      },
+      "break_even": {
+        "definition": "fixed-curve segments crossing auto p50 request latency",
+        "ratio_intervals": [
+          [
+            0.25,
+            0.375
+          ]
+        ],
+        "status": "observed"
+      },
+      "fixed_curve": [
+        {
+          "cpu_ratio": 0.125,
+          "p50_request_ms": 1.1597629999999999,
+          "sample_count": 10
+        },
+        {
+          "cpu_ratio": 0.25,
+          "p50_request_ms": 1.5170124999999999,
+          "sample_count": 10
+        },
+        {
+          "cpu_ratio": 0.375,
+          "p50_request_ms": 2.2133235,
+          "sample_count": 10
+        },
+        {
+          "cpu_ratio": 0.5,
+          "p50_request_ms": 2.5527015,
+          "sample_count": 10
+        },
+        {
+          "cpu_ratio": 0.625,
+          "p50_request_ms": 3.0570135,
+          "sample_count": 10
+        },
+        {
+          "cpu_ratio": 0.75,
+          "p50_request_ms": 3.6821395,
+          "sample_count": 10
+        },
+        {
+          "cpu_ratio": 0.875,
+          "p50_request_ms": 4.342623,
+          "sample_count": 10
+        }
+      ],
+      "identity": {
+        "dataset_manifest_sha256": "0d7899db921b223a3f94625fa910191485f6fb050054447025b9f2abbc2729a5",
+        "dataset_path": "data/tpch_sf1_arrow",
+        "experiment_id": "formal-sf1-resident",
+        "git_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc",
+        "result_hash": "542abf4003633c7c",
+        "scale_factor": "1"
+      },
+      "regret_ms": 0.3930475000000002,
+      "regret_percent": 33.890329317282955,
+      "regret_percent_status": "measured",
+      "status": "ok"
+    },
+    {
+      "auto": {
+        "p50_request_ms": 10.9799595,
+        "predicted_cpu_ratio": 0.2887329010669868,
+        "realized_cpu_ratio": 0.28842544930278124,
+        "sample_count": 10,
+        "selected_cpu_ratio": 0.28842544930278124
+      },
+      "best_fixed": {
+        "cpu_ratio": 0.375,
+        "p50_request_ms": 10.054269,
+        "sample_count": 10
+      },
+      "break_even": {
+        "definition": "fixed-curve segments crossing auto p50 request latency",
+        "ratio_intervals": [
+          [
+            0.25,
+            0.375
+          ],
+          [
+            0.375,
+            0.5
+          ]
+        ],
+        "status": "observed"
+      },
+      "fixed_curve": [
+        {
+          "cpu_ratio": 0.125,
+          "p50_request_ms": 12.5157035,
+          "sample_count": 10
+        },
+        {
+          "cpu_ratio": 0.25,
+          "p50_request_ms": 11.5218475,
+          "sample_count": 10
+        },
+        {
+          "cpu_ratio": 0.375,
+          "p50_request_ms": 10.054269,
+          "sample_count": 10
+        },
+        {
+          "cpu_ratio": 0.5,
+          "p50_request_ms": 13.389777500000001,
+          "sample_count": 10
+        },
+        {
+          "cpu_ratio": 0.625,
+          "p50_request_ms": 15.957733000000001,
+          "sample_count": 10
+        },
+        {
+          "cpu_ratio": 0.75,
+          "p50_request_ms": 18.9776275,
+          "sample_count": 10
+        },
+        {
+          "cpu_ratio": 0.875,
+          "p50_request_ms": 21.933439,
+          "sample_count": 10
+        }
+      ],
+      "identity": {
+        "dataset_manifest_sha256": "44ddfec1e929264542ce28276a900b0dac3968ee102cae3475574a933e7af8ea",
+        "dataset_path": "data/tpch_sf10_arrow",
+        "experiment_id": "formal-sf10-resident",
+        "git_commit": "021becd1b10f84aaed87858e45eb15a915cf6adc",
+        "result_hash": "b1351a421ba8dcfd",
+        "scale_factor": "10"
+      },
+      "regret_ms": 0.9256905,
+      "regret_percent": 9.206939858084164,
+      "regret_percent_status": "measured",
+      "status": "ok"
+    }
+  ],
+  "schema_version": 1,
+  "status": "ok"
+}

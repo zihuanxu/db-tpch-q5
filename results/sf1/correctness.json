@@ -1,0 +1,41 @@
+{
+  "backends": {
+    "arrow-acero": {
+      "errors": [],
+      "status": "passed"
+    },
+    "cpu-specialized": {
+      "errors": [],
+      "status": "passed"
+    },
+    "cudf": {
+      "errors": [],
+      "status": "passed"
+    },
+    "gpu-copy": {
+      "errors": [],
+      "status": "passed"
+    },
+    "gpu-managed": {
+      "errors": [],
+      "status": "passed"
+    },
+    "gpu-mapped": {
+      "errors": [],
+      "status": "passed"
+    },
+    "hybrid-auto": {
+      "errors": [],
+      "status": "passed"
+    },
+    "hybrid-fixed": {
+      "errors": [],
+      "status": "passed"
+    }
+  },
+  "expected_hash": "542abf4003633c7c",
+  "observed_hashes": [
+    "542abf4003633c7c"
+  ],
+  "ok": true
+}

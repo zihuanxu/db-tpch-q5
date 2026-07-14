@@ -1,0 +1,36 @@
+{
+  "schema_version": 2,
+  "experiment_id": "formal-sf10-resident",
+  "dataset": {
+    "path": "data/tpch_sf10_arrow",
+    "scale_factor": "10",
+    "manifest_sha256": "44ddfec1e929264542ce28276a900b0dac3968ee102cae3475574a933e7af8ea",
+    "expected_hash": "b1351a421ba8dcfd"
+  },
+  "oracle": {
+    "path": "q5/experiments/oracles/formal_sf10_q5.json",
+    "sha256": "a397078a8896f22ce16d41ad17f1de0dc04fd1ef1de26ed78f8b01de62a351ec"
+  },
+  "query": {"region": "ASIA", "date": "1994-01-01"},
+  "configurations": [
+    {"config_id": "cpu-specialized-t08", "engine": "cpu-specialized", "runner": "cpp", "threads": 8, "ratio_mode": "fixed", "cpu_ratio": 1.0, "correctness_backend": "cpu-specialized", "mode_options": {"sweep": "threads"}},
+    {"config_id": "cpu-specialized-t16", "engine": "cpu-specialized", "runner": "cpp", "threads": 16, "ratio_mode": "fixed", "cpu_ratio": 1.0, "correctness_backend": "cpu-specialized", "mode_options": {"sweep": "threads"}},
+    {"config_id": "cpu-specialized-t32", "engine": "cpu-specialized", "runner": "cpp", "threads": 32, "ratio_mode": "fixed", "cpu_ratio": 1.0, "correctness_backend": "cpu-specialized", "mode_options": {"sweep": "threads"}},
+    {"config_id": "arrow-acero-t08", "engine": "arrow-acero", "runner": "cpp", "threads": 8, "ratio_mode": "fixed", "cpu_ratio": 1.0, "correctness_backend": "arrow-acero", "mode_options": {"sweep": "threads"}},
+    {"config_id": "arrow-acero-t16", "engine": "arrow-acero", "runner": "cpp", "threads": 16, "ratio_mode": "fixed", "cpu_ratio": 1.0, "correctness_backend": "arrow-acero", "mode_options": {"sweep": "threads"}},
+    {"config_id": "arrow-acero-t32", "engine": "arrow-acero", "runner": "cpp", "threads": 32, "ratio_mode": "fixed", "cpu_ratio": 1.0, "correctness_backend": "arrow-acero", "mode_options": {"sweep": "threads"}},
+    {"config_id": "gpu-copy", "engine": "gpu-copy", "runner": "cpp", "threads": 1, "ratio_mode": "fixed", "cpu_ratio": 0.0, "correctness_backend": "gpu-copy", "mode_options": {"memory_mode": "copy"}},
+    {"config_id": "gpu-managed", "engine": "gpu-managed", "runner": "cpp", "threads": 1, "ratio_mode": "fixed", "cpu_ratio": 0.0, "correctness_backend": "gpu-managed", "mode_options": {"memory_mode": "managed"}},
+    {"config_id": "gpu-mapped", "engine": "gpu-mapped", "runner": "cpp", "threads": 1, "ratio_mode": "fixed", "cpu_ratio": 0.0, "correctness_backend": "gpu-mapped", "mode_options": {"memory_mode": "mapped"}},
+    {"config_id": "cudf", "engine": "cudf", "runner": "cudf", "threads": 1, "ratio_mode": "fixed", "cpu_ratio": 0.0, "correctness_backend": "cudf", "mode_options": {"framework": "cudf"}},
+    {"config_id": "hybrid-fixed-r0125-t16", "engine": "hybrid-arrow", "runner": "cpp", "threads": 16, "ratio_mode": "fixed", "cpu_ratio": 0.125, "correctness_backend": "hybrid-fixed", "mode_options": {"partition": "fixed", "selection": "fixed", "sweep": "diagnostic"}},
+    {"config_id": "hybrid-fixed-r0250-t16", "engine": "hybrid-arrow", "runner": "cpp", "threads": 16, "ratio_mode": "fixed", "cpu_ratio": 0.25, "correctness_backend": "hybrid-fixed", "mode_options": {"partition": "fixed", "selection": "fixed", "sweep": "core"}},
+    {"config_id": "hybrid-fixed-r0375-t16", "engine": "hybrid-arrow", "runner": "cpp", "threads": 16, "ratio_mode": "fixed", "cpu_ratio": 0.375, "correctness_backend": "hybrid-fixed", "mode_options": {"partition": "fixed", "selection": "fixed", "sweep": "diagnostic"}},
+    {"config_id": "hybrid-fixed-r0500-t16", "engine": "hybrid-arrow", "runner": "cpp", "threads": 16, "ratio_mode": "fixed", "cpu_ratio": 0.5, "correctness_backend": "hybrid-fixed", "mode_options": {"partition": "fixed", "selection": "fixed", "sweep": "core"}},
+    {"config_id": "hybrid-fixed-r0625-t16", "engine": "hybrid-arrow", "runner": "cpp", "threads": 16, "ratio_mode": "fixed", "cpu_ratio": 0.625, "correctness_backend": "hybrid-fixed", "mode_options": {"partition": "fixed", "selection": "fixed", "sweep": "diagnostic"}},
+    {"config_id": "hybrid-fixed-r0750-t16", "engine": "hybrid-arrow", "runner": "cpp", "threads": 16, "ratio_mode": "fixed", "cpu_ratio": 0.75, "correctness_backend": "hybrid-fixed", "mode_options": {"partition": "fixed", "selection": "fixed", "sweep": "core"}},
+    {"config_id": "hybrid-fixed-r0875-t16", "engine": "hybrid-arrow", "runner": "cpp", "threads": 16, "ratio_mode": "fixed", "cpu_ratio": 0.875, "correctness_backend": "hybrid-fixed", "mode_options": {"partition": "fixed", "selection": "fixed", "sweep": "diagnostic"}},
+    {"config_id": "hybrid-auto-t16", "engine": "hybrid-arrow", "runner": "cpp", "threads": 16, "ratio_mode": "auto", "correctness_backend": "hybrid-auto", "mode_options": {"selection": "auto"}}
+  ],
+  "protocol": {"warmup": 3, "repeat": 10, "timeout_seconds": 1800}
+}

@@ -1,0 +1,10 @@
+{
+  "cpu": "2 x AMD EPYC 9654 96-Core Processor",
+  "logical_cpus": 384,
+  "gpu": "NVIDIA GeForce RTX 4090",
+  "gpu_memory_mib": 24564,
+  "cuda_compiler": "12.6",
+  "nvidia_driver": "595.71.05",
+  "cudf": "26.06.00",
+  "os": "Linux x86_64"
+}

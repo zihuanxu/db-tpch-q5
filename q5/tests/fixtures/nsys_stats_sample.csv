@@ -1,0 +1,6 @@
+"Time (%)";"Total Time (ns)";"Instances";"Average (ns)";"Operation";"Range"
+"62.500";"1.250.000";"2";"625.000";"void q5_kernel<float>(char const*, ""quoted"")";""
+"25,0";"500.000";"4";"125.000";"[CUDA memcpy HtoD]";""
+"12,5";"250.000";"1";"250.000";"[CUDA memcpy DtoH]";""
+"0,1";"62.500";"1";"62.500";"";"request"
+"0,1";"42.000";"1";"42.000";"";"q5_kernel"

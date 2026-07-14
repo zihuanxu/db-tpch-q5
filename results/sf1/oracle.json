@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "scale_factor": "1",
+  "region": "ASIA",
+  "date": "1994-01-01",
+  "ordering": "revenue_desc_nation_asc",
+  "rows": [
+    {"nation": "INDONESIA", "revenue_1e4": 555020411697},
+    {"nation": "VIETNAM", "revenue_1e4": 552950869967},
+    {"nation": "CHINA", "revenue_1e4": 537244942566},
+    {"nation": "INDIA", "revenue_1e4": 520355120002},
+    {"nation": "JAPAN", "revenue_1e4": 454101756954}
+  ],
+  "result_hash": "542abf4003633c7c"
+}

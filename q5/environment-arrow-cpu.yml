@@ -1,0 +1,13 @@
+name: memq5-arrow-cpu
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - cmake
+  - ninja
+  - arrow-cpp=23.0.1
+  - pyarrow=23.0.1
+  - openssl
+  - nlohmann_json
+  - pytest
+  - psutil

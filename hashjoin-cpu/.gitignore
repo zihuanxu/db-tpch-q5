@@ -1,0 +1,41 @@
+# Object files
+*.Po
+*.o
+
+# Generated files
+config.h
+config.log
+config.status
+Makefile
+*.d
+
+# Generted docs
+html/
+latex/
+
+# Executables
+stamp-h1
+mchashjoins*
+
+# autoconf stuff
+*.cache
+
+# log files
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Assignment experiment outputs
+*.build.log
+*.raw.csv
+*.summary.csv
+*.logs/
+*.plots/
+*~
+prvj-tuning-*.csv
+prvj-tuning-logs-*/
+report-*.csv
+starjoin-sf100-*.csv
+deliverables/*.tar.gz
