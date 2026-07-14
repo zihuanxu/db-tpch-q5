@@ -492,7 +492,7 @@ produced 183 files; every line in `checksums.sha256` verified.
 - [x] Rebuild the four-page CjC paper with evidence-bound provenance.
 - [x] Validate the 21-claim ledger, process records, and learning links.
 - [x] Pass the default Python suite excluding environment-specific modules:
-  395 passed and 6 skipped.
+  397 passed and 6 skipped.
 - [x] Pass the Arrow/cuDF Python 3.11 suite: 22 passed.
 - [x] Pass all 45 CTest entries with zero failures in the current environment;
   15 CUDA runtime entries were explicitly skipped because the final shell no
