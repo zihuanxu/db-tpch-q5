@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import contextlib
 import csv
+import inspect
 import io
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 BASELINES_DIR = ROOT / "baselines"
@@ -17,9 +20,8 @@ for path in (BASELINES_DIR, SCRIPTS_DIR):
     if text not in sys.path:
         sys.path.insert(0, text)
 
-from arrow_q5 import run_q5 as run_arrow_q5
 from common import ResultRow, emit_json, emit_rows, result_hash
-from prepare_arrow_dataset import prepare_dataset
+import duckdb_q5
 from python_q5 import run_q5 as run_python_q5
 from run_benchmarks import write_rows
 
@@ -47,6 +49,10 @@ def test_result_contract_uses_raw_revenue_1e4_display_rounding_and_exact_hash() 
 
 
 def test_python_and_arrow_match_tiny_exact_rows_and_hash(tmp_path: Path) -> None:
+    pytest.importorskip("pyarrow")
+    from arrow_q5 import run_q5 as run_arrow_q5
+    from prepare_arrow_dataset import prepare_dataset
+
     dataset_dir = tmp_path / "tiny-arrow"
     prepare_dataset(
         input_dir=FIXTURE_DIR,
@@ -65,6 +71,34 @@ def test_python_and_arrow_match_tiny_exact_rows_and_hash(tmp_path: Path) -> None
     assert python_rows == expected
     assert arrow_rows == expected
     assert result_hash(python_rows) == result_hash(arrow_rows)
+
+
+def test_duckdb_baseline_exposes_direct_csv_view_loader_without_executemany() -> None:
+    source = inspect.getsource(duckdb_q5)
+
+    assert hasattr(duckdb_q5, "create_tpch_views")
+    assert "read_csv" in source
+    assert "executemany" not in source
+
+
+def test_duckdb_baseline_reads_tiny_fixture_with_exact_fixed_point_revenue() -> None:
+    pytest.importorskip("duckdb")
+
+    expected = [ResultRow("JAPAN", 1900000), ResultRow("INDIA", 900000)]
+    rows = duckdb_q5.run_q5(FIXTURE_DIR, "ASIA", "1994-01-01")
+
+    assert rows == expected
+    assert result_hash(rows) == "248d10b6ee352953"
+
+
+def test_duckdb_csv_view_loader_rejects_missing_source_tables(tmp_path: Path) -> None:
+    duckdb = pytest.importorskip("duckdb")
+    con = duckdb.connect(":memory:")
+    try:
+        with pytest.raises(FileNotFoundError, match="region.tbl"):
+            duckdb_q5.create_tpch_views(con, tmp_path)
+    finally:
+        con.close()
 
 
 def test_run_benchmarks_preserves_query_counters(tmp_path: Path) -> None:
@@ -95,6 +129,9 @@ def test_run_benchmarks_preserves_query_counters(tmp_path: Path) -> None:
 
 
 def test_run_benchmarks_requires_arrow_dataset_and_skips_warmups_in_csv(tmp_path: Path) -> None:
+    pytest.importorskip("pyarrow")
+    from prepare_arrow_dataset import prepare_dataset
+
     dataset_dir = tmp_path / "tiny-arrow"
     prepare_dataset(
         input_dir=FIXTURE_DIR,
