@@ -147,6 +147,23 @@ if(MEMQ5_ENABLE_ARROW AND MEMQ5_ENABLE_CUDA)
   add_test(NAME test_q5_arrow_cuda COMMAND test_q5_arrow_cuda)
   set_tests_properties(test_q5_arrow_cuda PROPERTIES SKIP_RETURN_CODE 77)
 
+  set_source_files_properties(test_q5_cuda_session.cpp PROPERTIES LANGUAGE CUDA)
+  add_executable(test_q5_cuda_session test_q5_cuda_session.cpp)
+  target_link_libraries(test_q5_cuda_session PRIVATE memq5_arrow_cuda)
+  target_compile_definitions(test_q5_cuda_session PRIVATE
+    MEMQ5_ARROW_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow"
+  )
+  set_target_properties(test_q5_cuda_session PROPERTIES
+    CUDA_STANDARD 17
+    CUDA_STANDARD_REQUIRED ON
+    CUDA_EXTENSIONS OFF
+  )
+  target_compile_options(test_q5_cuda_session PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:-UNDEBUG>
+  )
+  add_test(NAME test_q5_cuda_session COMMAND test_q5_cuda_session)
+  set_tests_properties(test_q5_cuda_session PROPERTIES SKIP_RETURN_CODE 77)
+
   add_executable(test_q5_hybrid test_q5_hybrid.cpp)
   target_link_libraries(test_q5_hybrid PRIVATE memq5_arrow_cuda)
   target_compile_definitions(test_q5_hybrid PRIVATE

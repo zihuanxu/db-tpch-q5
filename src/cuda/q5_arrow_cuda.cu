@@ -20,8 +20,6 @@
 namespace memq5 {
 namespace {
 
-enum class MemoryMode { kCopy, kManaged, kMapped };
-
 struct ArrowGpuInput {
   ArrowQ5Plan plan;
   std::vector<int32_t> order_keys;
@@ -194,6 +192,7 @@ public:
   MappedHostBuffer& operator=(const MappedHostBuffer&) = delete;
 
   T* device_data() { return device_data_; }
+  const T* device_data() const { return device_data_; }
 
   void copy_from_host(const T* source, std::size_t count) {
     if (count > 0) {
@@ -477,11 +476,10 @@ double launch_kernel(const ArrowGpuInput& input, const int32_t* order_keys,
   return elapsed_ms(start, stop);
 }
 
-arrow::Result<Q5Result> finish_result(const ArrowGpuInput& input,
-                                      std::vector<unsigned long long> revenue,
-                                      unsigned long long matched_rows,
-                                      int32_t overflow, Q5Result result,
-                                      const Stopwatch& total_timer) {
+arrow::Result<Q5Result> finish_result(
+    const ArrowGpuInput& input, const std::vector<unsigned long long>& revenue,
+    unsigned long long matched_rows, int32_t overflow, Q5Result result,
+    const Stopwatch& total_timer) {
   if (overflow != 0) {
     return arrow::Status::CapacityError("GPU Q5 revenue accumulation overflow");
   }
@@ -514,232 +512,17 @@ arrow::Result<Q5Result> finish_result(const ArrowGpuInput& input,
   return result;
 }
 
-arrow::Result<Q5Result> execute_copy(const ArrowQ5Dataset& dataset,
-                                     const Q5Params& params) {
-  Stopwatch total_timer;
-  ARROW_ASSIGN_OR_RAISE(const ArrowGpuInput input,
-                        prepare_arrow_gpu_input(dataset, params));
-  const std::size_t nation_count =
-      input.plan.max_nation_key < 0
-          ? 0
-          : static_cast<std::size_t>(input.plan.max_nation_key) + 1;
-  ARROW_RETURN_NOT_OK(validate_cuda_dimensions(input, nation_count));
+}  // namespace
 
-  DeviceBuffer<int32_t> order_keys(input.order_keys.size());
-  DeviceBuffer<int32_t> supplier_keys(input.supplier_keys.size());
-  DeviceBuffer<int64_t> prices(input.price_cents.size());
-  DeviceBuffer<int32_t> discounts(input.discount_hundredths.size());
-  DeviceBuffer<int32_t> order_map(input.plan.order_nation_by_key.size());
-  DeviceBuffer<int32_t> supplier_map(input.plan.supplier_nation_by_key.size());
-  DeviceBuffer<unsigned long long> revenue(nation_count);
-  DeviceBuffer<unsigned long long> matched(1);
-  DeviceBuffer<int32_t> overflow(1);
-
-  Q5Result result;
-  result.timing.build_ms = input.build_ms;
-  CudaEvent h2d_start;
-  CudaEvent h2d_stop;
-  check_cuda(cudaEventRecord(h2d_start.get()), "cudaEventRecord H2D start");
-  order_keys.copy_from_host(input.order_keys.data(), input.order_keys.size());
-  supplier_keys.copy_from_host(input.supplier_keys.data(),
-                               input.supplier_keys.size());
-  prices.copy_from_host(input.price_cents.data(), input.price_cents.size());
-  discounts.copy_from_host(input.discount_hundredths.data(),
-                           input.discount_hundredths.size());
-  order_map.copy_from_host(input.plan.order_nation_by_key.data(),
-                           input.plan.order_nation_by_key.size());
-  supplier_map.copy_from_host(input.plan.supplier_nation_by_key.data(),
-                              input.plan.supplier_nation_by_key.size());
-  revenue.zero();
-  matched.zero();
-  overflow.zero();
-  check_cuda(cudaEventRecord(h2d_stop.get()), "cudaEventRecord H2D stop");
-  result.timing.h2d_ms = elapsed_ms(h2d_start, h2d_stop);
-
-  result.timing.kernel_ms = launch_kernel(
-      input, order_keys.data(), supplier_keys.data(), prices.data(),
-      discounts.data(), order_map.data(), supplier_map.data(), revenue.data(),
-      nation_count, matched.data(), overflow.data());
-
-  std::vector<unsigned long long> host_revenue(nation_count, 0);
-  unsigned long long host_matched = 0;
-  int32_t host_overflow = 0;
-  CudaEvent d2h_start;
-  CudaEvent d2h_stop;
-  check_cuda(cudaEventRecord(d2h_start.get()), "cudaEventRecord D2H start");
-  revenue.copy_to_host(host_revenue.data(), host_revenue.size());
-  matched.copy_to_host(&host_matched, 1);
-  overflow.copy_to_host(&host_overflow, 1);
-  check_cuda(cudaEventRecord(d2h_stop.get()), "cudaEventRecord D2H stop");
-  result.timing.d2h_ms = elapsed_ms(d2h_start, d2h_stop);
-  result.counters.h2d_bytes = input_bytes(input);
-  result.counters.d2h_bytes = output_bytes(nation_count);
-  return finish_result(input, std::move(host_revenue), host_matched,
-                       host_overflow, std::move(result), total_timer);
-}
-
-arrow::Result<Q5Result> execute_managed(const ArrowQ5Dataset& dataset,
-                                        const Q5Params& params) {
-  Stopwatch total_timer;
-  ARROW_ASSIGN_OR_RAISE(const ArrowGpuInput input,
-                        prepare_arrow_gpu_input(dataset, params));
-  const std::size_t nation_count =
-      input.plan.max_nation_key < 0
-          ? 0
-          : static_cast<std::size_t>(input.plan.max_nation_key) + 1;
-  ARROW_RETURN_NOT_OK(validate_cuda_dimensions(input, nation_count));
-  int device = 0;
-  check_cuda(cudaGetDevice(&device), "cudaGetDevice");
-
-  ManagedBuffer<int32_t> order_keys(input.order_keys.size());
-  ManagedBuffer<int32_t> supplier_keys(input.supplier_keys.size());
-  ManagedBuffer<int64_t> prices(input.price_cents.size());
-  ManagedBuffer<int32_t> discounts(input.discount_hundredths.size());
-  ManagedBuffer<int32_t> order_map(input.plan.order_nation_by_key.size());
-  ManagedBuffer<int32_t> supplier_map(input.plan.supplier_nation_by_key.size());
-  ManagedBuffer<unsigned long long> revenue(nation_count);
-  ManagedBuffer<unsigned long long> matched(1);
-  ManagedBuffer<int32_t> overflow(1);
-
-  Stopwatch managed_stage;
-  order_keys.copy_from_host(input.order_keys.data(), input.order_keys.size());
-  supplier_keys.copy_from_host(input.supplier_keys.data(),
-                               input.supplier_keys.size());
-  prices.copy_from_host(input.price_cents.data(), input.price_cents.size());
-  discounts.copy_from_host(input.discount_hundredths.data(),
-                           input.discount_hundredths.size());
-  order_map.copy_from_host(input.plan.order_nation_by_key.data(),
-                           input.plan.order_nation_by_key.size());
-  supplier_map.copy_from_host(input.plan.supplier_nation_by_key.data(),
-                              input.plan.supplier_nation_by_key.size());
-  revenue.zero();
-  matched.zero();
-  overflow.zero();
-
-  Q5Result result;
-  result.timing.build_ms = input.build_ms + managed_stage.elapsed_ms();
-  CudaEvent h2d_start;
-  CudaEvent h2d_stop;
-  check_cuda(cudaEventRecord(h2d_start.get()),
-             "cudaEventRecord managed prefetch start");
-  order_keys.prefetch(device);
-  supplier_keys.prefetch(device);
-  prices.prefetch(device);
-  discounts.prefetch(device);
-  order_map.prefetch(device);
-  supplier_map.prefetch(device);
-  revenue.prefetch(device);
-  matched.prefetch(device);
-  overflow.prefetch(device);
-  check_cuda(cudaEventRecord(h2d_stop.get()),
-             "cudaEventRecord managed prefetch stop");
-  result.timing.h2d_ms = elapsed_ms(h2d_start, h2d_stop);
-
-  result.timing.kernel_ms = launch_kernel(
-      input, order_keys.data(), supplier_keys.data(), prices.data(),
-      discounts.data(), order_map.data(), supplier_map.data(), revenue.data(),
-      nation_count, matched.data(), overflow.data());
-
-  CudaEvent d2h_start;
-  CudaEvent d2h_stop;
-  check_cuda(cudaEventRecord(d2h_start.get()),
-             "cudaEventRecord managed CPU prefetch start");
-  revenue.prefetch(cudaCpuDeviceId);
-  matched.prefetch(cudaCpuDeviceId);
-  overflow.prefetch(cudaCpuDeviceId);
-  check_cuda(cudaEventRecord(d2h_stop.get()),
-             "cudaEventRecord managed CPU prefetch stop");
-  result.timing.d2h_ms = elapsed_ms(d2h_start, d2h_stop);
-
-  std::vector<unsigned long long> host_revenue(nation_count, 0);
-  std::copy(revenue.data(), revenue.data() + nation_count,
-            host_revenue.begin());
-  result.counters.h2d_bytes = checked_counter_bytes(
-      checked_add(static_cast<std::size_t>(input_bytes(input)),
-                  static_cast<std::size_t>(output_bytes(nation_count))));
-  result.counters.d2h_bytes = output_bytes(nation_count);
-  return finish_result(input, std::move(host_revenue), matched.data()[0],
-                       overflow.data()[0], std::move(result), total_timer);
-}
-
-arrow::Result<Q5Result> execute_mapped(const ArrowQ5Dataset& dataset,
-                                       const Q5Params& params) {
-  Stopwatch total_timer;
-  ARROW_ASSIGN_OR_RAISE(const ArrowGpuInput input,
-                        prepare_arrow_gpu_input(dataset, params));
-  const std::size_t nation_count =
-      input.plan.max_nation_key < 0
-          ? 0
-          : static_cast<std::size_t>(input.plan.max_nation_key) + 1;
-  ARROW_RETURN_NOT_OK(validate_cuda_dimensions(input, nation_count));
-
-  MappedHostBuffer<int32_t> order_keys(input.order_keys.size());
-  MappedHostBuffer<int32_t> supplier_keys(input.supplier_keys.size());
-  MappedHostBuffer<int64_t> prices(input.price_cents.size());
-  MappedHostBuffer<int32_t> discounts(input.discount_hundredths.size());
-  MappedHostBuffer<int32_t> order_map(input.plan.order_nation_by_key.size());
-  MappedHostBuffer<int32_t> supplier_map(
-      input.plan.supplier_nation_by_key.size());
-  DeviceBuffer<unsigned long long> revenue(nation_count);
-  DeviceBuffer<unsigned long long> matched(1);
-  DeviceBuffer<int32_t> overflow(1);
-
-  Stopwatch mapped_stage;
-  order_keys.copy_from_host(input.order_keys.data(), input.order_keys.size());
-  supplier_keys.copy_from_host(input.supplier_keys.data(),
-                               input.supplier_keys.size());
-  prices.copy_from_host(input.price_cents.data(), input.price_cents.size());
-  discounts.copy_from_host(input.discount_hundredths.data(),
-                           input.discount_hundredths.size());
-  order_map.copy_from_host(input.plan.order_nation_by_key.data(),
-                           input.plan.order_nation_by_key.size());
-  supplier_map.copy_from_host(input.plan.supplier_nation_by_key.data(),
-                              input.plan.supplier_nation_by_key.size());
-  revenue.zero();
-  matched.zero();
-  overflow.zero();
-
-  Q5Result result;
-  result.timing.build_ms = input.build_ms + mapped_stage.elapsed_ms();
-  result.timing.kernel_ms = launch_kernel(
-      input, order_keys.device_data(), supplier_keys.device_data(),
-      prices.device_data(), discounts.device_data(), order_map.device_data(),
-      supplier_map.device_data(), revenue.data(), nation_count, matched.data(),
-      overflow.data());
-
-  std::vector<unsigned long long> host_revenue(nation_count, 0);
-  unsigned long long host_matched = 0;
-  int32_t host_overflow = 0;
-  CudaEvent d2h_start;
-  CudaEvent d2h_stop;
-  check_cuda(cudaEventRecord(d2h_start.get()),
-             "cudaEventRecord mapped D2H start");
-  revenue.copy_to_host(host_revenue.data(), host_revenue.size());
-  matched.copy_to_host(&host_matched, 1);
-  overflow.copy_to_host(&host_overflow, 1);
-  check_cuda(cudaEventRecord(d2h_stop.get()),
-             "cudaEventRecord mapped D2H stop");
-  result.timing.d2h_ms = elapsed_ms(d2h_start, d2h_stop);
-  result.counters.d2h_bytes = output_bytes(nation_count);
-  result.counters.mapped_remote_read_bytes =
-      logical_mapped_read_bytes(input, nation_count);
-  return finish_result(input, std::move(host_revenue), host_matched,
-                       host_overflow, std::move(result), total_timer);
-}
-
-arrow::Result<Q5Result> execute_mode(const ArrowQ5Dataset& dataset,
-                                     const Q5Params& params, MemoryMode mode) {
+template <typename Function>
+auto arrow_cuda_status_boundary(Function&& function) -> decltype(function()) {
   try {
-    if (mode == MemoryMode::kCopy) {
-      return execute_copy(dataset, params);
-    }
-    if (mode == MemoryMode::kManaged) {
-      return execute_managed(dataset, params);
-    }
-    return execute_mapped(dataset, params);
+    return function();
   } catch (const std::bad_alloc&) {
     return arrow::Status::CapacityError("Arrow CUDA Q5 allocation failed");
   } catch (const CudaCapacityError& error) {
+    return arrow::Status::CapacityError("Arrow CUDA Q5 failed: ", error.what());
+  } catch (const std::length_error& error) {
     return arrow::Status::CapacityError("Arrow CUDA Q5 failed: ", error.what());
   } catch (const std::overflow_error& error) {
     return arrow::Status::CapacityError("Arrow CUDA Q5 failed: ", error.what());
@@ -748,23 +531,493 @@ arrow::Result<Q5Result> execute_mode(const ArrowQ5Dataset& dataset,
   }
 }
 
-}  // namespace
+struct ArrowCudaQ5Session::Impl {
+  ArrowGpuInput input;
+  const std::size_t nation_count;
+  const ArrowCudaMemoryMode mode;
+  int device = 0;
+  Q5SessionSetup setup;
+  int64_t initial_h2d_bytes = 0;
+  bool outputs_clean = true;
+  bool managed_output_on_device = false;
+
+  std::unique_ptr<DeviceBuffer<int32_t>> copy_order_keys;
+  std::unique_ptr<DeviceBuffer<int32_t>> copy_supplier_keys;
+  std::unique_ptr<DeviceBuffer<int64_t>> copy_prices;
+  std::unique_ptr<DeviceBuffer<int32_t>> copy_discounts;
+  std::unique_ptr<DeviceBuffer<int32_t>> copy_order_map;
+  std::unique_ptr<DeviceBuffer<int32_t>> copy_supplier_map;
+
+  std::unique_ptr<ManagedBuffer<int32_t>> managed_order_keys;
+  std::unique_ptr<ManagedBuffer<int32_t>> managed_supplier_keys;
+  std::unique_ptr<ManagedBuffer<int64_t>> managed_prices;
+  std::unique_ptr<ManagedBuffer<int32_t>> managed_discounts;
+  std::unique_ptr<ManagedBuffer<int32_t>> managed_order_map;
+  std::unique_ptr<ManagedBuffer<int32_t>> managed_supplier_map;
+
+  std::unique_ptr<MappedHostBuffer<int32_t>> mapped_order_keys;
+  std::unique_ptr<MappedHostBuffer<int32_t>> mapped_supplier_keys;
+  std::unique_ptr<MappedHostBuffer<int64_t>> mapped_prices;
+  std::unique_ptr<MappedHostBuffer<int32_t>> mapped_discounts;
+  std::unique_ptr<MappedHostBuffer<int32_t>> mapped_order_map;
+  std::unique_ptr<MappedHostBuffer<int32_t>> mapped_supplier_map;
+
+  std::unique_ptr<DeviceBuffer<unsigned long long>> device_revenue;
+  std::unique_ptr<DeviceBuffer<unsigned long long>> device_matched;
+  std::unique_ptr<DeviceBuffer<int32_t>> device_overflow;
+  std::unique_ptr<ManagedBuffer<unsigned long long>> managed_revenue;
+  std::unique_ptr<ManagedBuffer<unsigned long long>> managed_matched;
+  std::unique_ptr<ManagedBuffer<int32_t>> managed_overflow;
+
+  std::vector<unsigned long long> host_revenue;
+  unsigned long long host_matched = 0;
+  int32_t host_overflow = 0;
+
+  Impl(ArrowGpuInput prepared, std::size_t nations,
+       ArrowCudaMemoryMode memory_mode)
+      : input(std::move(prepared)),
+        nation_count(nations),
+        mode(memory_mode),
+        host_revenue(nations, 0) {}
+
+  void allocate() {
+    if (mode == ArrowCudaMemoryMode::kCopy) {
+      allocate_copy();
+      return;
+    }
+    if (mode == ArrowCudaMemoryMode::kManaged) {
+      allocate_managed();
+      return;
+    }
+    allocate_mapped();
+  }
+
+  void initialize() {
+    if (mode == ArrowCudaMemoryMode::kCopy) {
+      initialize_copy();
+      return;
+    }
+    if (mode == ArrowCudaMemoryMode::kManaged) {
+      initialize_managed();
+      return;
+    }
+    initialize_mapped();
+  }
+
+  void reset_output_buffers() {
+    if (outputs_clean) {
+      return;
+    }
+    if (mode == ArrowCudaMemoryMode::kManaged) {
+      zero_managed_outputs();
+      managed_output_on_device = false;
+    } else {
+      zero_device_outputs();
+    }
+    outputs_clean = true;
+  }
+
+  double prefetch_managed_output_to_device_if_needed() {
+    if (mode != ArrowCudaMemoryMode::kManaged || managed_output_on_device) {
+      return 0.0;
+    }
+    CudaEvent start;
+    CudaEvent stop;
+    check_cuda(cudaEventRecord(start.get()),
+               "cudaEventRecord managed output prefetch start");
+    prefetch_managed_outputs(device);
+    check_cuda(cudaEventRecord(stop.get()),
+               "cudaEventRecord managed output prefetch stop");
+    managed_output_on_device = true;
+    return elapsed_ms(start, stop);
+  }
+
+  double launch_existing_kernel() {
+    outputs_clean = false;
+    return launch_kernel(
+        input, order_keys_data(), supplier_keys_data(), prices_data(),
+        discounts_data(), order_map_data(), supplier_map_data(), revenue_data(),
+        nation_count, matched_data(), overflow_data());
+  }
+
+  double collect_small_output() {
+    CudaEvent start;
+    CudaEvent stop;
+    check_cuda(cudaEventRecord(start.get()), "cudaEventRecord D2H start");
+    if (mode == ArrowCudaMemoryMode::kManaged) {
+      prefetch_managed_outputs(cudaCpuDeviceId);
+    } else {
+      device_revenue->copy_to_host(host_revenue.data(), host_revenue.size());
+      device_matched->copy_to_host(&host_matched, 1);
+      device_overflow->copy_to_host(&host_overflow, 1);
+    }
+    check_cuda(cudaEventRecord(stop.get()), "cudaEventRecord D2H stop");
+    const double d2h_ms = elapsed_ms(start, stop);
+    if (mode == ArrowCudaMemoryMode::kManaged) {
+      if (nation_count > 0) {
+        std::copy(managed_revenue->data(),
+                  managed_revenue->data() + nation_count, host_revenue.begin());
+      }
+      host_matched = managed_matched->data()[0];
+      host_overflow = managed_overflow->data()[0];
+      managed_output_on_device = false;
+    }
+    return d2h_ms;
+  }
+
+  arrow::Result<Q5Result> finish_result_for_request(
+      double h2d_ms, double kernel_ms, double d2h_ms,
+      const Stopwatch& total_timer) {
+    Q5Result result;
+    result.timing.h2d_ms = h2d_ms;
+    result.timing.kernel_ms = kernel_ms;
+    result.timing.d2h_ms = d2h_ms;
+    result.counters.d2h_bytes = output_bytes(nation_count);
+    if (mode == ArrowCudaMemoryMode::kMapped) {
+      result.counters.mapped_remote_read_bytes =
+          logical_mapped_read_bytes(input, nation_count);
+    }
+    return finish_result(input, host_revenue, host_matched, host_overflow,
+                         std::move(result), total_timer);
+  }
+
+  void fold_setup_into_cold_result(Q5Result* result) const {
+    result->timing.build_ms = setup.plan_build_ms + setup.host_staging_ms;
+    result->timing.h2d_ms += setup.initial_h2d_ms;
+    result->timing.scan_ms = result->timing.h2d_ms + result->timing.kernel_ms +
+                             result->timing.d2h_ms;
+    result->timing.total_ms += setup.total_ms;
+    result->counters.h2d_bytes += initial_h2d_bytes;
+  }
+
+ private:
+  void allocate_copy() {
+    copy_order_keys =
+        std::make_unique<DeviceBuffer<int32_t>>(input.order_keys.size());
+    copy_supplier_keys =
+        std::make_unique<DeviceBuffer<int32_t>>(input.supplier_keys.size());
+    copy_prices = std::make_unique<DeviceBuffer<int64_t>>(input.price_cents.size());
+    copy_discounts = std::make_unique<DeviceBuffer<int32_t>>(
+        input.discount_hundredths.size());
+    copy_order_map = std::make_unique<DeviceBuffer<int32_t>>(
+        input.plan.order_nation_by_key.size());
+    copy_supplier_map = std::make_unique<DeviceBuffer<int32_t>>(
+        input.plan.supplier_nation_by_key.size());
+    allocate_device_outputs();
+  }
+
+  void allocate_managed() {
+    check_cuda(cudaGetDevice(&device), "cudaGetDevice");
+    managed_order_keys =
+        std::make_unique<ManagedBuffer<int32_t>>(input.order_keys.size());
+    managed_supplier_keys =
+        std::make_unique<ManagedBuffer<int32_t>>(input.supplier_keys.size());
+    managed_prices =
+        std::make_unique<ManagedBuffer<int64_t>>(input.price_cents.size());
+    managed_discounts = std::make_unique<ManagedBuffer<int32_t>>(
+        input.discount_hundredths.size());
+    managed_order_map = std::make_unique<ManagedBuffer<int32_t>>(
+        input.plan.order_nation_by_key.size());
+    managed_supplier_map = std::make_unique<ManagedBuffer<int32_t>>(
+        input.plan.supplier_nation_by_key.size());
+    managed_revenue =
+        std::make_unique<ManagedBuffer<unsigned long long>>(nation_count);
+    managed_matched = std::make_unique<ManagedBuffer<unsigned long long>>(1);
+    managed_overflow = std::make_unique<ManagedBuffer<int32_t>>(1);
+  }
+
+  void allocate_mapped() {
+    mapped_order_keys =
+        std::make_unique<MappedHostBuffer<int32_t>>(input.order_keys.size());
+    mapped_supplier_keys = std::make_unique<MappedHostBuffer<int32_t>>(
+        input.supplier_keys.size());
+    mapped_prices =
+        std::make_unique<MappedHostBuffer<int64_t>>(input.price_cents.size());
+    mapped_discounts = std::make_unique<MappedHostBuffer<int32_t>>(
+        input.discount_hundredths.size());
+    mapped_order_map = std::make_unique<MappedHostBuffer<int32_t>>(
+        input.plan.order_nation_by_key.size());
+    mapped_supplier_map = std::make_unique<MappedHostBuffer<int32_t>>(
+        input.plan.supplier_nation_by_key.size());
+    allocate_device_outputs();
+  }
+
+  void allocate_device_outputs() {
+    device_revenue =
+        std::make_unique<DeviceBuffer<unsigned long long>>(nation_count);
+    device_matched = std::make_unique<DeviceBuffer<unsigned long long>>(1);
+    device_overflow = std::make_unique<DeviceBuffer<int32_t>>(1);
+  }
+
+  void initialize_copy() {
+    CudaEvent start;
+    CudaEvent stop;
+    check_cuda(cudaEventRecord(start.get()), "cudaEventRecord H2D start");
+    copy_order_keys->copy_from_host(input.order_keys.data(),
+                                    input.order_keys.size());
+    copy_supplier_keys->copy_from_host(input.supplier_keys.data(),
+                                       input.supplier_keys.size());
+    copy_prices->copy_from_host(input.price_cents.data(),
+                                input.price_cents.size());
+    copy_discounts->copy_from_host(input.discount_hundredths.data(),
+                                   input.discount_hundredths.size());
+    copy_order_map->copy_from_host(input.plan.order_nation_by_key.data(),
+                                   input.plan.order_nation_by_key.size());
+    copy_supplier_map->copy_from_host(input.plan.supplier_nation_by_key.data(),
+                                      input.plan.supplier_nation_by_key.size());
+    zero_device_outputs();
+    check_cuda(cudaEventRecord(stop.get()), "cudaEventRecord H2D stop");
+    setup.initial_h2d_ms = elapsed_ms(start, stop);
+    initial_h2d_bytes = input_bytes(input);
+  }
+
+  void initialize_managed() {
+    Stopwatch staging_timer;
+    managed_order_keys->copy_from_host(input.order_keys.data(),
+                                       input.order_keys.size());
+    managed_supplier_keys->copy_from_host(input.supplier_keys.data(),
+                                          input.supplier_keys.size());
+    managed_prices->copy_from_host(input.price_cents.data(),
+                                   input.price_cents.size());
+    managed_discounts->copy_from_host(input.discount_hundredths.data(),
+                                      input.discount_hundredths.size());
+    managed_order_map->copy_from_host(input.plan.order_nation_by_key.data(),
+                                      input.plan.order_nation_by_key.size());
+    managed_supplier_map->copy_from_host(input.plan.supplier_nation_by_key.data(),
+                                         input.plan.supplier_nation_by_key.size());
+    zero_managed_outputs();
+    setup.host_staging_ms += staging_timer.elapsed_ms();
+
+    CudaEvent start;
+    CudaEvent stop;
+    check_cuda(cudaEventRecord(start.get()),
+               "cudaEventRecord managed prefetch start");
+    prefetch_managed_inputs(device);
+    prefetch_managed_outputs(device);
+    check_cuda(cudaEventRecord(stop.get()),
+               "cudaEventRecord managed prefetch stop");
+    setup.initial_h2d_ms = elapsed_ms(start, stop);
+    initial_h2d_bytes = checked_counter_bytes(
+        checked_add(static_cast<std::size_t>(input_bytes(input)),
+                    static_cast<std::size_t>(output_bytes(nation_count))));
+    managed_output_on_device = true;
+  }
+
+  void initialize_mapped() {
+    Stopwatch staging_timer;
+    mapped_order_keys->copy_from_host(input.order_keys.data(),
+                                      input.order_keys.size());
+    mapped_supplier_keys->copy_from_host(input.supplier_keys.data(),
+                                         input.supplier_keys.size());
+    mapped_prices->copy_from_host(input.price_cents.data(),
+                                  input.price_cents.size());
+    mapped_discounts->copy_from_host(input.discount_hundredths.data(),
+                                     input.discount_hundredths.size());
+    mapped_order_map->copy_from_host(input.plan.order_nation_by_key.data(),
+                                     input.plan.order_nation_by_key.size());
+    mapped_supplier_map->copy_from_host(input.plan.supplier_nation_by_key.data(),
+                                        input.plan.supplier_nation_by_key.size());
+    zero_device_outputs();
+    setup.host_staging_ms += staging_timer.elapsed_ms();
+  }
+
+  const int32_t* order_keys_data() const {
+    if (mode == ArrowCudaMemoryMode::kCopy) {
+      return copy_order_keys->data();
+    }
+    if (mode == ArrowCudaMemoryMode::kManaged) {
+      return managed_order_keys->data();
+    }
+    return mapped_order_keys->device_data();
+  }
+
+  const int32_t* supplier_keys_data() const {
+    if (mode == ArrowCudaMemoryMode::kCopy) {
+      return copy_supplier_keys->data();
+    }
+    if (mode == ArrowCudaMemoryMode::kManaged) {
+      return managed_supplier_keys->data();
+    }
+    return mapped_supplier_keys->device_data();
+  }
+
+  const int64_t* prices_data() const {
+    if (mode == ArrowCudaMemoryMode::kCopy) {
+      return copy_prices->data();
+    }
+    if (mode == ArrowCudaMemoryMode::kManaged) {
+      return managed_prices->data();
+    }
+    return mapped_prices->device_data();
+  }
+
+  const int32_t* discounts_data() const {
+    if (mode == ArrowCudaMemoryMode::kCopy) {
+      return copy_discounts->data();
+    }
+    if (mode == ArrowCudaMemoryMode::kManaged) {
+      return managed_discounts->data();
+    }
+    return mapped_discounts->device_data();
+  }
+
+  const int32_t* order_map_data() const {
+    if (mode == ArrowCudaMemoryMode::kCopy) {
+      return copy_order_map->data();
+    }
+    if (mode == ArrowCudaMemoryMode::kManaged) {
+      return managed_order_map->data();
+    }
+    return mapped_order_map->device_data();
+  }
+
+  const int32_t* supplier_map_data() const {
+    if (mode == ArrowCudaMemoryMode::kCopy) {
+      return copy_supplier_map->data();
+    }
+    if (mode == ArrowCudaMemoryMode::kManaged) {
+      return managed_supplier_map->data();
+    }
+    return mapped_supplier_map->device_data();
+  }
+
+  unsigned long long* revenue_data() {
+    return mode == ArrowCudaMemoryMode::kManaged ? managed_revenue->data()
+                                                   : device_revenue->data();
+  }
+
+  unsigned long long* matched_data() {
+    return mode == ArrowCudaMemoryMode::kManaged ? managed_matched->data()
+                                                   : device_matched->data();
+  }
+
+  int32_t* overflow_data() {
+    return mode == ArrowCudaMemoryMode::kManaged ? managed_overflow->data()
+                                                   : device_overflow->data();
+  }
+
+  void zero_device_outputs() {
+    device_revenue->zero();
+    device_matched->zero();
+    device_overflow->zero();
+  }
+
+  void zero_managed_outputs() {
+    managed_revenue->zero();
+    managed_matched->zero();
+    managed_overflow->zero();
+  }
+
+  void prefetch_managed_inputs(int location) {
+    managed_order_keys->prefetch(location);
+    managed_supplier_keys->prefetch(location);
+    managed_prices->prefetch(location);
+    managed_discounts->prefetch(location);
+    managed_order_map->prefetch(location);
+    managed_supplier_map->prefetch(location);
+  }
+
+  void prefetch_managed_outputs(int location) {
+    managed_revenue->prefetch(location);
+    managed_matched->prefetch(location);
+    managed_overflow->prefetch(location);
+  }
+};
+
+ArrowCudaQ5Session::ArrowCudaQ5Session(std::unique_ptr<Impl> impl)
+    : impl_(std::move(impl)) {}
+
+ArrowCudaQ5Session::~ArrowCudaQ5Session() = default;
+
+arrow::Result<std::unique_ptr<ArrowCudaQ5Session>> ArrowCudaQ5Session::Make(
+    const ArrowQ5Dataset& dataset, const Q5Params& params,
+    ArrowCudaMemoryMode mode) {
+  return arrow_cuda_status_boundary(
+      [&]() -> arrow::Result<std::unique_ptr<ArrowCudaQ5Session>> {
+        Stopwatch setup_timer;
+        ARROW_ASSIGN_OR_RAISE(ArrowGpuInput input,
+                              prepare_arrow_gpu_input(dataset, params));
+        const std::size_t nation_count =
+            input.plan.max_nation_key < 0
+                ? 0
+                : static_cast<std::size_t>(input.plan.max_nation_key) + 1;
+        ARROW_RETURN_NOT_OK(validate_cuda_dimensions(input, nation_count));
+
+        Q5SessionSetup setup;
+        setup.plan_build_ms = input.plan.build_ms;
+        setup.host_staging_ms = input.build_ms - setup.plan_build_ms;
+        const int64_t gpu_input_bytes = input_bytes(input);
+        const int64_t output_size_bytes = output_bytes(nation_count);
+
+        Stopwatch allocation_timer;
+        auto impl = std::unique_ptr<Impl>(
+            new Impl(std::move(input), nation_count, mode));
+        impl->allocate();
+        setup.allocation_ms = allocation_timer.elapsed_ms();
+
+        impl->setup = setup;
+        impl->initialize();
+        impl->setup.resident_host_bytes = checked_counter_bytes(checked_add(
+            static_cast<std::size_t>(gpu_input_bytes),
+            static_cast<std::size_t>(output_size_bytes)));
+        if (mode == ArrowCudaMemoryMode::kMapped) {
+          impl->setup.resident_gpu_bytes = output_size_bytes;
+          impl->setup.resident_pinned_bytes = gpu_input_bytes;
+        } else {
+          impl->setup.resident_gpu_bytes = checked_counter_bytes(checked_add(
+              static_cast<std::size_t>(gpu_input_bytes),
+              static_cast<std::size_t>(output_size_bytes)));
+        }
+        impl->setup.total_ms = setup_timer.elapsed_ms();
+        return std::unique_ptr<ArrowCudaQ5Session>(
+            new ArrowCudaQ5Session(std::move(impl)));
+      });
+}
+
+arrow::Result<Q5Result> ArrowCudaQ5Session::Execute() {
+  return arrow_cuda_status_boundary([&]() -> arrow::Result<Q5Result> {
+    Stopwatch total_timer;
+    impl_->reset_output_buffers();
+    const double h2d_ms = impl_->prefetch_managed_output_to_device_if_needed();
+    const double kernel_ms = impl_->launch_existing_kernel();
+    const double d2h_ms = impl_->collect_small_output();
+    return impl_->finish_result_for_request(h2d_ms, kernel_ms, d2h_ms,
+                                             total_timer);
+  });
+}
+
+const Q5SessionSetup& ArrowCudaQ5Session::setup() const { return impl_->setup; }
 
 arrow::Result<Q5Result> execute_q5_arrow_gpu_copy(const ArrowQ5Dataset& dataset,
                                                   const Q5Params& params) {
-  return execute_mode(dataset, params, MemoryMode::kCopy);
+  ARROW_ASSIGN_OR_RAISE(auto session,
+                        ArrowCudaQ5Session::Make(dataset, params,
+                                                 ArrowCudaMemoryMode::kCopy));
+  ARROW_ASSIGN_OR_RAISE(Q5Result result, session->Execute());
+  session->impl_->fold_setup_into_cold_result(&result);
+  return result;
 }
 
 arrow::Result<Q5Result>
 execute_q5_arrow_gpu_managed(const ArrowQ5Dataset& dataset,
                              const Q5Params& params) {
-  return execute_mode(dataset, params, MemoryMode::kManaged);
+  ARROW_ASSIGN_OR_RAISE(
+      auto session,
+      ArrowCudaQ5Session::Make(dataset, params, ArrowCudaMemoryMode::kManaged));
+  ARROW_ASSIGN_OR_RAISE(Q5Result result, session->Execute());
+  session->impl_->fold_setup_into_cold_result(&result);
+  return result;
 }
 
 arrow::Result<Q5Result>
 execute_q5_arrow_gpu_mapped(const ArrowQ5Dataset& dataset,
                             const Q5Params& params) {
-  return execute_mode(dataset, params, MemoryMode::kMapped);
+  ARROW_ASSIGN_OR_RAISE(
+      auto session,
+      ArrowCudaQ5Session::Make(dataset, params, ArrowCudaMemoryMode::kMapped));
+  ARROW_ASSIGN_OR_RAISE(Q5Result result, session->Execute());
+  session->impl_->fold_setup_into_cold_result(&result);
+  return result;
 }
 
 }  // namespace memq5
