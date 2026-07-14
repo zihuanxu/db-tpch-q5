@@ -68,6 +68,13 @@ if(MEMQ5_ENABLE_ARROW)
   )
   add_test(NAME test_batch_partition COMMAND test_batch_partition)
 
+  add_executable(test_hybrid_cost_model test_hybrid_cost_model.cpp)
+  target_link_libraries(test_hybrid_cost_model PRIVATE memq5_arrow)
+  target_compile_options(test_hybrid_cost_model PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-UNDEBUG>
+  )
+  add_test(NAME test_hybrid_cost_model COMMAND test_hybrid_cost_model)
+
   add_test(
     NAME test_q5_arrow_cli_specialized
     COMMAND $<TARGET_FILE:memq5_arrow_query>

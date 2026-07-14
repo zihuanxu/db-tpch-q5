@@ -32,6 +32,7 @@ if(MEMQ5_ENABLE_ARROW)
   find_package(nlohmann_json CONFIG REQUIRED)
 
   add_library(memq5_arrow
+    src/hybrid/hybrid_cost_model.cpp
     src/hybrid/batch_partition.cpp
     src/cpu/q5_acero.cpp
     src/cpu/q5_arrow_cpu.cpp
