@@ -363,6 +363,21 @@ Audited SF10 evidence recorded on 2026-07-14:
   Setup records now separate dataset load, plan/build/allocation/initial H2D,
   and resident host/GPU/pinned bytes. These two-sample values are diagnostic,
   not the formal median results used for paper claims.
+- The V7 resident runner then completed the checked-in SF10 smoke matrix with
+  6 setups, 6 warmups, 12 measured requests, and zero process failures. Every
+  request matched `b1351a421ba8dcfd`. Its 1+2 protocol remains diagnostic and
+  is not reused as the later 3+10 formal experiment.
+- The strict SF10 correctness gate passed all seven fixed implementations:
+  specialized CPU, Arrow Acero, copy, managed, mapped, fixed hybrid, and cuDF.
+  Acero is explicitly recorded as a cold execution because it has no resident
+  session interface; the other six records come from the resident smoke. The
+  gate recomputed each exact row hash and observed only
+  `b1351a421ba8dcfd`.
+- Current profiler and resident Python regressions passed independently: 80
+  profiler/parser tests and 55 protocol/schema/runner/correctness-gate tests.
+  The profiler bundle now rejects path escapes, ambiguous profile identities,
+  unverified dataset manifests, and unsupported metric claims; raw-report to
+  exported-stat linkage remains documented as a non-cryptographic residual.
 
 - [x] Add a manifest-validated SF10 preparation orchestrator that rejects
   incomplete, unmanifested, wrong-scale, and SF1-reused data before reuse.
