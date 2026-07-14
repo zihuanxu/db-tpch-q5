@@ -30,7 +30,7 @@
     {"config_id": "hybrid-fixed-r0625-t16", "engine": "hybrid-arrow", "runner": "cpp", "threads": 16, "ratio_mode": "fixed", "cpu_ratio": 0.625, "correctness_backend": "hybrid-fixed", "mode_options": {"partition": "fixed", "selection": "fixed", "sweep": "diagnostic"}},
     {"config_id": "hybrid-fixed-r0750-t16", "engine": "hybrid-arrow", "runner": "cpp", "threads": 16, "ratio_mode": "fixed", "cpu_ratio": 0.75, "correctness_backend": "hybrid-fixed", "mode_options": {"partition": "fixed", "selection": "fixed", "sweep": "core"}},
     {"config_id": "hybrid-fixed-r0875-t16", "engine": "hybrid-arrow", "runner": "cpp", "threads": 16, "ratio_mode": "fixed", "cpu_ratio": 0.875, "correctness_backend": "hybrid-fixed", "mode_options": {"partition": "fixed", "selection": "fixed", "sweep": "diagnostic"}},
-    {"config_id": "hybrid-auto-t16", "engine": "hybrid-arrow", "runner": "cpp", "threads": 16, "ratio_mode": "auto", "correctness_backend": "hybrid-auto", "mode_options": {"selection": "auto"}, "enabled": false, "disabled_reason": "hybrid-auto session CLI is not implemented yet"}
+    {"config_id": "hybrid-auto-t16", "engine": "hybrid-arrow", "runner": "cpp", "threads": 16, "ratio_mode": "auto", "correctness_backend": "hybrid-auto", "mode_options": {"selection": "auto"}}
   ],
   "protocol": {"warmup": 3, "repeat": 10, "timeout_seconds": 1800}
 }

@@ -50,6 +50,25 @@ def valid_setup(**overrides: object) -> dict[str, object]:
         "resident_host_bytes": 1024,
         "resident_gpu_bytes": 2048,
         "resident_pinned_bytes": 512,
+        "measurement_status_json": json.dumps(
+            {
+                name: "measured"
+                for name in (
+                    "dataset_load_ms",
+                    "session_setup_ms",
+                    "plan_build_ms",
+                    "host_staging_ms",
+                    "allocation_ms",
+                    "initial_h2d_ms",
+                    "tune_ms",
+                    "resident_host_bytes",
+                    "resident_gpu_bytes",
+                    "resident_pinned_bytes",
+                )
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ),
         "selected_cpu_ratio": 0.0,
         "predicted_cpu_ratio": None,
         "hybrid_provenance_status": "unavailable",
@@ -107,7 +126,7 @@ def valid_request(**overrides: object) -> dict[str, object]:
         "result_hash": RESULT_HASH,
         "rows_json": json.dumps(ROWS, separators=(",", ":"), sort_keys=True),
         "oracle_status": "passed",
-        "load_ms": 0.0,
+        "load_ms": None,
         "plan_build_ms": 0.0,
         "host_prepare_ms": 0.0,
         "h2d_ms": 0.0,
@@ -143,6 +162,14 @@ def valid_request(**overrides: object) -> dict[str, object]:
                     "h2d_bytes",
                     "d2h_bytes",
                     "mapped_remote_read_bytes",
+                    "query_total_ms",
+                    "throughput_rows_per_second",
+                    "dataset_load_ms",
+                    "session_setup_ms",
+                    "tune_ms",
+                    "resident_host_bytes",
+                    "resident_gpu_bytes",
+                    "resident_pinned_bytes",
                 )
             },
             separators=(",", ":"),
@@ -166,6 +193,11 @@ def valid_request(**overrides: object) -> dict[str, object]:
         "predicted_cpu_ratio": None,
         "request_index": 1,
     }
+    statuses = json.loads(record["measurement_status_json"])
+    statuses["load_ms"] = "unavailable"
+    record["measurement_status_json"] = json.dumps(
+        statuses, separators=(",", ":"), sort_keys=True
+    )
     record.update(overrides)
     return record
 
@@ -334,21 +366,20 @@ def test_request_csv_round_trip_requires_exact_header(tmp_path: Path) -> None:
 def test_unavailable_measurements_round_trip_as_null_with_explicit_status() -> None:
     from scripts.v7_benchmark_schema import validate_request, validate_setup
 
-    unavailable = {
-        name: "unavailable"
-        for name in (
-            "plan_build_ms",
-            "host_prepare_ms",
-            "h2d_ms",
-            "cpu_scan_ms",
-            "gpu_kernel_ms",
-            "d2h_ms",
-            "overlap_wall_ms",
-            "h2d_bytes",
-            "d2h_bytes",
-            "mapped_remote_read_bytes",
-        )
-    }
+    unavailable_fields = (
+        "plan_build_ms",
+        "host_prepare_ms",
+        "h2d_ms",
+        "cpu_scan_ms",
+        "gpu_kernel_ms",
+        "d2h_ms",
+        "overlap_wall_ms",
+        "h2d_bytes",
+        "d2h_bytes",
+        "mapped_remote_read_bytes",
+    )
+    statuses = json.loads(valid_request()["measurement_status_json"])
+    statuses.update({name: "unavailable" for name in unavailable_fields})
     request = validate_request(
         valid_request(
             engine="cudf",
@@ -366,10 +397,10 @@ def test_unavailable_measurements_round_trip_as_null_with_explicit_status() -> N
             mapped_remote_read_bytes=None,
             gpu_peak_memory_bytes=None,
             gpu_peak_memory_status="unavailable",
-            gpu_peak_memory_source="",
-            measurement_status_json=json.dumps(
-                unavailable, separators=(",", ":"), sort_keys=True
-            ),
+                gpu_peak_memory_source="",
+                measurement_status_json=json.dumps(
+                    statuses, separators=(",", ":"), sort_keys=True
+                ),
         )
     )
     setup = validate_setup(
@@ -401,5 +432,93 @@ def test_measurement_status_rejects_zero_claimed_for_unavailable_metric() -> Non
                 measurement_status_json=json.dumps(
                     statuses, separators=(",", ":"), sort_keys=True
                 ),
+            )
+        )
+
+
+def test_failed_setup_requires_null_metrics_and_unavailable_statuses() -> None:
+    from scripts.v7_benchmark_schema import validate_setup
+
+    measurement_fields = {
+        "dataset_load_ms",
+        "session_setup_ms",
+        "plan_build_ms",
+        "host_staging_ms",
+        "allocation_ms",
+        "initial_h2d_ms",
+        "tune_ms",
+        "resident_host_bytes",
+        "resident_gpu_bytes",
+        "resident_pinned_bytes",
+    }
+    unavailable = {name: "unavailable" for name in measurement_fields}
+    raw = valid_setup(
+        status="error",
+        error_class="ERROR_PROCESS_EXIT",
+        return_code=3,
+        **{name: None for name in measurement_fields},
+    )
+    raw["measurement_status_json"] = json.dumps(
+        unavailable, separators=(",", ":"), sort_keys=True
+    )
+
+    setup = validate_setup(raw)
+
+    assert setup.dataset_load_ms is None
+    assert setup.resident_host_bytes is None
+    assert setup.measurement_statuses == unavailable
+
+
+def test_failed_request_requires_null_timings_with_unavailable_status() -> None:
+    from scripts.v7_benchmark_schema import validate_request
+
+    request_measurements = {
+        "load_ms",
+        "plan_build_ms",
+        "host_prepare_ms",
+        "h2d_ms",
+        "cpu_scan_ms",
+        "gpu_kernel_ms",
+        "d2h_ms",
+        "overlap_wall_ms",
+        "h2d_bytes",
+        "d2h_bytes",
+        "mapped_remote_read_bytes",
+        "query_total_ms",
+        "throughput_rows_per_second",
+    }
+    statuses = json.loads(valid_request()["measurement_status_json"])
+    statuses.update({name: "unavailable" for name in request_measurements})
+    failed = validate_request(
+        valid_request(
+            status="error",
+            error_class="ERROR_REQUEST_FAILED",
+            result_rows=0,
+            result_hash="",
+            rows_json="[]",
+            oracle_status="not_run",
+            **{name: None for name in request_measurements},
+            measurement_status_json=json.dumps(
+                statuses, separators=(",", ":"), sort_keys=True
+            ),
+        )
+    )
+
+    assert failed.query_total_ms is None
+    assert failed.measurement_statuses["query_total_ms"] == "unavailable"
+
+
+def test_failed_request_rejects_measured_request_timing() -> None:
+    from scripts.v7_benchmark_schema import validate_request
+
+    with pytest.raises(ValueError, match="failed request.*measurements"):
+        validate_request(
+            valid_request(
+                status="error",
+                error_class="ERROR_REQUEST_FAILED",
+                result_rows=0,
+                result_hash="",
+                rows_json="[]",
+                oracle_status="not_run",
             )
         )

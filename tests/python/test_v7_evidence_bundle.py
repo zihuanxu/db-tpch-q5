@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from scripts.run_v7_benchmarks import _payload_sha256
+from scripts.summarize_v7_records import summary_fieldnames
 from scripts.v7_benchmark_schema import (
     REQUEST_FIELDS,
     SETUP_FIELDS,
@@ -139,7 +140,9 @@ def _make_bundle(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     _write_csv(root / "warmups.csv", REQUEST_FIELDS, warmups)
     _write_csv(root / "raw.csv", REQUEST_FIELDS, measured)
     (root / "commands.txt").write_text(
-        "CUDA_VISIBLE_DEVICES=0 memq5_arrow_session --engine gpu-copy\n",
+        "CUDA_VISIBLE_DEVICES=0 /opt/memq5_arrow_session --engine gpu-copy "
+        "--threads 1 --dataset /data/test-arrow --region ASIA --date 1994-01-01 "
+        "--warmup 3 --repeat 10\n",
         encoding="utf-8",
     )
     cli_sha = "b" * 64
@@ -220,6 +223,27 @@ def test_finalize_and_audit_complete_v7_bundle(tmp_path: Path) -> None:
     assert manifest["identity"]["git_commit"] == "a" * 40
     assert manifest["identity"]["session_cli_sha256"] == "b" * 64
     assert manifest["identity"]["gpu_uuid"] == "GPU-abc"
+    assert manifest["matrix"]["payload"] == json.loads(
+        (root / "matrix.yml").read_text(encoding="utf-8")
+    )
+    assert manifest["dataset"]["path"] == "data/test-arrow"
+    assert manifest["dataset"]["manifest_sha256"] == manifest["dataset"]["sha256"]
+    assert manifest["oracle"]["path"].endswith("source/oracle.json")
+    assert manifest["correctness"]["counts"] == {
+        "configurations": 1,
+        "correctness_backends": 1,
+        "setups": 1,
+        "successful_setups": 1,
+        "warmups": 3,
+        "successful_warmups": 3,
+        "measured": 10,
+        "successful_measured": 10,
+    }
+    assert manifest["summary"] == {
+        "source_files": ["summary.csv", "summary.md"],
+        "fields": summary_fieldnames(),
+        "row_count": 1,
+    }
 
 
 def test_finalize_rejects_incomplete_request_coverage(tmp_path: Path) -> None:
@@ -321,3 +345,85 @@ def test_audit_rejects_unmanifested_extra_artifact(tmp_path: Path) -> None:
     (root / "injected.txt").write_text("extra\n", encoding="utf-8")
 
     assert audit_bundle(root)["ok"] is False
+
+
+@pytest.mark.parametrize(
+    ("path", "replacement"),
+    [
+        (("manifest_version",), 99),
+        (("matrix", "payload_sha256"), "0" * 64),
+        (("matrix", "configuration_count"), 99),
+        (("matrix", "configurations"), []),
+        (("dataset", "scale_factor"), "10"),
+        (("oracle", "path"), "wrong/oracle.json"),
+        (("correctness", "expected_hash"), "0" * 16),
+    ],
+)
+def test_audit_rejects_resigned_manifest_semantic_tampering(
+    tmp_path: Path, path: tuple[str, ...], replacement: object
+) -> None:
+    from scripts.v7_evidence_bundle import audit_bundle
+
+    root = _finalize(tmp_path)
+    manifest_path = root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    target = manifest
+    for name in path[:-1]:
+        target = target[name]
+    target[path[-1]] = replacement
+    _write_json(manifest_path, manifest)
+    (root / "manifest.sha256").write_text(
+        f"{_sha256(manifest_path)}  manifest.json\n", encoding="ascii"
+    )
+
+    assert audit_bundle(root)["ok"] is False
+
+
+def test_audit_rejects_resigned_unrelated_command(tmp_path: Path) -> None:
+    from scripts.v7_evidence_bundle import audit_bundle
+
+    root = _finalize(tmp_path)
+    commands = root / "commands.txt"
+    commands.write_text("CUDA_VISIBLE_DEVICES=0 echo unrelated\n", encoding="utf-8")
+    manifest_path = root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["artifacts"]["commands.txt"] = _sha256(commands)
+    _write_json(manifest_path, manifest)
+    (root / "manifest.sha256").write_text(
+        f"{_sha256(manifest_path)}  manifest.json\n", encoding="ascii"
+    )
+
+    report = audit_bundle(root)
+    assert report["ok"] is False
+    assert any("commands" in error for error in report["errors"])
+
+
+def test_finalize_rejects_oracle_hash_not_derived_from_exact_rows(
+    tmp_path: Path,
+) -> None:
+    from scripts.v7_evidence_bundle import finalize_bundle
+
+    root, matrix_path, dataset_manifest, oracle_path, correctness = _make_bundle(
+        tmp_path
+    )
+    oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+    oracle["rows"][0]["revenue_1e4"] += 1
+    _write_json(oracle_path, oracle)
+    matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
+    matrix["oracle"]["sha256"] = _sha256(oracle_path)
+    _write_json(matrix_path, matrix)
+    environment_path = root / "environment.json"
+    environment = json.loads(environment_path.read_text(encoding="utf-8"))
+    environment["v7_runner"]["matrix_sha256"] = _sha256(matrix_path)
+    environment["v7_runner"]["matrix_payload"] = matrix
+    environment["v7_runner"]["matrix_payload_sha256"] = _payload_sha256(matrix)
+    _write_json(environment_path, environment)
+
+    with pytest.raises(ValueError, match="oracle.*exact rows"):
+        finalize_bundle(
+            root,
+            matrix=matrix_path,
+            dataset_manifest=dataset_manifest,
+            oracle=oracle_path,
+            correctness=correctness,
+        )

@@ -161,7 +161,9 @@ for index in range(3):
     path.chmod(0o755)
 
 
-def _write_partial_failing_session(path: Path, launches: Path) -> None:
+def _write_partial_failing_session(
+    path: Path, launches: Path, *, return_code: int = 3
+) -> None:
     setup = {
         "record_type": "session_setup",
         "session_id": SESSION_ID,
@@ -241,7 +243,7 @@ setup['dataset'] = args[args.index('--dataset') + 1]
 print(json.dumps(setup, sort_keys=True))
 print(json.dumps({success!r}, sort_keys=True))
 print(json.dumps({failed!r}, sort_keys=True))
-raise SystemExit(3)
+raise SystemExit({return_code})
 """
     path.write_text(source, encoding="utf-8")
     path.chmod(0o755)
@@ -518,7 +520,11 @@ def test_runner_monitors_one_process_and_writes_complete_bundle(tmp_path: Path) 
     assert measured[0].stdout_log == "logs/cpu-specialized.stdout.jsonl"
     assert (output / measured[0].stdout_log).is_file()
     assert (output / measured[0].stderr_log).is_file()
-    assert (output / "commands.txt").read_text(encoding="utf-8").count("\n") == 1
+    assert (output / "commands.txt").read_text(encoding="utf-8") == (
+        f"CUDA_VISIBLE_DEVICES=0 {executable} --engine cpu-specialized --threads 1 "
+        f"--dataset {tmp_path / 'data/arrow'} --region ASIA --date 1994-01-01 "
+        "--warmup 1 --repeat 2\n"
+    )
     environment = json.loads((output / "environment.json").read_text(encoding="utf-8"))
     assert environment["v7_runner"]["matrix_payload"] == json.loads(
         matrix.read_text(encoding="utf-8")
@@ -641,6 +647,11 @@ def test_runner_retains_launch_failure_without_fabricating_request_slots(
     measured = read_requests(output / "raw.csv")
     assert setups[0].status == "error"
     assert setups[0].return_code == 3
+    assert setups[0].measurement_statuses == {
+        name: "unavailable" for name in setups[0].measurement_statuses
+    }
+    assert setups[0].dataset_load_ms is None
+    assert setups[0].resident_gpu_bytes is None
     assert warmups == []
     assert measured == []
     assert "session launch failed" in (output / setups[0].stderr_log).read_text(
@@ -675,6 +686,35 @@ def test_runner_preserves_partial_nonzero_session_without_fabricating_missing_ro
     assert [(row.request_index, row.status) for row in warmups] == [(0, "ok")]
     assert [(row.request_index, row.status) for row in measured] == [(1, "error")]
     assert warmups[0].overlap_wall_ms == 0.5
+    assert measured[0].query_total_ms is None
+    assert measured[0].measurement_statuses["query_total_ms"] == "unavailable"
+
+
+def test_runner_preserves_truncated_session_that_exits_zero(tmp_path: Path) -> None:
+    from scripts.run_v7_benchmarks import run_matrix
+
+    matrix = _write_matrix(tmp_path)
+    executable = tmp_path / "partial-success-exit-session"
+    _write_partial_failing_session(
+        executable, tmp_path / "launches.txt", return_code=0
+    )
+    output = tmp_path / "bundle"
+
+    result = run_matrix(
+        matrix_path=matrix,
+        project_root=tmp_path,
+        session_cli=executable,
+        output_dir=output,
+        cudf_env="memq5-cudf",
+    )
+
+    setups = read_setups(output / "setups.csv")
+    warmups = read_requests(output / "warmups.csv")
+    measured = read_requests(output / "raw.csv")
+    assert result.failures == 1
+    assert setups[0].error_class == "ERROR_NOT_EXECUTED"
+    assert [(row.request_index, row.status) for row in warmups] == [(0, "ok")]
+    assert [(row.request_index, row.status) for row in measured] == [(1, "error")]
 
 
 def test_matrix_rejects_correctness_backend_relabeling(tmp_path: Path) -> None:
@@ -707,6 +747,34 @@ def test_runner_validates_independent_oracle_before_launch(tmp_path: Path) -> No
     _write_fake_session(executable, launches)
 
     with pytest.raises(ValueError, match="oracle SHA256"):
+        run_matrix(
+            matrix_path=matrix_path,
+            project_root=tmp_path,
+            session_cli=executable,
+            output_dir=tmp_path / "bundle",
+            cudf_env="memq5-cudf",
+        )
+    assert not launches.exists()
+
+
+def test_runner_recomputes_independent_oracle_hash_before_launch(
+    tmp_path: Path,
+) -> None:
+    from scripts.run_v7_benchmarks import run_matrix
+
+    matrix_path = _write_matrix(tmp_path)
+    changed_rows = [dict(row) for row in ROWS]
+    changed_rows[0]["revenue_1e4"] += 1
+    oracle = tmp_path / "oracle.json"
+    _write_json(oracle, {"result_hash": RESULT_HASH, "rows": changed_rows})
+    matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
+    matrix["oracle"] = {"path": "oracle.json", "sha256": _sha256(oracle)}
+    _write_json(matrix_path, matrix)
+    launches = tmp_path / "launches.txt"
+    executable = tmp_path / "fake-session"
+    _write_fake_session(executable, launches)
+
+    with pytest.raises(ValueError, match="oracle.*exact rows"):
         run_matrix(
             matrix_path=matrix_path,
             project_root=tmp_path,

@@ -20,9 +20,12 @@ try:
     from scripts.capture_environment import capture
     from scripts.process_monitor import MonitoredProcessResult, run_monitored
     from scripts.resident_protocol import ResidentSession, parse_resident_jsonl
+    from scripts.verify_q5_oracle import result_hash_hex
     from scripts.v7_benchmark_schema import (
         REQUEST_FIELDS,
+        REQUEST_MEASUREMENT_FIELDS,
         SETUP_FIELDS,
+        SETUP_MEASUREMENT_FIELDS,
         V7BenchmarkRecord,
         V7SetupRecord,
         read_requests,
@@ -34,9 +37,12 @@ except ModuleNotFoundError:
     from capture_environment import capture
     from process_monitor import MonitoredProcessResult, run_monitored
     from resident_protocol import ResidentSession, parse_resident_jsonl
+    from verify_q5_oracle import result_hash_hex
     from v7_benchmark_schema import (
         REQUEST_FIELDS,
+        REQUEST_MEASUREMENT_FIELDS,
         SETUP_FIELDS,
+        SETUP_MEASUREMENT_FIELDS,
         V7BenchmarkRecord,
         V7SetupRecord,
         read_requests,
@@ -98,6 +104,35 @@ def _sha256(path: Path) -> str:
 def _payload_sha256(payload: object) -> str:
     canonical = json.dumps(payload, separators=(",", ":"), sort_keys=True)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def validate_oracle_payload(
+    payload: object, *, expected_hash: str
+) -> list[dict[str, object]]:
+    if not isinstance(payload, dict) or not isinstance(payload.get("rows"), list):
+        raise ValueError("independent oracle requires ordered exact rows")
+    rows = payload["rows"]
+    exact: list[tuple[str, int]] = []
+    seen: set[str] = set()
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict) or set(row) != {"nation", "revenue_1e4"}:
+            raise ValueError(
+                f"independent oracle exact rows[{index}] must contain nation and revenue_1e4"
+            )
+        nation = row["nation"]
+        revenue = row["revenue_1e4"]
+        if not isinstance(nation, str) or not nation or nation in seen:
+            raise ValueError("independent oracle exact rows require unique nation names")
+        if isinstance(revenue, bool) or not isinstance(revenue, int):
+            raise ValueError("independent oracle revenue_1e4 must be an integer")
+        seen.add(nation)
+        exact.append((nation, revenue))
+    derived_hash = result_hash_hex(exact)
+    if payload.get("result_hash") != derived_hash:
+        raise ValueError("independent oracle result_hash does not match exact rows")
+    if derived_hash != expected_hash:
+        raise ValueError("independent oracle exact rows do not match matrix expected_hash")
+    return rows
 
 
 def _is_lower_hex(value: object, length: int) -> bool:
@@ -430,6 +465,10 @@ def build_command(
     raise ValueError(f"unsupported resident runner: {config.runner}")
 
 
+def canonical_command(command: Sequence[str], *, gpu_index: int) -> str:
+    return f"CUDA_VISIBLE_DEVICES={shlex.quote(str(gpu_index))} {shlex.join(command)}"
+
+
 def _validate_dataset(dataset: Path, matrix: dict[str, Any]) -> int:
     manifest_path = dataset / "manifest.json"
     if not manifest_path.is_file():
@@ -466,11 +505,9 @@ def _validate_oracle(project_root: Path, matrix: dict[str, Any]) -> Path | None:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"independent oracle is invalid: {exc}") from exc
-    if (
-        not isinstance(payload, dict)
-        or payload.get("result_hash") != matrix["dataset"]["expected_hash"]
-    ):
-        raise ValueError("independent oracle result_hash does not match matrix")
+    validate_oracle_payload(
+        payload, expected_hash=matrix["dataset"]["expected_hash"]
+    )
     return path
 
 
@@ -604,6 +641,21 @@ def _hybrid_provenance_values(
     }
 
 
+def _measurement_values(
+    values: dict[str, object | None], fields: set[str]
+) -> dict[str, object]:
+    statuses = {
+        name: "measured" if values[name] is not None else "unavailable"
+        for name in fields
+    }
+    return {
+        **values,
+        "measurement_status_json": json.dumps(
+            statuses, separators=(",", ":"), sort_keys=True
+        ),
+    }
+
+
 def _setup_from_session(
     matrix: dict[str, Any],
     config: Configuration,
@@ -626,24 +678,22 @@ def _setup_from_session(
         status, error_class = "ok", ""
     elif session.missing_request_indexes:
         status, error_class = "error", "ERROR_NOT_EXECUTED"
+    elif any(
+        request["status"] != "ok" for request in (*session.warmups, *session.measured)
+    ):
+        status, error_class = "error", "ERROR_REQUEST_FAILED"
     else:
         status, error_class = _failure_metadata(monitored, None)
+    setup_measurements = {
+        name: setup.get(name) for name in SETUP_MEASUREMENT_FIELDS
+    }
     values.update(
         session_id=session.session_id,
         lifecycle="resident",
         status=status,
         error_class=error_class,
         dataset_path=matrix["dataset"]["path"],
-        dataset_load_ms=setup["dataset_load_ms"],
-        session_setup_ms=setup["session_setup_ms"],
-        plan_build_ms=setup.get("plan_build_ms", 0.0),
-        host_staging_ms=setup.get("host_staging_ms", 0.0),
-        allocation_ms=setup.get("allocation_ms", 0.0),
-        initial_h2d_ms=setup.get("initial_h2d_ms", 0.0),
-        tune_ms=setup["tune_ms"],
-        resident_host_bytes=setup["resident_host_bytes"],
-        resident_gpu_bytes=setup["resident_gpu_bytes"],
-        resident_pinned_bytes=setup["resident_pinned_bytes"],
+        **_measurement_values(setup_measurements, SETUP_MEASUREMENT_FIELDS),
         selected_cpu_ratio=setup["selected_cpu_ratio"],
         **_hybrid_provenance_values(config, setup),
     )
@@ -666,6 +716,7 @@ def _request_from_session(
     request_index = int(request["request_index"])
     is_warmup = bool(request["is_warmup"])
     warmup_count = int(matrix["protocol"]["warmup"])
+    request_ok = request["status"] == "ok"
     query_ms = float(request["query_total_ms"])
     input_rows = int(request["input_lineitem_rows"])
     if config.runner == "cudf":
@@ -704,9 +755,23 @@ def _request_from_session(
             "d2h_bytes": request["d2h_bytes"],
             "mapped_remote_read_bytes": request["mapped_remote_read_bytes"],
         }
+    if not request_ok:
+        measurements = {name: None for name in measurements}
+    throughput = input_rows * 1000.0 / query_ms if request_ok and query_ms else None
+    measurements.update(
+        load_ms=None,
+        query_total_ms=query_ms if request_ok else None,
+        throughput_rows_per_second=throughput,
+        dataset_load_ms=setup.dataset_load_ms,
+        session_setup_ms=setup.session_setup_ms,
+        tune_ms=setup.tune_ms,
+        resident_host_bytes=setup.resident_host_bytes,
+        resident_gpu_bytes=setup.resident_gpu_bytes,
+        resident_pinned_bytes=setup.resident_pinned_bytes,
+    )
     measurement_status = {
-        name: "measured" if value is not None else "unavailable"
-        for name, value in measurements.items()
+        name: "measured" if measurements[name] is not None else "unavailable"
+        for name in REQUEST_MEASUREMENT_FIELDS
     }
     values: dict[str, object] = {
         **shared,
@@ -728,7 +793,7 @@ def _request_from_session(
         "oracle_status": (
             "expected_hash_match" if request["status"] == "ok" else "not_run"
         ),
-        "load_ms": 0.0,
+        "load_ms": measurements["load_ms"],
         "plan_build_ms": measurements["plan_build_ms"],
         "host_prepare_ms": measurements["host_prepare_ms"],
         "h2d_ms": measurements["h2d_ms"],
@@ -736,7 +801,7 @@ def _request_from_session(
         "gpu_kernel_ms": measurements["gpu_kernel_ms"],
         "d2h_ms": measurements["d2h_ms"],
         "overlap_wall_ms": measurements["overlap_wall_ms"],
-        "query_total_ms": query_ms,
+        "query_total_ms": measurements["query_total_ms"],
         "input_lineitem_rows": input_rows,
         "matched_lineitem_rows": request["matched_lineitem_rows"],
         "cpu_input_rows": request["cpu_input_rows"],
@@ -744,15 +809,15 @@ def _request_from_session(
         "h2d_bytes": measurements["h2d_bytes"],
         "d2h_bytes": measurements["d2h_bytes"],
         "mapped_remote_read_bytes": measurements["mapped_remote_read_bytes"],
-        "throughput_rows_per_second": input_rows * 1000.0 / query_ms if query_ms else 0.0,
+        "throughput_rows_per_second": measurements["throughput_rows_per_second"],
         "session_id": session.session_id,
         "lifecycle": "resident",
-        "dataset_load_ms": setup.dataset_load_ms,
-        "session_setup_ms": setup.session_setup_ms,
-        "tune_ms": setup.tune_ms,
-        "resident_host_bytes": setup.resident_host_bytes,
-        "resident_gpu_bytes": setup.resident_gpu_bytes,
-        "resident_pinned_bytes": setup.resident_pinned_bytes,
+        "dataset_load_ms": measurements["dataset_load_ms"],
+        "session_setup_ms": measurements["session_setup_ms"],
+        "tune_ms": measurements["tune_ms"],
+        "resident_host_bytes": measurements["resident_host_bytes"],
+        "resident_gpu_bytes": measurements["resident_gpu_bytes"],
+        "resident_pinned_bytes": measurements["resident_pinned_bytes"],
         "selected_cpu_ratio": request["selected_cpu_ratio"],
         "predicted_cpu_ratio": setup.predicted_cpu_ratio,
         "request_index": request_index,
@@ -808,16 +873,10 @@ def _failure_records(
         "status": status,
         "error_class": error_class,
         "dataset_path": matrix["dataset"]["path"],
-        "dataset_load_ms": 0.0,
-        "session_setup_ms": 0.0,
-        "plan_build_ms": 0.0,
-        "host_staging_ms": 0.0,
-        "allocation_ms": 0.0,
-        "initial_h2d_ms": 0.0,
-        "tune_ms": 0.0,
-        "resident_host_bytes": 0,
-        "resident_gpu_bytes": 0,
-        "resident_pinned_bytes": 0,
+        **_measurement_values(
+            {name: None for name in SETUP_MEASUREMENT_FIELDS},
+            SETUP_MEASUREMENT_FIELDS,
+        ),
         "selected_cpu_ratio": config.cpu_ratio,
         **_hybrid_provenance_values(config),
     }
@@ -851,7 +910,7 @@ def _run_configuration(
         cudf_env=cudf_env,
     )
     with commands_path.open("a", encoding="utf-8") as handle:
-        handle.write(shlex.join(command) + "\n")
+        handle.write(canonical_command(command, gpu_index=gpu_index) + "\n")
     monitored = run_monitored(
         command,
         float(matrix["protocol"]["timeout_seconds"]),
@@ -870,7 +929,7 @@ def _run_configuration(
                 warmup=matrix["protocol"]["warmup"],
                 repeat=matrix["protocol"]["repeat"],
                 expected_hash=matrix["dataset"]["expected_hash"],
-                allow_partial=monitored.return_code != 0 or monitored.timed_out,
+                allow_partial=True,
             )
             _validate_session_identity(session, config, dataset, matrix, project_root)
         except ValueError as exc:

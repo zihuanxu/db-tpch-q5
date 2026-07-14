@@ -17,11 +17,15 @@ try:
     from scripts.run_v7_benchmarks import (
         Configuration,
         _payload_sha256,
+        build_command,
+        canonical_command,
         configurations,
         load_matrix,
+        validate_oracle_payload,
     )
     from scripts.summarize_v7_records import (
         summarize_records,
+        summary_fieldnames,
         write_markdown,
         write_summary,
     )
@@ -35,11 +39,15 @@ except ModuleNotFoundError:
     from run_v7_benchmarks import (  # type: ignore[no-redef]
         Configuration,
         _payload_sha256,
+        build_command,
+        canonical_command,
         configurations,
         load_matrix,
+        validate_oracle_payload,
     )
     from summarize_v7_records import (  # type: ignore[no-redef]
         summarize_records,
+        summary_fieldnames,
         write_markdown,
         write_summary,
     )
@@ -123,8 +131,9 @@ def _validate_sources(
     if str(dataset_payload.get("scale_factor")) != matrix["dataset"]["scale_factor"]:
         raise ValueError("dataset manifest scale_factor does not match the matrix")
     oracle_payload = _load_json(oracle, "oracle")
-    if oracle_payload.get("result_hash") != matrix["dataset"]["expected_hash"]:
-        raise ValueError("independent oracle result_hash does not match the matrix")
+    validate_oracle_payload(
+        oracle_payload, expected_hash=matrix["dataset"]["expected_hash"]
+    )
     if oracle_payload.get("matched") is False:
         raise ValueError("independent oracle explicitly reports a mismatch")
     return dataset_payload, oracle_payload
@@ -144,7 +153,10 @@ def _validate_correctness(
     backends = correctness.get("backends")
     if not isinstance(backends, dict):
         raise ValueError("correctness report requires backend results")
-    for backend in sorted({config.correctness_backend for config in configs}):
+    expected_backends = {config.correctness_backend for config in configs}
+    if set(backends) != expected_backends:
+        raise ValueError("correctness backend coverage does not match the matrix")
+    for backend in sorted(expected_backends):
         result = backends.get(backend)
         if not isinstance(result, dict) or result.get("status") != "passed":
             raise ValueError(f"correctness backend {backend} did not pass")
@@ -335,6 +347,9 @@ def _validate_environment(
         raise ValueError("session CLI SHA256 is invalid")
     if runner.get("session_cli_sha256") != cli_sha:
         raise ValueError("runner session CLI SHA256 does not match captured binary")
+    cli_path = cli.get("path")
+    if not isinstance(cli_path, str) or not cli_path or runner.get("session_cli") != cli_path:
+        raise ValueError("runner session CLI path does not match captured binary")
     if runner.get("matrix_sha256") != sha256_file(matrix_path):
         raise ValueError("runner matrix SHA256 does not match matrix.yml")
     if runner.get("matrix_payload") != matrix:
@@ -345,8 +360,12 @@ def _validate_environment(
     cudf_name = cudf.get("name")
     if not isinstance(cudf_name, str) or not cudf_name or runner.get("cudf_env") != cudf_name:
         raise ValueError("cuDF environment provenance is inconsistent")
-    if not isinstance(cudf.get("details"), dict) or not cudf["details"]:
+    cudf_details = cudf.get("details")
+    if not isinstance(cudf_details, dict) or not cudf_details:
         raise ValueError("cuDF environment details are missing")
+    dataset = runner.get("dataset")
+    if not isinstance(dataset, str) or not dataset:
+        raise ValueError("runner dataset provenance is missing")
 
     gpu_index = gpu.get("requested_index")
     visible = gpu.get("cuda_visible_devices")
@@ -376,29 +395,51 @@ def _validate_environment(
         raise ValueError("requested GPU driver/name provenance is missing")
     return {
         "git_commit": commit,
+        "session_cli": cli_path,
         "session_cli_sha256": cli_sha,
+        "dataset": dataset,
         "cudf_env": cudf_name,
+        "cudf_details": cudf_details,
         "gpu_index": gpu_index,
         "gpu_uuid": selected["uuid"],
+        "gpu_name": selected["name"],
         "gpu_driver": selected["driver_version"],
         "cuda_visible_devices": visible,
     }
 
 
-def _validate_commands(root: Path, expected_configurations: int) -> None:
-    commands = (root / "commands.txt").read_text(encoding="utf-8").splitlines()
-    commands = [line for line in commands if line.strip()]
-    if len(commands) != expected_configurations:
-        raise ValueError(
-            f"commands.txt expected={expected_configurations} actual={len(commands)}"
+def _validate_commands(
+    root: Path,
+    matrix: dict[str, Any],
+    configs: Sequence[Configuration],
+    environment: dict[str, Any],
+) -> None:
+    runner = environment["v7_runner"]
+    commands = [
+        canonical_command(
+            build_command(
+                config,
+                session_cli=Path(runner["session_cli"]),
+                dataset=Path(runner["dataset"]),
+                region=matrix["query"]["region"],
+                date=matrix["query"]["date"],
+                warmup=matrix["protocol"]["warmup"],
+                repeat=matrix["protocol"]["repeat"],
+                cudf_env=runner["cudf_env"],
+            ),
+            gpu_index=runner["gpu_index"],
         )
-    if any("profiler" in line.lower() for line in commands):
-        raise ValueError("profiler commands are forbidden in the formal latency bundle")
+        for config in configs
+    ]
+    expected = "\n".join(commands) + "\n"
+    actual = (root / "commands.txt").read_text(encoding="utf-8")
+    if actual != expected:
+        raise ValueError("commands.txt does not match the matrix execution order")
 
 
 def _render_summaries(
     measured: Sequence[V7BenchmarkRecord], setups: Sequence[V7SetupRecord]
-) -> tuple[bytes, bytes]:
+) -> tuple[bytes, bytes, list[dict[str, object]]]:
     rows = summarize_records(measured, setups)
     with tempfile.TemporaryDirectory(prefix="v7-summary-") as directory:
         temporary = Path(directory)
@@ -406,7 +447,7 @@ def _render_summaries(
         markdown_path = temporary / "summary.md"
         write_summary(csv_path, rows)
         write_markdown(markdown_path, rows)
-        return csv_path.read_bytes(), markdown_path.read_bytes()
+        return csv_path.read_bytes(), markdown_path.read_bytes(), rows
 
 
 def _validate_bundle_data(
@@ -418,7 +459,9 @@ def _validate_bundle_data(
 ) -> dict[str, object]:
     matrix = load_matrix(matrix_path)
     configs = configurations(matrix)
-    _validate_sources(matrix, dataset_manifest_path, oracle_path)
+    dataset_payload, oracle_payload = _validate_sources(
+        matrix, dataset_manifest_path, oracle_path
+    )
     correctness = _load_json(correctness_path, "correctness report")
     _validate_correctness(correctness, matrix, configs)
     setups = read_setups(root / "setups.csv")
@@ -427,15 +470,96 @@ def _validate_bundle_data(
     _validate_coverage(root, matrix, configs, setups, warmups, measured)
     environment = _load_json(root / "environment.json", "environment")
     identity = _validate_environment(environment, matrix, matrix_path)
-    _validate_commands(root, len(configs))
-    summary_csv, summary_markdown = _render_summaries(measured, setups)
+    _validate_commands(root, matrix, configs, environment)
+    summary_csv, summary_markdown, summary_rows = _render_summaries(measured, setups)
     return {
         "matrix": matrix,
         "configs": configs,
         "identity": identity,
         "correctness": correctness,
+        "dataset_payload": dataset_payload,
+        "oracle_payload": oracle_payload,
+        "setups": setups,
+        "warmups": warmups,
+        "measured": measured,
         "summary_csv": summary_csv,
         "summary_markdown": summary_markdown,
+        "summary_rows": summary_rows,
+    }
+
+
+def _build_manifest(root: Path, context: dict[str, object]) -> dict[str, Any]:
+    matrix = context["matrix"]
+    configs = context["configs"]
+    identity = context["identity"]
+    correctness = context["correctness"]
+    setups = context["setups"]
+    warmups = context["warmups"]
+    measured = context["measured"]
+    summary_rows = context["summary_rows"]
+    assert isinstance(matrix, dict)
+    assert isinstance(configs, list)
+    assert isinstance(identity, dict)
+    assert isinstance(correctness, dict)
+    assert isinstance(setups, list)
+    assert isinstance(warmups, list)
+    assert isinstance(measured, list)
+    assert isinstance(summary_rows, list)
+    backends = correctness["backends"]
+    assert isinstance(backends, dict)
+    return {
+        "manifest_version": 1,
+        "status": "complete",
+        "experiment_id": matrix["experiment_id"],
+        "identity": identity,
+        "dataset": {
+            "source_file": "dataset-manifest.json",
+            "path": matrix["dataset"]["path"],
+            "sha256": sha256_file(root / "dataset-manifest.json"),
+            "manifest_sha256": matrix["dataset"]["manifest_sha256"],
+            "scale_factor": matrix["dataset"]["scale_factor"],
+        },
+        "oracle": {
+            "source_file": "oracle.json",
+            "path": matrix["oracle"]["path"],
+            "sha256": sha256_file(root / "oracle.json"),
+            "result_hash": matrix["dataset"]["expected_hash"],
+        },
+        "matrix": {
+            "source_file": "matrix.yml",
+            "sha256": sha256_file(root / "matrix.yml"),
+            "payload": matrix,
+            "payload_sha256": _payload_sha256(matrix),
+            "configuration_count": len(configs),
+            "configurations": [asdict(config) for config in configs],
+        },
+        "protocol": {
+            "warmup": matrix["protocol"]["warmup"],
+            "repeat": matrix["protocol"]["repeat"],
+            "expected_configurations": len(configs),
+        },
+        "correctness": {
+            "source_file": "correctness.json",
+            "sha256": sha256_file(root / "correctness.json"),
+            "expected_hash": correctness["expected_hash"],
+            "observed_hashes": correctness["observed_hashes"],
+            "counts": {
+                "configurations": len(configs),
+                "correctness_backends": len(backends),
+                "setups": len(setups),
+                "successful_setups": sum(row.status == "ok" for row in setups),
+                "warmups": len(warmups),
+                "successful_warmups": sum(row.status == "ok" for row in warmups),
+                "measured": len(measured),
+                "successful_measured": sum(row.status == "ok" for row in measured),
+            },
+        },
+        "summary": {
+            "source_files": ["summary.csv", "summary.md"],
+            "fields": summary_fieldnames(),
+            "row_count": len(summary_rows),
+        },
+        "artifacts": artifact_checksums(root),
     }
 
 
@@ -491,49 +615,7 @@ def finalize_bundle(
     (root / "summary.csv").write_bytes(context["summary_csv"])  # type: ignore[arg-type]
     (root / "summary.md").write_bytes(context["summary_markdown"])  # type: ignore[arg-type]
 
-    matrix_payload = context["matrix"]
-    configs = context["configs"]
-    identity = context["identity"]
-    correctness_payload = context["correctness"]
-    assert isinstance(matrix_payload, dict)
-    assert isinstance(configs, list)
-    assert isinstance(identity, dict)
-    assert isinstance(correctness_payload, dict)
-    manifest: dict[str, Any] = {
-        "manifest_version": 1,
-        "status": "complete",
-        "experiment_id": matrix_payload["experiment_id"],
-        "identity": identity,
-        "dataset": {
-            "source_file": "dataset-manifest.json",
-            "sha256": sha256_file(root / "dataset-manifest.json"),
-            "scale_factor": matrix_payload["dataset"]["scale_factor"],
-        },
-        "oracle": {
-            "source_file": "oracle.json",
-            "sha256": sha256_file(root / "oracle.json"),
-            "result_hash": matrix_payload["dataset"]["expected_hash"],
-        },
-        "matrix": {
-            "source_file": "matrix.yml",
-            "sha256": sha256_file(root / "matrix.yml"),
-            "payload_sha256": _payload_sha256(matrix_payload),
-            "configuration_count": len(configs),
-            "configurations": [asdict(config) for config in configs],
-        },
-        "protocol": {
-            "warmup": matrix_payload["protocol"]["warmup"],
-            "repeat": matrix_payload["protocol"]["repeat"],
-            "expected_configurations": len(configs),
-        },
-        "correctness": {
-            "source_file": "correctness.json",
-            "sha256": sha256_file(root / "correctness.json"),
-            "expected_hash": correctness_payload["expected_hash"],
-            "observed_hashes": correctness_payload["observed_hashes"],
-        },
-        "artifacts": artifact_checksums(root),
-    }
+    manifest = _build_manifest(root, context)
     manifest_path = root / "manifest.json"
     manifest_path.write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -596,43 +678,9 @@ def audit_bundle(root: Path) -> dict[str, object]:
 
     if manifest is not None and context is not None:
         try:
-            matrix = context["matrix"]
-            configs = context["configs"]
-            identity = context["identity"]
-            correctness = context["correctness"]
-            assert isinstance(matrix, dict)
-            assert isinstance(configs, list)
-            assert isinstance(identity, dict)
-            assert isinstance(correctness, dict)
-            expected_sections = {
-                "status": "complete",
-                "experiment_id": matrix["experiment_id"],
-                "identity": identity,
-                "protocol": {
-                    "warmup": matrix["protocol"]["warmup"],
-                    "repeat": matrix["protocol"]["repeat"],
-                    "expected_configurations": len(configs),
-                },
-            }
-            for name, expected in expected_sections.items():
-                if manifest.get(name) != expected:
-                    errors.append(f"manifest {name} does not match recomputed identity")
-            if manifest.get("matrix", {}).get("sha256") != sha256_file(
-                root / "matrix.yml"
-            ):
-                errors.append("manifest matrix SHA256 is invalid")
-            if manifest.get("dataset", {}).get("sha256") != sha256_file(
-                root / "dataset-manifest.json"
-            ):
-                errors.append("manifest dataset SHA256 is invalid")
-            if manifest.get("oracle", {}).get("sha256") != sha256_file(
-                root / "oracle.json"
-            ):
-                errors.append("manifest oracle SHA256 is invalid")
-            if manifest.get("correctness", {}).get("sha256") != sha256_file(
-                root / "correctness.json"
-            ):
-                errors.append("manifest correctness SHA256 is invalid")
+            expected_manifest = _build_manifest(root, context)
+            if manifest != expected_manifest:
+                errors.append("manifest does not match the fully recomputed bundle declaration")
         except (AttributeError, OSError, TypeError, ValueError) as exc:
             errors.append(f"manifest semantic audit failed: {exc}")
     return {"ok": not errors, "errors": errors}

@@ -115,6 +115,9 @@ def summarize_records(
     output: list[dict[str, object]] = []
     for key in sorted(record_groups):
         group = record_groups[key]
+        successful = [record for record in group if record.status == "ok"]
+        if not successful:
+            continue
         config_id = str(key[GROUP_FIELDS.index("config_id")])
         matching_setups = setup_groups.get(config_id, [])
         if len(matching_setups) != 1:
@@ -130,7 +133,6 @@ def summarize_records(
         ):
             raise ValueError(f"configuration {config_id} requests do not match its setup")
 
-        successful = [record for record in group if record.status == "ok"]
         hashes = {record.result_hash for record in successful}
         if len(hashes) > 1:
             raise ValueError(f"configuration {config_id} has unstable result hashes")
@@ -146,12 +148,22 @@ def summarize_records(
             for name in STAT_NAMES:
                 row[f"query_total_ms_{name}"] = ""
 
-        setup_cost = setup.dataset_load_ms + setup.session_setup_ms
+        required_setup = (
+            setup.dataset_load_ms,
+            setup.session_setup_ms,
+            setup.tune_ms,
+            setup.resident_host_bytes,
+            setup.resident_gpu_bytes,
+            setup.resident_pinned_bytes,
+        )
+        if any(value is None for value in required_setup):
+            raise ValueError(f"configuration {config_id} has unavailable setup metrics")
+        setup_cost = setup.dataset_load_ms + setup.session_setup_ms  # type: ignore[operator]
         resident_total = (
             setup.resident_host_bytes
             + setup.resident_gpu_bytes
             + setup.resident_pinned_bytes
-        )
+        )  # type: ignore[operator]
         row.update(
             dataset_load_ms=setup.dataset_load_ms,
             session_setup_ms=setup.session_setup_ms,

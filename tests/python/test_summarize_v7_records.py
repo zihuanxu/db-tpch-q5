@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 
 import pytest
 
-from scripts.v7_benchmark_schema import validate_request, validate_setup
+from scripts.v7_benchmark_schema import (
+    REQUEST_EXECUTION_MEASUREMENT_FIELDS,
+    validate_request,
+    validate_setup,
+)
 from test_v7_benchmark_schema import valid_request, valid_setup
 
 
@@ -85,6 +90,31 @@ def test_summary_requires_exactly_one_matching_setup_per_configuration() -> None
         summarize_records(records, [setup, setup])
 
 
+def test_summary_ignores_configuration_with_only_failed_samples() -> None:
+    from scripts.summarize_v7_records import summarize_records
+
+    statuses = json.loads(valid_request()["measurement_status_json"])
+    statuses.update(
+        {name: "unavailable" for name in REQUEST_EXECUTION_MEASUREMENT_FIELDS}
+    )
+    failed = validate_request(
+        valid_request(
+            status="error",
+            error_class="ERROR_REQUEST_FAILED",
+            result_rows=0,
+            result_hash="",
+            rows_json="[]",
+            oracle_status="not_run",
+            **{name: None for name in REQUEST_EXECUTION_MEASUREMENT_FIELDS},
+            measurement_status_json=json.dumps(
+                statuses, separators=(",", ":"), sort_keys=True
+            ),
+        )
+    )
+
+    assert summarize_records([failed], [validate_setup(valid_setup())]) == []
+
+
 def test_committed_formal_matrices_have_complete_unique_sweeps() -> None:
     from scripts.run_v7_benchmarks import configurations, load_matrix
 
@@ -101,7 +131,7 @@ def test_committed_formal_matrices_have_complete_unique_sweeps() -> None:
             "repeat": 10,
             "timeout_seconds": 1800,
         }
-        assert len(enabled) == 17
+        assert len(enabled) == 18
         assert len(declared) == 18
         assert len({config.config_id for config in declared}) == 18
         for engine in ("cpu-specialized", "arrow-acero"):
@@ -133,6 +163,22 @@ def test_committed_formal_matrices_have_complete_unique_sweeps() -> None:
             for config in fixed_hybrid
             if config.mode_options["sweep"] == "core"
         } == {0.25, 0.5, 0.75}
-        auto = [config for config in declared if config.ratio_mode == "auto"]
+        auto = [config for config in enabled if config.ratio_mode == "auto"]
         assert len(auto) == 1
         assert auto[0].correctness_backend == "hybrid-auto"
+
+
+def test_committed_formal_oracles_recompute_expected_hash_from_ordered_rows() -> None:
+    from scripts.run_v7_benchmarks import load_matrix
+    from scripts.verify_q5_oracle import result_hash_hex
+
+    for scale in ("1", "10"):
+        matrix = load_matrix(ROOT / "experiments" / f"v7_formal_sf{scale}.yml")
+        oracle_path = ROOT / matrix["oracle"]["path"]
+        oracle = __import__("json").loads(oracle_path.read_text(encoding="utf-8"))
+        rows = oracle["rows"]
+        exact = [(row["nation"], row["revenue_1e4"]) for row in rows]
+
+        assert len(rows) == len({row["nation"] for row in rows})
+        assert result_hash_hex(exact) == oracle["result_hash"]
+        assert oracle["result_hash"] == matrix["dataset"]["expected_hash"]

@@ -8,8 +8,8 @@
     "expected_hash": "542abf4003633c7c"
   },
   "oracle": {
-    "path": "docs/artifacts/mvp_sf1/oracle_check.json",
-    "sha256": "9591616c64e921de984f7fe1e5733273c1abbf360d6810f214e73d25f2e39fbd"
+    "path": "experiments/oracles/v7_sf1_q5.json",
+    "sha256": "b8c756f398bc5bce13631f5bc4224b34f2c50a092424cb1d5b0d23c04d3924a8"
   },
   "query": {"region": "ASIA", "date": "1994-01-01"},
   "configurations": [
@@ -30,7 +30,7 @@
     {"config_id": "hybrid-fixed-r0625-t08", "engine": "hybrid-arrow", "runner": "cpp", "threads": 8, "ratio_mode": "fixed", "cpu_ratio": 0.625, "correctness_backend": "hybrid-fixed", "mode_options": {"partition": "fixed", "selection": "fixed", "sweep": "diagnostic"}},
     {"config_id": "hybrid-fixed-r0750-t08", "engine": "hybrid-arrow", "runner": "cpp", "threads": 8, "ratio_mode": "fixed", "cpu_ratio": 0.75, "correctness_backend": "hybrid-fixed", "mode_options": {"partition": "fixed", "selection": "fixed", "sweep": "core"}},
     {"config_id": "hybrid-fixed-r0875-t08", "engine": "hybrid-arrow", "runner": "cpp", "threads": 8, "ratio_mode": "fixed", "cpu_ratio": 0.875, "correctness_backend": "hybrid-fixed", "mode_options": {"partition": "fixed", "selection": "fixed", "sweep": "diagnostic"}},
-    {"config_id": "hybrid-auto-t08", "engine": "hybrid-arrow", "runner": "cpp", "threads": 8, "ratio_mode": "auto", "correctness_backend": "hybrid-auto", "mode_options": {"selection": "auto"}, "enabled": false, "disabled_reason": "hybrid-auto session CLI is not implemented yet"}
+    {"config_id": "hybrid-auto-t08", "engine": "hybrid-arrow", "runner": "cpp", "threads": 8, "ratio_mode": "auto", "correctness_backend": "hybrid-auto", "mode_options": {"selection": "auto"}}
   ],
   "protocol": {"warmup": 3, "repeat": 10, "timeout_seconds": 1800}
 }

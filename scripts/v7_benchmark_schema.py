@@ -45,13 +45,13 @@ V7_REQUEST_FIELDS = [
     "resident_host_bytes",
     "resident_gpu_bytes",
     "resident_pinned_bytes",
+    "measurement_status_json",
     "selected_cpu_ratio",
     "predicted_cpu_ratio",
     "request_index",
     "cpu_peak_rss_status",
     "gpu_peak_memory_status",
     "gpu_peak_memory_source",
-    "measurement_status_json",
 ]
 REQUEST_FIELDS = [*RAW_FIELDS]
 REQUEST_FIELDS.insert(REQUEST_FIELDS.index("oracle_status"), "rows_json")
@@ -88,6 +88,7 @@ SETUP_FIELDS = [
     "resident_host_bytes",
     "resident_gpu_bytes",
     "resident_pinned_bytes",
+    "measurement_status_json",
     "selected_cpu_ratio",
     "predicted_cpu_ratio",
     "hybrid_provenance_status",
@@ -165,6 +166,7 @@ REQUEST_FLOAT_FIELDS = V5_FLOAT_FIELDS | {
     "predicted_cpu_ratio",
 }
 REQUEST_MEASUREMENT_FIELDS = {
+    "load_ms",
     "plan_build_ms",
     "host_prepare_ms",
     "h2d_ms",
@@ -175,6 +177,41 @@ REQUEST_MEASUREMENT_FIELDS = {
     "h2d_bytes",
     "d2h_bytes",
     "mapped_remote_read_bytes",
+    "query_total_ms",
+    "throughput_rows_per_second",
+    "dataset_load_ms",
+    "session_setup_ms",
+    "tune_ms",
+    "resident_host_bytes",
+    "resident_gpu_bytes",
+    "resident_pinned_bytes",
+}
+REQUEST_EXECUTION_MEASUREMENT_FIELDS = {
+    "load_ms",
+    "plan_build_ms",
+    "host_prepare_ms",
+    "h2d_ms",
+    "cpu_scan_ms",
+    "gpu_kernel_ms",
+    "d2h_ms",
+    "overlap_wall_ms",
+    "h2d_bytes",
+    "d2h_bytes",
+    "mapped_remote_read_bytes",
+    "query_total_ms",
+    "throughput_rows_per_second",
+}
+SETUP_MEASUREMENT_FIELDS = {
+    "dataset_load_ms",
+    "session_setup_ms",
+    "plan_build_ms",
+    "host_staging_ms",
+    "allocation_ms",
+    "initial_h2d_ms",
+    "tune_ms",
+    "resident_host_bytes",
+    "resident_gpu_bytes",
+    "resident_pinned_bytes",
 }
 HYBRID_PROVENANCE_FIELDS = {
     "hybrid_model_version",
@@ -198,6 +235,7 @@ SETUP_NULLABLE_FIELDS = {
     "gpu_peak_memory_bytes",
     "predicted_cpu_ratio",
     *HYBRID_PROVENANCE_FIELDS,
+    *SETUP_MEASUREMENT_FIELDS,
 }
 
 
@@ -223,16 +261,17 @@ class V7SetupRecord:
     gpu_chunk_rows: int
     memory_scope: str
     mode_options_json: str
-    dataset_load_ms: float
-    session_setup_ms: float
-    plan_build_ms: float
-    host_staging_ms: float
-    allocation_ms: float
-    initial_h2d_ms: float
-    tune_ms: float
-    resident_host_bytes: int
-    resident_gpu_bytes: int
-    resident_pinned_bytes: int
+    dataset_load_ms: float | None
+    session_setup_ms: float | None
+    plan_build_ms: float | None
+    host_staging_ms: float | None
+    allocation_ms: float | None
+    initial_h2d_ms: float | None
+    tune_ms: float | None
+    resident_host_bytes: int | None
+    resident_gpu_bytes: int | None
+    resident_pinned_bytes: int | None
+    measurement_status_json: str
     selected_cpu_ratio: float
     predicted_cpu_ratio: float | None
     hybrid_provenance_status: str
@@ -262,20 +301,27 @@ class V7SetupRecord:
     def as_dict(self) -> dict[str, object]:
         return {field.name: getattr(self, field.name) for field in fields(self)}
 
+    @property
+    def measurement_statuses(self) -> dict[str, str]:
+        return json.loads(self.measurement_status_json)
+
 
 @dataclass(frozen=True)
 class V7BenchmarkRecord(BenchmarkRecord):
+    load_ms: float | None
+    query_total_ms: float | None
+    throughput_rows_per_second: float | None
     rows_json: str
     config_id: str
     session_id: str
     lifecycle: str
     ratio_mode: str
-    dataset_load_ms: float
-    session_setup_ms: float
-    tune_ms: float
-    resident_host_bytes: int
-    resident_gpu_bytes: int
-    resident_pinned_bytes: int
+    dataset_load_ms: float | None
+    session_setup_ms: float | None
+    tune_ms: float | None
+    resident_host_bytes: int | None
+    resident_gpu_bytes: int | None
+    resident_pinned_bytes: int | None
     selected_cpu_ratio: float
     predicted_cpu_ratio: float | None
     request_index: int
@@ -290,6 +336,10 @@ class V7BenchmarkRecord(BenchmarkRecord):
 
     def as_dict(self) -> dict[str, object]:
         return {name: getattr(self, name) for name in REQUEST_FIELDS}
+
+    @property
+    def measurement_statuses(self) -> dict[str, str]:
+        return json.loads(self.measurement_status_json)
 
 
 def _as_int(name: str, value: object) -> int:
@@ -467,6 +517,49 @@ def _validate_request_measurements(values: dict[str, Any]) -> None:
             raise ValueError(f"{name} must be null when unavailable")
         if status not in {"measured", "unavailable"}:
             raise ValueError(f"{name} measurement status is invalid")
+    if values["status"] != "ok":
+        measured = sorted(
+            name
+            for name in REQUEST_EXECUTION_MEASUREMENT_FIELDS
+            if statuses[name] != "unavailable"
+        )
+        if measured:
+            raise ValueError(
+                f"failed request requires unavailable request measurements: {measured}"
+            )
+    values["measurement_status_json"] = json.dumps(
+        statuses, separators=(",", ":"), sort_keys=True
+    )
+
+
+def _validate_setup_measurements(values: dict[str, Any]) -> None:
+    try:
+        statuses = json.loads(values["measurement_status_json"])
+    except json.JSONDecodeError as exc:
+        raise ValueError("measurement_status_json must be valid JSON") from exc
+    if not isinstance(statuses, dict) or set(statuses) != SETUP_MEASUREMENT_FIELDS:
+        raise ValueError("setup measurement_status_json fields do not match the contract")
+    for name in sorted(SETUP_MEASUREMENT_FIELDS):
+        status = statuses[name]
+        value = values[name]
+        if status == "measured" and value is None:
+            raise ValueError(f"{name} is measured but has a null value")
+        if status == "unavailable" and value is not None:
+            raise ValueError(f"{name} must be null when unavailable")
+        if status not in {"measured", "unavailable"}:
+            raise ValueError(f"{name} measurement status is invalid")
+    if values["status"] == "ok":
+        required = {
+            "dataset_load_ms",
+            "session_setup_ms",
+            "tune_ms",
+            "resident_host_bytes",
+            "resident_gpu_bytes",
+            "resident_pinned_bytes",
+        }
+        missing = sorted(name for name in required if statuses[name] != "measured")
+        if missing:
+            raise ValueError(f"successful setup has unavailable required measurements: {missing}")
     values["measurement_status_json"] = json.dumps(
         statuses, separators=(",", ":"), sort_keys=True
     )
@@ -573,7 +666,12 @@ def validate_setup(raw: Mapping[str, object]) -> V7SetupRecord:
     )
     _validate_common(values)
     _validate_peak_measurements(values)
-    if values["tune_ms"] > values["session_setup_ms"]:
+    _validate_setup_measurements(values)
+    if (
+        values["tune_ms"] is not None
+        and values["session_setup_ms"] is not None
+        and values["tune_ms"] > values["session_setup_ms"]
+    ):
         raise ValueError("tune_ms must be a subinterval of session_setup_ms")
     _validate_hybrid_provenance(values)
     _validate_nonnegative(
@@ -595,6 +693,10 @@ def validate_request(raw: Mapping[str, object]) -> V7BenchmarkRecord:
     _validate_common(values, allow_ok_process_failure=True)
     _validate_peak_measurements(values)
     _validate_request_measurements(values)
+    if values["status"] == "ok" and any(
+        values[name] is None for name in ("query_total_ms", "throughput_rows_per_second")
+    ):
+        raise ValueError("successful request requires measured query timing and throughput")
     if values["ratio_mode"] == "fixed" and values["predicted_cpu_ratio"] is not None:
         raise ValueError("fixed ratio request requires unavailable predicted_cpu_ratio")
     if (
