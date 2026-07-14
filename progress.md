@@ -514,3 +514,26 @@ inside the archive. Paper checking regenerates all macros from both audited
 bundles, the hybrid model, setups, and the claim ledger. Model regret,
 predicted/selected/realized ratios, samples, statuses, fixed curves, binary and
 software identities are validated rather than trusted from generated files.
+
+## GitHub Publication Hardening (2026-07-14)
+
+- [x] Reproduce the GitHub push-protection failure without exposing the value.
+- [x] Trace it to inherited process environment stored inside raw NSYS reports.
+- [x] Add failing regressions for collection isolation, export redaction, and
+  release-time secret scanning; all three pass after the fix.
+- [x] Disable inherited target environments in future NSYS collection.
+- [x] Regenerate all 10 public NSYS reports with length-stable redaction and
+  checksum-bound redaction counts (51 embedded occurrences in total).
+- [x] Confirm a regenerated report remains readable by `nsys stats`.
+- [x] Preserve legacy collector compatibility; the original full bundle still
+  audits with `ok=true` while new captures disable environment inheritance.
+- [x] Pass 421 default Python tests (6 skipped), 27 Arrow/cuDF tests (2
+  skipped), release audit, and a fresh 1034-file archive audit.
+- [x] Close independent review findings for nested-report scan bypass and
+  unbound redaction counts; focused re-review returned `CLEAN`.
+- [ ] Rotate the affected external API key in its provider account.
+- [ ] Rewrite the unpublished branch history, push it, and create the draft PR.
+
+The first GitHub push was rejected before the branch was published. Public
+artifacts now contain no `sk-`-shaped values. Raw local profiler bundles remain
+private because they can contain the original inherited environment.

@@ -20,6 +20,8 @@ try:
         SCALES as COMPACT_SCALES,
         SCHEMA as COMPACT_SCHEMA,
         SCHEMA_VERSION as COMPACT_SCHEMA_VERSION,
+        REDACTED_SECRET_BYTES_RE,
+        SECRET_BYTES_RE,
     )
     from scripts.v7_evidence_bundle import audit_bundle as audit_v7_evidence
     from scripts.validate_claim_ledger import validate_ledger
@@ -35,6 +37,8 @@ except ModuleNotFoundError:
         SCALES as COMPACT_SCALES,
         SCHEMA as COMPACT_SCHEMA,
         SCHEMA_VERSION as COMPACT_SCHEMA_VERSION,
+        REDACTED_SECRET_BYTES_RE,
+        SECRET_BYTES_RE,
     )
     from v7_evidence_bundle import audit_bundle as audit_v7_evidence
     from validate_claim_ledger import validate_ledger
@@ -249,6 +253,7 @@ def _check_profiler_summary(
         )
         app_command = item.get("app_command")
         copied_files = item.get("copied_files")
+        nsys = item.get("nsys")
         if (
             identity is None
             or not isinstance(profile_id, str)
@@ -256,7 +261,9 @@ def _check_profiler_summary(
             or not app_command
             or any(not isinstance(argument, str) or not argument for argument in app_command)
             or not isinstance(copied_files, dict)
-            or not isinstance(item.get("nsys"), dict)
+            or not isinstance(nsys, dict)
+            or type(nsys.get("redacted_secret_count")) is not int
+            or nsys["redacted_secret_count"] < 0
             or not isinstance(item.get("ncu"), dict)
         ):
             errors.append(
@@ -300,6 +307,14 @@ def _check_profiler_summary(
                     "compact profiler summary does not bind required capture: "
                     f"{relative.as_posix()}"
                 )
+        report_relative = Path("captures") / profile_id / "nsys/profile.nsys-rep"
+        try:
+            report_bytes = (directory / report_relative).read_bytes()
+        except OSError:
+            report_bytes = b""
+        actual_redaction_count = len(REDACTED_SECRET_BYTES_RE.findall(report_bytes))
+        if actual_redaction_count != nsys["redacted_secret_count"]:
+            errors.append(f"compact profiler redaction count mismatch: {profile_id}")
 
     if set(profiles_by_pair) != expected_pairs:
         errors.append("compact profiler profiles do not have canonical 10-profile coverage")
@@ -309,6 +324,22 @@ def _check_profiler_summary(
 def audit_compact_profiler_evidence(directory: Path) -> list[str]:
     checksums, errors = _profiler_checksums(directory)
     errors.extend(_check_profiler_summary(directory, checksums))
+    reports = sorted(
+        directory / relative
+        for relative in checksums
+        if relative.name.endswith(".nsys-rep")
+    )
+    for report in reports:
+        try:
+            contains_secret = SECRET_BYTES_RE.search(report.read_bytes()) is not None
+        except OSError as error:
+            errors.append(f"compact profiler report is unreadable: {report}: {error}")
+            continue
+        if contains_secret:
+            errors.append(
+                "secret-shaped value in compact profiler capture: "
+                f"{report.relative_to(directory).as_posix()}"
+            )
     return errors
 
 

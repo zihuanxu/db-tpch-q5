@@ -394,6 +394,32 @@ def test_exports_compact_canonical_profiler_evidence(
     assert {path.name for path in (output / "captures/sf1-copy/ncu").iterdir()} == expected_ncu
 
 
+def test_redacts_secret_shaped_values_from_public_nsys_reports(
+    full_bundle: tuple[Path, list[dict[str, object]]], tmp_path: Path
+) -> None:
+    source, profiles = full_bundle
+    report = source / "captures/sf1-copy/nsys/profile.nsys-rep"
+    secret = b"sk-" + b"x" * 32
+    report.write_bytes(b"synthetic nsys report\x00DEEPSEEK_API_KEY=" + secret + b"\x00")
+    metadata_path = report.parent / "metadata.json"
+    metadata = _read_json(metadata_path)
+    metadata["files"] = _collector_files(report.parent)
+    _write_json(metadata_path, metadata)
+    _write_manifest(source, profiles)
+    output = tmp_path / "compact"
+
+    completed = _run(source, output)
+
+    assert completed.returncode == 0, completed.stderr
+    public_report = output / "captures/sf1-copy/nsys/profile.nsys-rep"
+    public_bytes = public_report.read_bytes()
+    assert len(public_bytes) == report.stat().st_size
+    assert secret not in public_bytes
+    summary = _read_json(output / "summary.json")
+    first = next(record for record in summary["profiles"] if record["id"] == "sf1-copy")
+    assert first["nsys"]["redacted_secret_count"] == 1
+
+
 def test_checksums_are_sorted_and_cover_every_other_output_file(
     full_bundle: tuple[Path, list[dict[str, object]]], tmp_path: Path
 ) -> None:

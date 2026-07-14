@@ -37,7 +37,8 @@ fixed hybrid 的 setup 约 4997 ms，所以少量请求时不一定比 CPU 划�
 采集。完整 bundle 位于本机
 `/tmp/memq5-v7-profiler-80dba7a-rerun2`，包含数据硬链接和完整指标全集，严格
 审计结果为 `ok=true`。仓库中的 `docs/artifacts/v7_profiler` 是轻量发布副本，
-保留命令、工具版本、原始 NSYS report、CSV、所选 NCU 指标和来源哈希。
+保留命令、工具版本、等长脱敏后的 NSYS report、CSV、所选 NCU 指标和来源哈希。
+完整 bundle 可能包含采集进程继承的环境变量，只能保存在本机，不能直接公开。
 
 ## 当前验证命令
 

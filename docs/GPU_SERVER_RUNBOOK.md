@@ -156,6 +156,9 @@ python3 scripts/evaluate_hybrid_model.py \
 NSYS/NCU profile。参数必须引用已经通过审计的两个V7证据包；GPU UUID可由
 `nvidia-smi -L` 获取。仓库的精简、可校验副本位于
 `docs/artifacts/v7_profiler`，原始完整bundle不放进最小交付包。
+NSYS会把目标进程环境写进report，因此采集器默认使用
+`--inherit-environment=false`。不要把未经 `export_v7_profiler_evidence.py`
+处理的 `.nsys-rep` 放入公开仓库。
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python3 scripts/run_v7_profilers.py \

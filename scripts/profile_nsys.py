@@ -128,6 +128,7 @@ def collect_nsys(command: list[str], output_dir: Path, metadata: dict) -> dict:
         "--force-overwrite=true",
         "--trace=cuda,nvtx,osrt",
         "--sample=none",
+        "--inherit-environment=false",
         "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
         "--capture-range=nvtx",
         "--nvtx-capture=measured_request",

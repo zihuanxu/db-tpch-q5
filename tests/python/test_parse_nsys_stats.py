@@ -119,10 +119,11 @@ def test_collector_records_argv_logs_hashes_versions_and_failed_command(
     assert result["return_code"] == 9
     assert result["profile_command"][:10] == [
         "nsys", "profile", "--force-overwrite=true", "--trace=cuda,nvtx,osrt", "--sample=none",
-        "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
+        "--inherit-environment=false", "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
         "--capture-range=nvtx", "--nvtx-capture=measured_request",
-        "--capture-range-end=stop", "--output",
+        "--capture-range-end=stop",
     ]
+    assert result["profile_command"][10] == "--output"
     assert result["profile_command"][-3:] == ["resident-q5", "--requests", "1"]
     assert result["tool_versions"]["nsys"] == "nsys 2026.1"
     assert (tmp_path / "profile.stdout.log").read_text(encoding="utf-8") == "profile output"

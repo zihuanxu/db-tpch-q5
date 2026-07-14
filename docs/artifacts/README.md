@@ -34,9 +34,10 @@ python3 scripts/v7_profiler_bundle.py audit \
   --directory /tmp/memq5-v7-profiler-80dba7a-rerun2
 ```
 
-`v7_profiler/` 保留来源 manifest SHA256、10 组身份与命令、NSYS 原始 report、
-四类 CSV、NCU report、所选指标、工具版本、解析结果和逐文件 checksum。它省略
-可重建的数据、SQLite sidecar、巨大 `supported_metrics.txt` 和 collector
+`v7_profiler/` 保留来源 manifest SHA256、10 组身份与命令、NSYS 等长脱敏
+report、四类 CSV、NCU report、所选指标、工具版本、解析结果和逐文件 checksum。
+脱敏次数写入各 profile 的 summary；发布审计还会再次扫描密钥形态字符串。它
+省略可重建的数据、SQLite sidecar、巨大 `supported_metrics.txt` 和 collector
 metadata 指标全集；因此它用于课程发布和阅读，不冒充完整 bundle 审计输入。
 
 ## 正式环境

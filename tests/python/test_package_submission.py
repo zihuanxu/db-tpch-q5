@@ -118,7 +118,7 @@ def _write_compact_fixture(repo_root: Path) -> Path:
                     "identity": _profile_identity(logical, scale),
                     "app_command": ["memq5_arrow_session"],
                     "copied_files": copied_files,
-                    "nsys": {},
+                    "nsys": {"redacted_secret_count": 0},
                     "ncu": {},
                 }
             )

@@ -1,8 +1,10 @@
 # V7 compact profiler evidence
 
 This directory is a compact publication copy of the audited full V7 profiler bundle.
-It preserves the raw NSYS report, four NSYS CSV exports, selected NCU report data,
-collector logs, parsed summary values, and checksums needed to inspect the evidence.
+It preserves a length-stable sanitized NSYS report, four NSYS CSV exports, selected
+NCU report data, collector logs, parsed summary values, and checksums needed to
+inspect the evidence. Secret-shaped values embedded in the NSYS process environment
+are replaced before publication; each profile records the replacement count.
 
 The following full-bundle content is intentionally omitted:
 

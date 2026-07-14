@@ -84,7 +84,7 @@
         "captures/sf1-copy/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
         "captures/sf1-copy/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "captures/sf1-copy/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "captures/sf1-copy/nsys/profile.nsys-rep": "8e401cfbe75a49a8b201cf9954ded49c1242961556e0d2e57a7bcdbd9849c3b7",
+        "captures/sf1-copy/nsys/profile.nsys-rep": "55c6a7d6659b326254085b796f07faef27cf71383fd8ae5b79008e4238af5893",
         "captures/sf1-copy/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
         "captures/sf1-copy/nsys/profile.stdout.log": "1390bcb641842a2a7fdeac44c5aff125465bb44f7945260ad520f13f902992c9",
         "captures/sf1-copy/nsys/profile.tool.stdout.log": "9a6b3163ea0b727c59490624c9a35ed39ffcb4a4010361f384a46a466f519e8c",
@@ -242,6 +242,7 @@
           "0"
         ],
         "q5_kernel_total_time_ns": 1208067,
+        "redacted_secret_count": 5,
         "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
       }
     },
@@ -266,7 +267,7 @@
         "captures/sf1-managed/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
         "captures/sf1-managed/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "captures/sf1-managed/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "captures/sf1-managed/nsys/profile.nsys-rep": "c51c0739090d004fda4e763c1828721e1b4cf04f62a574088d13d3a9262f0b34",
+        "captures/sf1-managed/nsys/profile.nsys-rep": "9248977a9d54442cd864785a8c28603653b483ba2c59ddeff645d76ec5d0f5d9",
         "captures/sf1-managed/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
         "captures/sf1-managed/nsys/profile.stdout.log": "025d3f8117cc283045a5ee2aa1278ed4d3d51b9c812653b981644b732acfaae8",
         "captures/sf1-managed/nsys/profile.tool.stdout.log": "878014e2ae51b5178783bd823bc0aa637eb1b0d4fd4e0e281ab445f560e70e80",
@@ -425,6 +426,7 @@
           "0"
         ],
         "q5_kernel_total_time_ns": 1639621,
+        "redacted_secret_count": 5,
         "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
       }
     },
@@ -449,7 +451,7 @@
         "captures/sf1-mapped/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
         "captures/sf1-mapped/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "captures/sf1-mapped/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "captures/sf1-mapped/nsys/profile.nsys-rep": "66cd1987bb9c951a06ca1a780b8e7e90587c94acf67883dca3030f5c0df669ce",
+        "captures/sf1-mapped/nsys/profile.nsys-rep": "d541f0fd13d149cccb4ae13f09a1d3b5e03972d13b9794a397c575ca0dae649d",
         "captures/sf1-mapped/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
         "captures/sf1-mapped/nsys/profile.stdout.log": "5aebdc7f9cf7c1b89e92ddcaa5160a0c5efecdb142b90362aefe3aa9e9d1e09d",
         "captures/sf1-mapped/nsys/profile.tool.stdout.log": "6b4731f95b4d0db25e9135156088f9e8d772c71245636da54749b5e3eed6f4ed",
@@ -607,6 +609,7 @@
           "0"
         ],
         "q5_kernel_total_time_ns": 2531336,
+        "redacted_secret_count": 5,
         "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
       }
     },
@@ -635,7 +638,7 @@
         "captures/sf1-hybrid-fixed/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
         "captures/sf1-hybrid-fixed/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "captures/sf1-hybrid-fixed/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "captures/sf1-hybrid-fixed/nsys/profile.nsys-rep": "2111d0a51f9dfd59f2d5cb4daa35abb4fbbe443b14fa6bf170be34eaa8343719",
+        "captures/sf1-hybrid-fixed/nsys/profile.nsys-rep": "dfd21241e5838ca333cdf43ab8c63d26fe70ae6d9bfe182c9a21426219c1bbba",
         "captures/sf1-hybrid-fixed/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
         "captures/sf1-hybrid-fixed/nsys/profile.stdout.log": "f67a9143c2d76983ea8c0e86b392d1577e2364f4723c2236d6958f75fe422842",
         "captures/sf1-hybrid-fixed/nsys/profile.tool.stdout.log": "56537f9c9665bc1d19ff978541089e937cf2ebe5338157e3e2bfa1ecd9bc53a7",
@@ -804,6 +807,7 @@
           "fixed"
         ],
         "q5_kernel_total_time_ns": 439585,
+        "redacted_secret_count": 5,
         "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
       }
     },
@@ -830,7 +834,7 @@
         "captures/sf1-hybrid-auto/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
         "captures/sf1-hybrid-auto/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "captures/sf1-hybrid-auto/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "captures/sf1-hybrid-auto/nsys/profile.nsys-rep": "e24068f7aa90b3f7e97ab174ec1be5dbbf2cef6def2f951a0c9223d9dd7e0565",
+        "captures/sf1-hybrid-auto/nsys/profile.nsys-rep": "4dc81e2bc52fb11339c552c32812f66e575511584296a02a28830641eaf12d9b",
         "captures/sf1-hybrid-auto/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
         "captures/sf1-hybrid-auto/nsys/profile.stdout.log": "9b116ba49aaa9f0676041958cb8fc3d95ec7ef429e366a0378d71c8a8f49212e",
         "captures/sf1-hybrid-auto/nsys/profile.tool.stdout.log": "82767775770096a40ebd54c2b7d74bec59a1ed802a13b8649d89c21e9a92b8fa",
@@ -998,6 +1002,7 @@
           "auto"
         ],
         "q5_kernel_total_time_ns": 846787,
+        "redacted_secret_count": 5,
         "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
       }
     },
@@ -1022,7 +1027,7 @@
         "captures/sf10-copy/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
         "captures/sf10-copy/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "captures/sf10-copy/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "captures/sf10-copy/nsys/profile.nsys-rep": "86f8846839f2c3d4042ac3851f498a65ff6f2283e4d3f62a4507d2acce6fcd2a",
+        "captures/sf10-copy/nsys/profile.nsys-rep": "b08e37db894dc6a7a8f804377927c392d9897daf94bf4f575259084bf0a949e7",
         "captures/sf10-copy/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
         "captures/sf10-copy/nsys/profile.stdout.log": "6134017fb30769876020af4cbc3f988c5ce65dcd6f273691f7718b5ce5112df6",
         "captures/sf10-copy/nsys/profile.tool.stdout.log": "1d24a413af853b9c1224b9037857b91d06703d1b6507539af9c43617f6ceef1d",
@@ -1180,6 +1185,7 @@
           "0"
         ],
         "q5_kernel_total_time_ns": 15343115,
+        "redacted_secret_count": 5,
         "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
       }
     },
@@ -1204,7 +1210,7 @@
         "captures/sf10-managed/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
         "captures/sf10-managed/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "captures/sf10-managed/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "captures/sf10-managed/nsys/profile.nsys-rep": "3937442c0610d7ba38e440cbd5726a615b7bc9e341c475e7997558c5b2a54d3f",
+        "captures/sf10-managed/nsys/profile.nsys-rep": "7f71e506b438e2294bc8df9771eb317b06479f39be90f7fdf4e6fbbb1d1827cb",
         "captures/sf10-managed/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
         "captures/sf10-managed/nsys/profile.stdout.log": "0e74803d86fd47124fc4c523e532cc246b5b197504c41eadbb24c8b51f822381",
         "captures/sf10-managed/nsys/profile.tool.stdout.log": "cceccbf5b76d2bb92ed1c5e363de730c88f3840efe2591cb9be2075e717f0f5e",
@@ -1363,6 +1369,7 @@
           "0"
         ],
         "q5_kernel_total_time_ns": 15586806,
+        "redacted_secret_count": 5,
         "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
       }
     },
@@ -1387,7 +1394,7 @@
         "captures/sf10-mapped/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
         "captures/sf10-mapped/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "captures/sf10-mapped/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "captures/sf10-mapped/nsys/profile.nsys-rep": "7992ac7d14482e2432ad5b548cb95a2a0764eada8076906ec7c95f170cc02034",
+        "captures/sf10-mapped/nsys/profile.nsys-rep": "c6a6616bcdf20c8f34089cb0a754c3530ad50a56f9a38b8564645bd1c8ac2ddb",
         "captures/sf10-mapped/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
         "captures/sf10-mapped/nsys/profile.stdout.log": "2e6d059150b0c4a2f49b554be41f05d6931584d7119609b59d16cabbc5d5ce03",
         "captures/sf10-mapped/nsys/profile.tool.stdout.log": "da37cdbfa5fba7a51c1fded91159ba00b2176c8f3e358675a3133a6b7c488a15",
@@ -1545,6 +1552,7 @@
           "0"
         ],
         "q5_kernel_total_time_ns": 135247042,
+        "redacted_secret_count": 6,
         "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
       }
     },
@@ -1573,7 +1581,7 @@
         "captures/sf10-hybrid-fixed/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
         "captures/sf10-hybrid-fixed/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "captures/sf10-hybrid-fixed/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "captures/sf10-hybrid-fixed/nsys/profile.nsys-rep": "b6d474eebece499eaa0986cdb8ac4c24a73efe269f4b040365f610cd394b76a1",
+        "captures/sf10-hybrid-fixed/nsys/profile.nsys-rep": "b3d70dc50650f80fb4f7ba29d1b1b7a75663537b86b9c869c22ff65ed8627050",
         "captures/sf10-hybrid-fixed/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
         "captures/sf10-hybrid-fixed/nsys/profile.stdout.log": "b93ac4b83b6e5580045de2a00e88450e936561db7231cfea263c5e5798367956",
         "captures/sf10-hybrid-fixed/nsys/profile.tool.stdout.log": "74b9ad98f2fb5c746a89d733d44945295d3b7eb95b1bca9af30a197d57d27b34",
@@ -1742,6 +1750,7 @@
           "fixed"
         ],
         "q5_kernel_total_time_ns": 7425986,
+        "redacted_secret_count": 5,
         "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
       }
     },
@@ -1768,7 +1777,7 @@
         "captures/sf10-hybrid-auto/ncu/selected_metrics.json": "49f05f4b1b82b43358c465b10e29427fd8e4ad4ef2da1f25e1bd9bd7ab204bd5",
         "captures/sf10-hybrid-auto/nsys/orchestrator.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "captures/sf10-hybrid-auto/nsys/orchestrator.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "captures/sf10-hybrid-auto/nsys/profile.nsys-rep": "40ba6115dc169470843c85d3cc1cb855110d72b9c570a26cb9619324135c32ee",
+        "captures/sf10-hybrid-auto/nsys/profile.nsys-rep": "1b3784a0e45052fb27e1a1e3aec0602a7e9c3e469ede2733f048f9c7ec9ef4b0",
         "captures/sf10-hybrid-auto/nsys/profile.stderr.log": "a93704eaff6d479e0095381d0fde9c75376f75f10091ba5514c7d212ac8914b0",
         "captures/sf10-hybrid-auto/nsys/profile.stdout.log": "3e5771da4b09c45f71141ac7ee12ef0036a596a3271c8b2952c12393e5eef0a6",
         "captures/sf10-hybrid-auto/nsys/profile.tool.stdout.log": "4bbaef0fea547e6f23ebe06699f78405d770166916cccc68ff8a7ec527ba08ca",
@@ -1936,6 +1945,7 @@
           "auto"
         ],
         "q5_kernel_total_time_ns": 10584240,
+        "redacted_secret_count": 5,
         "tool_version": "NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0"
       }
     }

@@ -11,6 +11,11 @@ results/
 __pycache__/
 *.pyc
 
+# Raw Nsight reports may embed inherited environment variables. Only the
+# exporter-sanitized publication copies are allowed in the repository.
+*.nsys-rep
+!docs/artifacts/v7_profiler/captures/**/profile.nsys-rep
+
 # Imported CPU hashjoin build/generated and unused upstream payloads
 hashjoin-cpu/Makefile
 hashjoin-cpu/src/Makefile

@@ -112,7 +112,7 @@ def _write_compact_fixture(compact: Path) -> None:
                     "identity": _profile_identity(logical, scale),
                     "app_command": ["memq5_arrow_session"],
                     "copied_files": copied_files,
-                    "nsys": {},
+                    "nsys": {"redacted_secret_count": 0},
                     "ncu": {},
                 }
             )
@@ -190,6 +190,57 @@ def test_compact_profiler_rejects_missing_required_capture_after_checksum_rewrit
         and "captures/sf10-copy/nsys/profile.nsys-rep" in error
         for error in errors
     )
+
+
+def test_compact_profiler_rejects_secret_shaped_value_with_valid_checksums(
+    tmp_path: Path,
+) -> None:
+    compact = tmp_path / "compact"
+    _write_compact_fixture(compact)
+    report = compact / "captures/sf1-copy/nsys/profile.nsys-rep"
+    report.write_bytes(report.read_bytes() + b"sk-" + b"x" * 32)
+    summary_path = compact / "summary.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    relative = report.relative_to(compact).as_posix()
+    summary["profiles"][0]["copied_files"][relative] = _sha256(report)
+    summary_path.write_text(json.dumps(summary, sort_keys=True) + "\n", encoding="utf-8")
+    _rewrite_compact_checksums(compact)
+
+    errors = check_profiler_checksums(compact)
+
+    assert any("secret-shaped value" in error and relative in error for error in errors)
+
+
+def test_compact_profiler_scans_noncanonical_nsys_report_paths(
+    tmp_path: Path,
+) -> None:
+    compact = tmp_path / "compact"
+    _write_compact_fixture(compact)
+    report = compact / "captures/sf1-copy/nsys/archive/raw/profile.nsys-rep"
+    report.parent.mkdir(parents=True)
+    report.write_bytes(b"sk-" + b"x" * 32)
+    _rewrite_compact_checksums(compact)
+
+    errors = check_profiler_checksums(compact)
+
+    relative = report.relative_to(compact).as_posix()
+    assert any("secret-shaped value" in error and relative in error for error in errors)
+
+
+def test_compact_profiler_binds_redaction_count_to_report(
+    tmp_path: Path,
+) -> None:
+    compact = tmp_path / "compact"
+    _write_compact_fixture(compact)
+    summary_path = compact / "summary.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary["profiles"][0]["nsys"]["redacted_secret_count"] = 1
+    summary_path.write_text(json.dumps(summary, sort_keys=True) + "\n", encoding="utf-8")
+    _rewrite_compact_checksums(compact)
+
+    errors = check_profiler_checksums(compact)
+
+    assert any("redaction count" in error and "sf1-copy" in error for error in errors)
 
 
 def test_compact_profiler_rejects_missing_profile_identity_provenance(

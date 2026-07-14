@@ -66,6 +66,8 @@ NCU_OPTIONAL_FILES = (
     "orchestrator.stderr.log",
 )
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
+SECRET_BYTES_RE = re.compile(rb"sk-[A-Za-z0-9_-]{20,}")
+REDACTED_SECRET_BYTES_RE = re.compile(rb"REDACTED_{15,}")
 PROFILE_ID_RE = re.compile(
     r"sf(1|10)-(copy|managed|mapped|hybrid-fixed|hybrid-auto)"
 )
@@ -123,6 +125,17 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(READ_BLOCK_BYTES), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _redact_nsys_report(path: Path) -> int:
+    data = _read_bytes(path, "NSYS report")
+    matches = list(SECRET_BYTES_RE.finditer(data))
+    for match in matches:
+        replacement = b"REDACTED" + b"_" * (len(match.group()) - len(b"REDACTED"))
+        data[match.start() : match.end()] = replacement
+    if matches:
+        path.write_bytes(data)
+    return len(matches)
 
 
 def _load_json(path: Path, label: str) -> dict[str, object]:
@@ -481,6 +494,10 @@ def _profile_record(
         NSYS_OPTIONAL_FILES,
     )
     staged_nsys = output_root / nsys_destination
+    public_report = staged_nsys / "profile.nsys-rep"
+    redacted_secret_count = _redact_nsys_report(public_report)
+    public_report_relative = public_report.relative_to(output_root).as_posix()
+    nsys_copied[public_report_relative] = _sha256(public_report)
     nvtx_rows = parse_nsys_csv(staged_nsys / "stats_nvtx_sum.csv")
     observed_ranges = sorted(
         {
@@ -553,6 +570,7 @@ def _profile_record(
         "copied_files": dict(sorted({**nsys_copied, **ncu_copied}.items())),
         "nsys": {
             "tool_version": _tool_version(nsys_metadata, "nsys"),
+            "redacted_secret_count": redacted_secret_count,
             "profile_command": _command(
                 nsys_metadata.get("profile_command"), f"{profile_id} NSYS profile_command"
             ),
@@ -581,8 +599,10 @@ def _readme() -> str:
     return """# V7 compact profiler evidence
 
 This directory is a compact publication copy of the audited full V7 profiler bundle.
-It preserves the raw NSYS report, four NSYS CSV exports, selected NCU report data,
-collector logs, parsed summary values, and checksums needed to inspect the evidence.
+It preserves a length-stable sanitized NSYS report, four NSYS CSV exports, selected
+NCU report data, collector logs, parsed summary values, and checksums needed to
+inspect the evidence. Secret-shaped values embedded in the NSYS process environment
+are replaced before publication; each profile records the replacement count.
 
 The following full-bundle content is intentionally omitted:
 

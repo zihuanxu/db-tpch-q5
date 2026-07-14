@@ -981,6 +981,7 @@ def _compile_nsys(
         "--force-overwrite=true",
         "--trace=cuda,nvtx,osrt",
         "--sample=none",
+        "--inherit-environment=false",
         "--env-var=NSYS_NVTX_PROFILER_REGISTER_ONLY=0",
         "--capture-range=nvtx",
         "--nvtx-capture=measured_request",
@@ -989,7 +990,15 @@ def _compile_nsys(
         str(directory / "profile"),
         *command,
     ]
-    if metadata.get("profile_command") != expected_profile_command:
+    legacy_profile_command = [
+        argument
+        for argument in expected_profile_command
+        if argument != "--inherit-environment=false"
+    ]
+    if metadata.get("profile_command") not in (
+        expected_profile_command,
+        legacy_profile_command,
+    ):
         raise ValueError("Nsight Systems profile command options do not match collector contract")
     expected_stats_command = [
         "nsys",
@@ -1084,7 +1093,7 @@ def _compile_nsys(
         "status": "ok",
         "metadata_path": _relative(root, metadata_path),
         "metadata_sha256": sha256_file(metadata_path),
-        "profile_command": expected_profile_command,
+        "profile_command": list(metadata["profile_command"]),
         "stats_commands": [expected_stats_command],
         "tool_version": version,
         "tool_version_provenance": dict(provenance),
