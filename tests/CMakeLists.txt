@@ -51,6 +51,116 @@ if(MEMQ5_ENABLE_ARROW)
   )
   add_test(NAME test_q5_cpu_session COMMAND test_q5_cpu_session)
 
+  add_executable(test_q5_session_io test_q5_session_io.cpp)
+  target_link_libraries(test_q5_session_io PRIVATE
+    memq5_arrow
+    nlohmann_json::nlohmann_json
+  )
+  target_compile_options(test_q5_session_io PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-UNDEBUG>
+  )
+  add_test(NAME test_q5_session_io COMMAND test_q5_session_io)
+
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  set(MEMQ5_SESSION_VALIDATOR [=[
+import json
+import subprocess
+import sys
+
+expected_hash, expected_engine = sys.argv[1:3]
+completed = subprocess.run(sys.argv[3:], capture_output=True, text=True)
+if completed.returncode == 77:
+    print(completed.stderr, file=sys.stderr)
+    sys.exit(77)
+if completed.returncode != 0:
+    print(completed.stderr, file=sys.stderr)
+    sys.exit(completed.returncode)
+records = [json.loads(line) for line in completed.stdout.splitlines()]
+assert len(records) == 4, records
+setup, requests = records[0], records[1:]
+assert setup["record_type"] == "session_setup"
+assert setup["engine"] == expected_engine
+assert setup["lifecycle"] == "resident"
+assert setup["status"] == "ok"
+session_id = setup["session_id"]
+assert session_id
+assert [record["request_index"] for record in requests] == [0, 1, 2]
+assert [record["is_warmup"] for record in requests] == [True, False, False]
+
+def update_byte(value, byte):
+    return ((value ^ byte) * 1099511628211) & ((1 << 64) - 1)
+
+def result_hash(rows):
+    value = 14695981039346656037
+    for row in rows:
+        for byte in row["nation"].encode():
+            value = update_byte(value, byte)
+        value = update_byte(value, 0xff)
+        revenue = row["revenue_1e4"] & ((1 << 64) - 1)
+        for shift in range(0, 64, 8):
+            value = update_byte(value, (revenue >> shift) & 0xff)
+    return f"{value:016x}"
+
+for request in requests:
+    assert request["record_type"] == "request"
+    assert request["session_id"] == session_id
+    assert request["status"] == "ok"
+    assert request["result_hash"] == expected_hash
+    assert result_hash(request["rows"]) == request["result_hash"]
+    assert request["result_rows"] == len(request["rows"])
+]=])
+
+  function(add_memq5_session_cli_test engine)
+    string(REPLACE "-" "_" test_suffix "${engine}")
+    add_test(
+      NAME test_q5_arrow_session_${test_suffix}
+      COMMAND ${Python3_EXECUTABLE} -c "${MEMQ5_SESSION_VALIDATOR}"
+        248d10b6ee352953 ${engine}
+        $<TARGET_FILE:memq5_arrow_session>
+        --dataset ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tpch_q5_tiny_arrow
+        --engine ${engine} --region ASIA --date 1994-01-01
+        --threads 2 --cpu-ratio 0.5 --warmup 1 --repeat 2
+    )
+  endfunction()
+
+  add_memq5_session_cli_test(cpu-specialized)
+
+  set(MEMQ5_SESSION_INVALID_VALIDATOR [=[
+import subprocess
+import sys
+
+expected_error = sys.argv[1]
+completed = subprocess.run(sys.argv[2:], capture_output=True, text=True)
+assert completed.returncode not in (0, 77), completed
+assert completed.stdout == "", completed.stdout
+assert expected_error in completed.stderr, completed.stderr
+assert "manifest.json" not in completed.stderr, completed.stderr
+]=])
+
+  function(add_memq5_session_invalid_test name expected_error)
+    add_test(
+      NAME test_q5_arrow_session_${name}
+      COMMAND ${Python3_EXECUTABLE} -c
+        "${MEMQ5_SESSION_INVALID_VALIDATOR}" "${expected_error}"
+        $<TARGET_FILE:memq5_arrow_session>
+        --dataset ${CMAKE_CURRENT_BINARY_DIR}/missing-resident-dataset
+        ${ARGN}
+    )
+  endfunction()
+
+  add_memq5_session_invalid_test(
+    bad_warmup "--warmup must be a nonnegative integer" --warmup -1)
+  add_memq5_session_invalid_test(
+    bad_repeat "--repeat must be a positive integer" --repeat 0)
+  add_memq5_session_invalid_test(
+    bad_engine "unsupported resident Arrow engine" --engine arrow-acero)
+  add_memq5_session_invalid_test(
+    bad_ratio "--cpu-ratio must be between 0 and 1" --cpu-ratio 1.1)
+  add_memq5_session_invalid_test(
+    bad_date "day out of range" --date 1994-02-30)
+  add_memq5_session_invalid_test(
+    bad_threads "--threads must be a positive integer" --threads 0)
+
   add_executable(test_q5_acero test_q5_acero.cpp)
   target_link_libraries(test_q5_acero PRIVATE memq5_arrow)
   target_compile_definitions(test_q5_acero PRIVATE
@@ -137,6 +247,16 @@ if(MEMQ5_ENABLE_CUDA)
 endif()
 
 if(MEMQ5_ENABLE_ARROW AND MEMQ5_ENABLE_CUDA)
+  foreach(session_engine IN ITEMS
+      gpu-copy gpu-managed gpu-mapped hybrid-arrow)
+    add_memq5_session_cli_test(${session_engine})
+    string(REPLACE "-" "_" session_test_suffix "${session_engine}")
+    set_tests_properties(
+      test_q5_arrow_session_${session_test_suffix}
+      PROPERTIES SKIP_RETURN_CODE 77
+    )
+  endforeach()
+
   set_source_files_properties(test_q5_arrow_cuda.cpp PROPERTIES LANGUAGE CUDA)
   add_executable(test_q5_arrow_cuda test_q5_arrow_cuda.cpp)
   target_link_libraries(test_q5_arrow_cuda PRIVATE memq5_arrow_cuda)

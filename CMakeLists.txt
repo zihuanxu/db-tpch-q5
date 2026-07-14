@@ -39,6 +39,7 @@ if(MEMQ5_ENABLE_ARROW)
     src/cpu/q5_arrow_scan.cpp
     src/io/arrow_q5_loader.cpp
     src/session/q5_cpu_session.cpp
+    src/session/q5_session_io.cpp
   )
 
   target_include_directories(memq5_arrow PUBLIC
@@ -64,6 +65,11 @@ if(MEMQ5_ENABLE_ARROW)
     src/cli/memq5_arrow_query.cpp
   )
   target_link_libraries(memq5_arrow_query PRIVATE memq5_arrow)
+
+  add_executable(memq5_arrow_session
+    src/cli/memq5_arrow_session.cpp
+  )
+  target_link_libraries(memq5_arrow_session PRIVATE memq5_arrow)
 endif()
 
 add_executable(memq5
@@ -115,6 +121,7 @@ if(MEMQ5_ENABLE_CUDA)
       CUDA_EXTENSIONS OFF
     )
     target_link_libraries(memq5_arrow_query PRIVATE memq5_arrow_cuda)
+    target_link_libraries(memq5_arrow_session PRIVATE memq5_arrow_cuda)
   endif()
 endif()
 
