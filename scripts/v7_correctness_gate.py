@@ -9,6 +9,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts.verify_q5_oracle import result_hash_hex
+except ModuleNotFoundError:
+    from verify_q5_oracle import result_hash_hex
+
 
 BASE_BACKENDS = (
     "cpu-specialized",
@@ -19,8 +24,16 @@ BASE_BACKENDS = (
     "hybrid-fixed",
     "cudf",
 )
-GPU_BACKENDS = {"gpu-copy", "gpu-managed", "gpu-mapped", "cudf"}
+GPU_BACKENDS = {
+    "gpu-copy",
+    "gpu-managed",
+    "gpu-mapped",
+    "hybrid-fixed",
+    "hybrid-auto",
+    "cudf",
+}
 HASH_RE = re.compile(r"^[0-9a-f]{16}$")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def compare_rows(expected: list[dict], actual: list[dict]) -> list[str]:
@@ -81,6 +94,26 @@ def _required_backends(matrix: dict[str, Any]) -> list[str]:
     return backends + (["hybrid-auto"] if hybrid_auto["enabled"] else [])
 
 
+def _matrix_identity(matrix: dict[str, Any]) -> dict[str, str]:
+    dataset = matrix.get("dataset")
+    query = matrix.get("query")
+    if not isinstance(dataset, dict) or not isinstance(query, dict):
+        raise ValueError("correctness matrix requires dataset and query objects")
+    identity = {
+        "experiment_id": matrix.get("experiment_id"),
+        "scale_factor": dataset.get("scale_factor"),
+        "dataset_path": dataset.get("path"),
+        "dataset_manifest_sha256": dataset.get("manifest_sha256"),
+        "region": query.get("region"),
+        "date": query.get("date"),
+    }
+    if any(not isinstance(value, str) or not value for value in identity.values()):
+        raise ValueError("correctness matrix identity fields must be nonempty strings")
+    if not SHA256_RE.fullmatch(identity["dataset_manifest_sha256"]):
+        raise ValueError("correctness matrix dataset manifest must be lowercase SHA256")
+    return identity
+
+
 def _oracle_rows_and_hash(oracle: dict[str, Any]) -> tuple[list[dict], str]:
     rows = oracle.get("rows")
     result_hash = oracle.get("result_hash")
@@ -91,6 +124,11 @@ def _oracle_rows_and_hash(oracle: dict[str, Any]) -> tuple[list[dict], str]:
     row_errors = compare_rows(rows, rows)
     if row_errors:
         raise ValueError(f"oracle rows are invalid: {row_errors}")
+    derived_hash = result_hash_hex(
+        [(row["nation"], row["revenue_1e4"]) for row in rows]
+    )
+    if result_hash != derived_hash:
+        raise ValueError("oracle result_hash does not match rows")
     return rows, result_hash
 
 
@@ -103,6 +141,7 @@ def _check_backend(
     backend: str,
     expected_rows: list[dict],
     expected_hash: str,
+    expected_identity: dict[str, str],
 ) -> tuple[dict[str, object], str | None]:
     path = directory / f"{backend}.json"
     if not path.is_file():
@@ -113,6 +152,10 @@ def _check_backend(
         return _result("failed", [str(exc)]), None
     if record.get("backend") != backend:
         return _result("failed", [f"backend mismatch expected={backend!r}"]), None
+    if record.get("schema_version") != 1:
+        return _result("failed", ["run record schema_version must be 1"]), None
+    if record.get("identity") != expected_identity:
+        return _result("failed", ["run identity does not match matrix"]), None
 
     process = record.get("process")
     if not isinstance(process, dict):
@@ -134,6 +177,13 @@ def _check_backend(
     if not isinstance(actual_rows, list) or any(not isinstance(row, dict) for row in actual_rows):
         return _result("failed", ["output rows must be a list of objects"]), None
     errors = compare_rows(expected_rows, actual_rows)
+    row_errors = compare_rows(actual_rows, actual_rows)
+    if not row_errors:
+        derived_hash = result_hash_hex(
+            [(row["nation"], row["revenue_1e4"]) for row in actual_rows]
+        )
+        if actual_hash != derived_hash:
+            errors.append("output result_hash does not match rows")
     if actual_hash != expected_hash:
         errors.append(f"result_hash mismatch expected={expected_hash} actual={actual_hash}")
     if errors:
@@ -142,13 +192,20 @@ def _check_backend(
 
 
 def verify_correctness(directory: Path, matrix: Path, oracle: Path) -> dict:
-    required_backends = _required_backends(_load_json(matrix, "correctness matrix"))
+    matrix_payload = _load_json(matrix, "correctness matrix")
+    required_backends = _required_backends(matrix_payload)
+    expected_identity = _matrix_identity(matrix_payload)
     expected_rows, expected_hash = _oracle_rows_and_hash(_load_json(oracle, "oracle"))
+    expected_files = {f"{backend}.json" for backend in required_backends}
+    actual_files = {path.name for path in directory.glob("*.json") if path.is_file()}
+    unexpected_files = sorted(actual_files - expected_files)
+    if unexpected_files:
+        raise ValueError(f"unexpected run record(s): {unexpected_files}")
     results: dict[str, dict[str, object]] = {}
     observed_hashes: set[str] = set()
     for backend in required_backends:
         result, observed_hash = _check_backend(
-            directory, backend, expected_rows, expected_hash
+            directory, backend, expected_rows, expected_hash, expected_identity
         )
         results[backend] = result
         if observed_hash is not None:

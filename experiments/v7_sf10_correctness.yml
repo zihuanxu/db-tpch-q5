@@ -1,5 +1,15 @@
 {
   "schema_version": 1,
+  "experiment_id": "v7-sf10-correctness",
+  "dataset": {
+    "path": "data/tpch_sf10_arrow",
+    "scale_factor": "10",
+    "manifest_sha256": "44ddfec1e929264542ce28276a900b0dac3968ee102cae3475574a933e7af8ea"
+  },
+  "query": {
+    "region": "ASIA",
+    "date": "1994-01-01"
+  },
   "required_backends": [
     "cpu-specialized",
     "arrow-acero",

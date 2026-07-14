@@ -20,6 +20,14 @@ BASE_BACKENDS = [
     "hybrid-fixed",
     "cudf",
 ]
+IDENTITY = {
+    "experiment_id": "v7-sf10-correctness",
+    "scale_factor": "10",
+    "dataset_path": "data/tpch_sf10_arrow",
+    "dataset_manifest_sha256": "a" * 64,
+    "region": "ASIA",
+    "date": "1994-01-01",
+}
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -32,6 +40,13 @@ def _write_matrix(tmp_path: Path, *, hybrid_auto: bool = False) -> Path:
         matrix,
         {
             "schema_version": 1,
+            "experiment_id": IDENTITY["experiment_id"],
+            "dataset": {
+                "path": IDENTITY["dataset_path"],
+                "scale_factor": IDENTITY["scale_factor"],
+                "manifest_sha256": IDENTITY["dataset_manifest_sha256"],
+            },
+            "query": {"region": IDENTITY["region"], "date": IDENTITY["date"]},
             "required_backends": BASE_BACKENDS,
             "hybrid_auto": {"enabled": hybrid_auto},
         },
@@ -53,11 +68,14 @@ def _write_run(
     return_code: int = 0,
     result_hash: str = RESULT_HASH,
     rows: list[dict[str, object]] | None = None,
+    identity: dict[str, str] | None = None,
 ) -> None:
     _write_json(
         directory / f"{backend}.json",
         {
+            "schema_version": 1,
             "backend": backend,
+            "identity": IDENTITY if identity is None else identity,
             "process": {"status": status, "return_code": return_code},
             "output": {
                 "result_hash": result_hash,
@@ -119,6 +137,22 @@ def test_gate_marks_wrong_hash_failed(tmp_path: Path) -> None:
     )
 
 
+def test_gate_rejects_oracle_hash_not_derived_from_rows(tmp_path: Path) -> None:
+    from scripts.v7_correctness_gate import verify_correctness
+
+    oracle = _write_oracle(tmp_path)
+    _write_json(oracle, {"rows": ROWS, "result_hash": "0000000000000000"})
+
+    try:
+        verify_correctness(
+            _write_passing_runs(tmp_path), _write_matrix(tmp_path), oracle
+        )
+    except ValueError as exc:
+        assert "oracle result_hash does not match rows" in str(exc)
+    else:
+        raise AssertionError("stale oracle hash was accepted")
+
+
 def test_gate_rejects_wrong_row_when_hash_is_claimed_equal(tmp_path: Path) -> None:
     from scripts.v7_correctness_gate import verify_correctness
 
@@ -137,6 +171,10 @@ def test_gate_rejects_wrong_row_when_hash_is_claimed_equal(tmp_path: Path) -> No
     assert report["ok"] is False
     assert report["backends"]["arrow-acero"]["status"] == "failed"
     assert any("row 1" in error for error in report["backends"]["arrow-acero"]["errors"])
+    assert any(
+        "output result_hash does not match rows" in error
+        for error in report["backends"]["arrow-acero"]["errors"]
+    )
 
 
 def test_gate_rejects_duplicate_nation(tmp_path: Path) -> None:
@@ -187,6 +225,49 @@ def test_gate_marks_skipped_gpu_unavailable(tmp_path: Path) -> None:
         "status": "unavailable",
         "errors": ["GPU backend unavailable"],
     }
+
+
+def test_gate_marks_skipped_hybrid_gpu_unavailable(tmp_path: Path) -> None:
+    from scripts.v7_correctness_gate import verify_correctness
+
+    directory = _write_passing_runs(tmp_path, hybrid_auto=True)
+    _write_run(directory, "hybrid-fixed", status="skipped_gpu", return_code=77)
+    _write_run(directory, "hybrid-auto", status="skipped_gpu", return_code=77)
+
+    report = verify_correctness(
+        directory, _write_matrix(tmp_path, hybrid_auto=True), _write_oracle(tmp_path)
+    )
+
+    assert report["backends"]["hybrid-fixed"]["status"] == "unavailable"
+    assert report["backends"]["hybrid-auto"]["status"] == "unavailable"
+
+
+def test_gate_rejects_run_identity_not_matching_matrix(tmp_path: Path) -> None:
+    from scripts.v7_correctness_gate import verify_correctness
+
+    directory = _write_passing_runs(tmp_path)
+    wrong_identity = {**IDENTITY, "scale_factor": "1"}
+    _write_run(directory, "gpu-copy", identity=wrong_identity)
+
+    report = verify_correctness(directory, _write_matrix(tmp_path), _write_oracle(tmp_path))
+
+    assert report["ok"] is False
+    assert report["backends"]["gpu-copy"]["status"] == "failed"
+    assert "run identity does not match matrix" in report["backends"]["gpu-copy"]["errors"]
+
+
+def test_gate_rejects_unrecognized_json_record(tmp_path: Path) -> None:
+    from scripts.v7_correctness_gate import verify_correctness
+
+    directory = _write_passing_runs(tmp_path)
+    _write_run(directory, "gpu-copy-retry")
+
+    try:
+        verify_correctness(directory, _write_matrix(tmp_path), _write_oracle(tmp_path))
+    except ValueError as exc:
+        assert "unexpected run record" in str(exc)
+    else:
+        raise AssertionError("unrecognized run record was accepted")
 
 
 def test_gate_requires_hybrid_auto_only_when_matrix_enables_it(tmp_path: Path) -> None:
