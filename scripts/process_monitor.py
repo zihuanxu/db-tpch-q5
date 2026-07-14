@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Sequence
+from typing import Mapping, Sequence
 
 import psutil
 
@@ -20,7 +20,10 @@ class MonitoredProcessResult:
     timed_out: bool
     elapsed_ms: float
     peak_rss_bytes: int
-    peak_gpu_bytes: int
+    peak_rss_status: str
+    peak_gpu_bytes: int | None
+    peak_gpu_status: str
+    peak_gpu_source: str
     started_at_utc: str
     finished_at_utc: str
 
@@ -69,6 +72,7 @@ def run_monitored(
     *,
     cwd: Path | None = None,
     poll_ms: int = 20,
+    env: Mapping[str, str] | None = None,
 ) -> MonitoredProcessResult:
     if timeout_s <= 0:
         raise ValueError("timeout_s must be positive")
@@ -89,6 +93,7 @@ def run_monitored(
                 stdout=stdout,
                 stderr=stderr,
                 start_new_session=True,
+                env={**os.environ, **dict(env or {})},
             )
         except OSError as exc:
             stderr.write(f"launch failed: {exc}\n".encode("utf-8", errors="replace"))
@@ -97,7 +102,10 @@ def run_monitored(
                 timed_out=False,
                 elapsed_ms=(time.perf_counter() - started) * 1000.0,
                 peak_rss_bytes=0,
-                peak_gpu_bytes=0,
+                peak_rss_status="measured",
+                peak_gpu_bytes=None,
+                peak_gpu_status="unavailable",
+                peak_gpu_source="",
                 started_at_utc=started_at,
                 finished_at_utc=_utc_now(),
             )
@@ -116,7 +124,10 @@ def run_monitored(
         timed_out=timed_out,
         elapsed_ms=(time.perf_counter() - started) * 1000.0,
         peak_rss_bytes=peak_rss,
-        peak_gpu_bytes=0,
+        peak_rss_status="measured",
+        peak_gpu_bytes=None,
+        peak_gpu_status="unavailable",
+        peak_gpu_source="",
         started_at_utc=started_at,
         finished_at_utc=_utc_now(),
     )

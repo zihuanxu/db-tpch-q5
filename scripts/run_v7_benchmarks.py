@@ -7,6 +7,8 @@ import csv
 import hashlib
 import json
 import math
+import os
+import re
 import shlex
 import sys
 import uuid
@@ -48,12 +50,21 @@ HASH_LENGTH = 16
 SHA256_LENGTH = 64
 CPP_ENGINES = {
     "cpu-specialized",
+    "arrow-acero",
     "gpu-copy",
     "gpu-managed",
     "gpu-mapped",
     "hybrid-arrow",
 }
 ALL_ENGINES = CPP_ENGINES | {"cudf"}
+CORRECTNESS_BACKENDS = {
+    "cpu-specialized": "cpu-specialized",
+    "arrow-acero": "arrow-acero",
+    "gpu-copy": "gpu-copy",
+    "gpu-managed": "gpu-managed",
+    "gpu-mapped": "gpu-mapped",
+    "cudf": "cudf",
+}
 
 
 @dataclass(frozen=True)
@@ -64,6 +75,8 @@ class Configuration:
     cpu_ratio: float
     correctness_backend: str
     mode_options: dict[str, object]
+    config_id: str = ""
+    ratio_mode: str = "fixed"
 
 
 @dataclass(frozen=True)
@@ -95,15 +108,125 @@ def _is_lower_hex(value: object, length: int) -> bool:
     )
 
 
+def _strict_fields(
+    raw: dict[str, Any],
+    *,
+    required: set[str],
+    optional: set[str] = frozenset(),
+    label: str,
+) -> None:
+    missing = sorted(required - set(raw))
+    unknown = sorted(set(raw) - required - optional)
+    if missing:
+        raise ValueError(f"{label} missing fields: {missing}")
+    if unknown:
+        raise ValueError(f"{label} unknown fields: {unknown}")
+
+
+def _validate_engine_options(
+    engine: str,
+    options: dict[str, Any],
+    *,
+    label: str,
+    explicit: bool,
+) -> tuple[str, int, str, float, str, dict[str, object], bool]:
+    if engine not in ALL_ENGINES:
+        raise ValueError(f"unsupported V7 resident engine: {engine}")
+    required = {"runner", "threads", "correctness_backend"}
+    optional = {"cpu_ratio", "mode_options"}
+    if explicit:
+        required |= {"config_id", "engine", "ratio_mode"}
+        optional |= {"enabled", "disabled_reason"}
+    _strict_fields(options, required=required, optional=optional, label=label)
+
+    runner = options.get("runner")
+    expected_runner = "cudf" if engine == "cudf" else "cpp"
+    if runner != expected_runner:
+        raise ValueError(f"runner for {engine} must be {expected_runner}")
+    threads = options.get("threads")
+    if isinstance(threads, bool) or not isinstance(threads, int) or threads < 1:
+        raise ValueError(f"threads for {engine} must be positive")
+
+    ratio_mode = options.get("ratio_mode", "fixed")
+    if ratio_mode not in {"fixed", "auto"}:
+        raise ValueError(f"ratio_mode for {engine} must be fixed or auto")
+    if ratio_mode == "auto":
+        if engine != "hybrid-arrow":
+            raise ValueError("ratio_mode=auto is only valid for hybrid-arrow")
+        if "cpu_ratio" in options:
+            raise ValueError("hybrid auto configuration must omit cpu_ratio")
+        ratio = 0.0
+    else:
+        raw_ratio = options.get("cpu_ratio")
+        if (
+            isinstance(raw_ratio, bool)
+            or not isinstance(raw_ratio, (int, float))
+            or not math.isfinite(float(raw_ratio))
+            or raw_ratio < 0
+            or raw_ratio > 1
+        ):
+            raise ValueError(f"cpu_ratio for {engine} must be between 0 and 1")
+        ratio = float(raw_ratio)
+        if engine in {"cpu-specialized", "arrow-acero"} and ratio != 1.0:
+            raise ValueError(f"{engine} requires cpu_ratio=1")
+        if engine in {"gpu-copy", "gpu-managed", "gpu-mapped", "cudf"} and ratio != 0.0:
+            raise ValueError(f"{engine} requires cpu_ratio=0")
+
+    backend = options.get("correctness_backend")
+    if not isinstance(backend, str) or not backend:
+        raise ValueError(f"correctness_backend for {engine} must be nonempty")
+    mode_options = options.get("mode_options", {})
+    if not isinstance(mode_options, dict):
+        raise ValueError(f"mode_options for {engine} must be an object")
+    if engine == "cudf" and threads != 1:
+        raise ValueError("cudf requires threads=1 because its runner has no thread option")
+    if engine == "cudf" and mode_options != {"framework": "cudf"}:
+        raise ValueError("cudf mode_options must be exactly {'framework': 'cudf'}")
+    if ratio_mode == "auto" and mode_options.get("selection") != "auto":
+        raise ValueError("hybrid auto mode_options.selection must be auto")
+    expected_backend = (
+        "hybrid-auto"
+        if engine == "hybrid-arrow" and ratio_mode == "auto"
+        else "hybrid-fixed"
+        if engine == "hybrid-arrow"
+        else CORRECTNESS_BACKENDS[engine]
+    )
+    if backend != expected_backend:
+        raise ValueError(
+            f"correctness_backend for {engine} must be {expected_backend}"
+        )
+
+    enabled = options.get("enabled", True)
+    if not isinstance(enabled, bool):
+        raise ValueError(f"enabled for {engine} must be boolean")
+    disabled_reason = options.get("disabled_reason")
+    if not enabled and (not isinstance(disabled_reason, str) or not disabled_reason):
+        raise ValueError(f"disabled configuration for {engine} requires disabled_reason")
+    if enabled and disabled_reason is not None:
+        raise ValueError(f"enabled configuration for {engine} cannot have disabled_reason")
+    return str(runner), int(threads), str(ratio_mode), ratio, str(backend), mode_options, enabled
+
+
 def _validate_matrix(matrix: object) -> dict[str, Any]:
     if not isinstance(matrix, dict) or matrix.get("schema_version") != 2:
         raise ValueError("V7 resident matrix schema_version must be 2")
+    _strict_fields(
+        matrix,
+        required={"schema_version", "experiment_id", "dataset", "query", "protocol"},
+        optional={"engines", "configurations", "oracle"},
+        label="V7 resident matrix",
+    )
     if not isinstance(matrix.get("experiment_id"), str) or not matrix["experiment_id"]:
         raise ValueError("V7 resident matrix experiment_id must be nonempty")
 
     dataset = matrix.get("dataset")
     if not isinstance(dataset, dict):
         raise ValueError("V7 resident matrix dataset must be an object")
+    _strict_fields(
+        dataset,
+        required={"path", "scale_factor", "manifest_sha256", "expected_hash"},
+        label="V7 resident matrix dataset",
+    )
     for name in ("path", "scale_factor"):
         if not isinstance(dataset.get(name), str) or not dataset[name]:
             raise ValueError(f"V7 resident matrix dataset.{name} must be nonempty")
@@ -112,7 +235,27 @@ def _validate_matrix(matrix: object) -> dict[str, Any]:
     if not _is_lower_hex(dataset.get("expected_hash"), HASH_LENGTH):
         raise ValueError("V7 resident matrix requires a 16-hex expected_hash")
 
+    oracle = matrix.get("oracle")
+    if oracle is not None:
+        if not isinstance(oracle, dict):
+            raise ValueError("V7 resident matrix oracle must be an object")
+        _strict_fields(
+            oracle,
+            required={"path", "sha256"},
+            label="V7 resident matrix oracle",
+        )
+        if not isinstance(oracle.get("path"), str) or not oracle["path"]:
+            raise ValueError("V7 resident matrix oracle.path must be nonempty")
+        if not _is_lower_hex(oracle.get("sha256"), SHA256_LENGTH):
+            raise ValueError("V7 resident matrix oracle.sha256 must be lowercase SHA256")
+
     query = matrix.get("query")
+    if isinstance(query, dict):
+        _strict_fields(
+            query,
+            required={"region", "date"},
+            label="V7 resident matrix query",
+        )
     if not isinstance(query, dict) or any(
         not isinstance(query.get(name), str) or not query[name]
         for name in ("region", "date")
@@ -122,6 +265,11 @@ def _validate_matrix(matrix: object) -> dict[str, Any]:
     protocol = matrix.get("protocol")
     if not isinstance(protocol, dict):
         raise ValueError("V7 resident matrix protocol must be an object")
+    _strict_fields(
+        protocol,
+        required={"warmup", "repeat", "timeout_seconds"},
+        label="V7 resident matrix protocol",
+    )
     warmup = protocol.get("warmup")
     repeat = protocol.get("repeat")
     timeout = protocol.get("timeout_seconds")
@@ -138,37 +286,47 @@ def _validate_matrix(matrix: object) -> dict[str, Any]:
         raise ValueError("V7 resident matrix timeout_seconds must be positive")
 
     engines = matrix.get("engines")
-    if not isinstance(engines, dict) or not engines:
-        raise ValueError("V7 resident matrix engines must be a nonempty object")
-    for engine, options in engines.items():
-        if engine not in ALL_ENGINES or not isinstance(options, dict):
-            raise ValueError(f"unsupported V7 resident engine: {engine}")
-        runner = options.get("runner")
-        expected_runner = "cudf" if engine == "cudf" else "cpp"
-        if runner != expected_runner:
-            raise ValueError(f"runner for {engine} must be {expected_runner}")
-        threads = options.get("threads")
-        if isinstance(threads, bool) or not isinstance(threads, int) or threads < 1:
-            raise ValueError(f"threads for {engine} must be positive")
-        ratio = options.get("cpu_ratio")
-        if (
-            isinstance(ratio, bool)
-            or not isinstance(ratio, (int, float))
-            or not math.isfinite(float(ratio))
-            or ratio < 0
-            or ratio > 1
-        ):
-            raise ValueError(f"cpu_ratio for {engine} must be between 0 and 1")
-        if engine == "cpu-specialized" and ratio != 1.0:
-            raise ValueError("cpu-specialized requires cpu_ratio=1")
-        if engine in {"gpu-copy", "gpu-managed", "gpu-mapped", "cudf"} and ratio != 0.0:
-            raise ValueError(f"{engine} requires cpu_ratio=0")
-        backend = options.get("correctness_backend")
-        if not isinstance(backend, str) or not backend:
-            raise ValueError(f"correctness_backend for {engine} must be nonempty")
-        mode_options = options.get("mode_options", {})
-        if not isinstance(mode_options, dict):
-            raise ValueError(f"mode_options for {engine} must be an object")
+    explicit = matrix.get("configurations")
+    if (engines is None) == (explicit is None):
+        raise ValueError("V7 resident matrix requires exactly one of engines or configurations")
+    if engines is not None:
+        if not isinstance(engines, dict) or not engines:
+            raise ValueError("V7 resident matrix engines must be a nonempty object")
+        for engine, options in engines.items():
+            if not isinstance(options, dict):
+                raise ValueError(f"V7 resident engine options for {engine} must be an object")
+            _validate_engine_options(
+                engine, options, label=f"V7 resident engine {engine}", explicit=False
+            )
+    else:
+        if not isinstance(explicit, list) or not explicit:
+            raise ValueError("V7 resident matrix configurations must be a nonempty array")
+        config_ids: set[str] = set()
+        logical_keys: set[tuple[object, ...]] = set()
+        for index, options in enumerate(explicit):
+            if not isinstance(options, dict):
+                raise ValueError(f"configuration {index} must be an object")
+            engine = options.get("engine")
+            if not isinstance(engine, str):
+                raise ValueError(f"configuration {index} engine must be a string")
+            config_id = options.get("config_id")
+            if not isinstance(config_id, str) or not re.fullmatch(
+                r"[a-z0-9][a-z0-9-]{0,63}", config_id
+            ):
+                raise ValueError(f"configuration {index} config_id must be a lowercase slug")
+            if config_id in config_ids:
+                raise ValueError(f"duplicate config_id: {config_id}")
+            config_ids.add(config_id)
+            _, threads, ratio_mode, ratio, _, _, _ = _validate_engine_options(
+                engine,
+                options,
+                label=f"configuration {config_id}",
+                explicit=True,
+            )
+            logical_key = (engine, threads, ratio_mode, ratio)
+            if logical_key in logical_keys:
+                raise ValueError(f"duplicate configuration: {logical_key}")
+            logical_keys.add(logical_key)
     return matrix
 
 
@@ -180,18 +338,44 @@ def load_matrix(path: Path) -> dict[str, Any]:
     return _validate_matrix(matrix)
 
 
-def configurations(matrix: dict[str, Any]) -> list[Configuration]:
-    return [
-        Configuration(
-            engine=engine,
-            runner=str(options["runner"]),
-            threads=int(options["threads"]),
-            cpu_ratio=float(options["cpu_ratio"]),
-            correctness_backend=str(options["correctness_backend"]),
-            mode_options=dict(options.get("mode_options", {})),
+def configurations(
+    matrix: dict[str, Any], *, include_disabled: bool = False
+) -> list[Configuration]:
+    if "engines" in matrix:
+        return [
+            Configuration(
+                engine=engine,
+                runner=str(options["runner"]),
+                threads=int(options["threads"]),
+                cpu_ratio=float(options["cpu_ratio"]),
+                correctness_backend=str(options["correctness_backend"]),
+                mode_options=dict(options.get("mode_options", {})),
+                config_id=engine,
+                ratio_mode="fixed",
+            )
+            for engine, options in matrix["engines"].items()
+        ]
+    output: list[Configuration] = []
+    for options in matrix["configurations"]:
+        if not options.get("enabled", True) and not include_disabled:
+            continue
+        output.append(
+            Configuration(
+                engine=str(options["engine"]),
+                runner=str(options["runner"]),
+                threads=int(options["threads"]),
+                cpu_ratio=float(options.get("cpu_ratio", 0.0)),
+                correctness_backend=str(options["correctness_backend"]),
+                mode_options=dict(options.get("mode_options", {})),
+                config_id=str(options["config_id"]),
+                ratio_mode=str(options["ratio_mode"]),
+            )
         )
-        for engine, options in matrix["engines"].items()
-    ]
+    return output
+
+
+def expected_configuration_ids(matrix: dict[str, Any]) -> set[str]:
+    return {config.config_id for config in configurations(matrix)}
 
 
 def build_command(
@@ -226,10 +410,14 @@ def build_command(
             str(config.threads),
             *common,
         ]
-        if config.engine == "hybrid-arrow":
+        if config.engine == "hybrid-arrow" and config.ratio_mode == "fixed":
             command.extend(["--cpu-ratio", str(config.cpu_ratio)])
+        elif config.engine == "hybrid-arrow":
+            command.extend(["--hybrid-selection", "auto"])
         return command
     if config.runner == "cudf":
+        if config.threads != 1 or config.mode_options != {"framework": "cudf"}:
+            raise ValueError("cudf command requires threads=1 and fixed mode_options")
         return [
             "conda",
             "run",
@@ -262,9 +450,33 @@ def _validate_dataset(dataset: Path, matrix: dict[str, Any]) -> int:
     return rows
 
 
-def _log_paths(output_dir: Path, engine: str) -> tuple[Path, Path, str, str]:
-    stdout_relative = f"logs/{engine}.stdout.jsonl"
-    stderr_relative = f"logs/{engine}.stderr.txt"
+def _validate_oracle(project_root: Path, matrix: dict[str, Any]) -> Path | None:
+    raw = matrix.get("oracle")
+    if raw is None:
+        return None
+    path = Path(raw["path"])
+    if not path.is_absolute():
+        path = project_root / path
+    path = path.resolve()
+    if not path.is_file():
+        raise ValueError(f"independent oracle is missing: {path}")
+    if _sha256(path) != raw["sha256"]:
+        raise ValueError("independent oracle SHA256 does not match matrix")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"independent oracle is invalid: {exc}") from exc
+    if (
+        not isinstance(payload, dict)
+        or payload.get("result_hash") != matrix["dataset"]["expected_hash"]
+    ):
+        raise ValueError("independent oracle result_hash does not match matrix")
+    return path
+
+
+def _log_paths(output_dir: Path, config_id: str) -> tuple[Path, Path, str, str]:
+    stdout_relative = f"logs/{config_id}.stdout.jsonl"
+    stderr_relative = f"logs/{config_id}.stderr.txt"
     return (
         output_dir / stdout_relative,
         output_dir / stderr_relative,
@@ -283,6 +495,8 @@ def _shared_values(
     return {
         "schema_version": 2,
         "experiment_id": matrix["experiment_id"],
+        "config_id": config.config_id or config.engine,
+        "ratio_mode": config.ratio_mode,
         "return_code": monitored.return_code,
         "engine": config.engine,
         "scale_factor": matrix["dataset"]["scale_factor"],
@@ -299,6 +513,9 @@ def _shared_values(
         "process_elapsed_ms": monitored.elapsed_ms,
         "cpu_peak_rss_bytes": monitored.peak_rss_bytes,
         "gpu_peak_memory_bytes": monitored.peak_gpu_bytes,
+        "cpu_peak_rss_status": monitored.peak_rss_status,
+        "gpu_peak_memory_status": monitored.peak_gpu_status,
+        "gpu_peak_memory_source": monitored.peak_gpu_source,
         "stdout_log": stdout_log,
         "stderr_log": stderr_log,
         "started_at_utc": monitored.started_at_utc,
@@ -341,8 +558,50 @@ def _validate_session_identity(
             raise ValueError(f"session_setup {name} does not match matrix")
     if not math.isclose(
         float(setup["selected_cpu_ratio"]), config.cpu_ratio, abs_tol=1e-9
-    ):
+    ) and config.ratio_mode == "fixed":
         raise ValueError("session_setup selected_cpu_ratio does not match matrix")
+
+
+def _hybrid_provenance_values(
+    config: Configuration, setup: dict[str, Any] | None = None
+) -> dict[str, object | None]:
+    unavailable: dict[str, object | None] = {
+        "hybrid_provenance_status": "unavailable",
+        "hybrid_model_version": None,
+        "calibration_rows": None,
+        "cpu_calibration_requests": None,
+        "gpu_calibration_requests": None,
+        "cpu_calibration_ms": None,
+        "gpu_calibration_ms": None,
+        "gpu_kernel_calibration_ms": None,
+        "gpu_fixed_ms": None,
+        "cpu_rows_per_ms": None,
+        "gpu_kernel_rows_per_ms": None,
+        "realized_cpu_ratio": None,
+        "selected_batch_boundary_rows": None,
+        "predicted_cpu_ratio": None,
+    }
+    if config.ratio_mode != "auto" or setup is None:
+        return unavailable
+    gpu_throughput = setup.get("gpu_kernel_rows_per_ms")
+    if gpu_throughput is None:
+        gpu_throughput = setup.get("gpu_rows_per_ms")
+    return {
+        "hybrid_provenance_status": "measured",
+        "hybrid_model_version": setup.get("hybrid_model_version"),
+        "calibration_rows": setup.get("calibration_rows"),
+        "cpu_calibration_requests": setup.get("cpu_calibration_requests"),
+        "gpu_calibration_requests": setup.get("gpu_calibration_requests"),
+        "cpu_calibration_ms": setup.get("cpu_calibration_ms"),
+        "gpu_calibration_ms": setup.get("gpu_calibration_ms"),
+        "gpu_kernel_calibration_ms": setup.get("gpu_kernel_calibration_ms"),
+        "gpu_fixed_ms": setup.get("gpu_fixed_ms"),
+        "cpu_rows_per_ms": setup.get("cpu_rows_per_ms"),
+        "gpu_kernel_rows_per_ms": gpu_throughput,
+        "realized_cpu_ratio": setup.get("realized_cpu_ratio"),
+        "selected_batch_boundary_rows": setup.get("selected_batch_boundary_rows"),
+        "predicted_cpu_ratio": setup.get("predicted_cpu_ratio"),
+    }
 
 
 def _setup_from_session(
@@ -354,12 +613,26 @@ def _setup_from_session(
     stderr_log: str,
 ) -> V7SetupRecord:
     setup = session.setup
+    effective_ratio = (
+        float(setup["selected_cpu_ratio"])
+        if config.ratio_mode == "auto"
+        else config.cpu_ratio
+    )
     values = _shared_values(matrix, config, monitored, stdout_log, stderr_log)
+    values["cpu_ratio"] = effective_ratio
+    values["gpu_ratio"] = 1.0 - effective_ratio
+    process_ok = monitored.return_code == 0 and not monitored.timed_out and session.complete
+    if process_ok:
+        status, error_class = "ok", ""
+    elif session.missing_request_indexes:
+        status, error_class = "error", "ERROR_NOT_EXECUTED"
+    else:
+        status, error_class = _failure_metadata(monitored, None)
     values.update(
         session_id=session.session_id,
         lifecycle="resident",
-        status="ok",
-        error_class="",
+        status=status,
+        error_class=error_class,
         dataset_path=matrix["dataset"]["path"],
         dataset_load_ms=setup["dataset_load_ms"],
         session_setup_ms=setup["session_setup_ms"],
@@ -372,7 +645,7 @@ def _setup_from_session(
         resident_gpu_bytes=setup["resident_gpu_bytes"],
         resident_pinned_bytes=setup["resident_pinned_bytes"],
         selected_cpu_ratio=setup["selected_cpu_ratio"],
-        predicted_cpu_ratio=setup["predicted_cpu_ratio"],
+        **_hybrid_provenance_values(config, setup),
     )
     return validate_setup(values)
 
@@ -388,47 +661,89 @@ def _request_from_session(
     stderr_log: str,
 ) -> V7BenchmarkRecord:
     shared = _shared_values(matrix, config, monitored, stdout_log, stderr_log)
+    shared["cpu_ratio"] = setup.cpu_ratio
+    shared["gpu_ratio"] = setup.gpu_ratio
     request_index = int(request["request_index"])
     is_warmup = bool(request["is_warmup"])
     warmup_count = int(matrix["protocol"]["warmup"])
     query_ms = float(request["query_total_ms"])
     input_rows = int(request["input_lineitem_rows"])
-    cpu_scan_ms = 0.0
-    if config.engine == "cpu-specialized":
-        cpu_scan_ms = float(request.get("scan_ms", 0.0))
-    elif config.engine == "hybrid-arrow":
-        cpu_scan_ms = float(request.get("cpu_ms", 0.0))
+    if config.runner == "cudf":
+        measurements: dict[str, object | None] = {
+            name: None
+            for name in (
+                "plan_build_ms",
+                "host_prepare_ms",
+                "h2d_ms",
+                "cpu_scan_ms",
+                "gpu_kernel_ms",
+                "d2h_ms",
+                "overlap_wall_ms",
+                "h2d_bytes",
+                "d2h_bytes",
+                "mapped_remote_read_bytes",
+            )
+        }
+    else:
+        cpu_scan_ms = (
+            request["scan_ms"]
+            if config.engine in {"cpu-specialized", "arrow-acero"}
+            else request["cpu_ms"]
+            if config.engine == "hybrid-arrow"
+            else 0.0
+        )
+        measurements = {
+            "plan_build_ms": request["build_ms"],
+            "host_prepare_ms": None,
+            "h2d_ms": request["h2d_ms"],
+            "cpu_scan_ms": cpu_scan_ms,
+            "gpu_kernel_ms": request["kernel_ms"],
+            "d2h_ms": request["d2h_ms"],
+            "overlap_wall_ms": request["overlap_wall_ms"],
+            "h2d_bytes": request["h2d_bytes"],
+            "d2h_bytes": request["d2h_bytes"],
+            "mapped_remote_read_bytes": request["mapped_remote_read_bytes"],
+        }
+    measurement_status = {
+        name: "measured" if value is not None else "unavailable"
+        for name, value in measurements.items()
+    }
     values: dict[str, object] = {
         **shared,
         "run_uuid": str(uuid.uuid4()),
-        "status": "ok",
-        "error_class": "",
+        "status": request["status"],
+        "error_class": request["error_class"],
         "scenario": "resident",
         "sample_index": request_index if is_warmup else request_index - warmup_count,
         "is_warmup": is_warmup,
-        "not_applicable_phases": "[]",
+        "not_applicable_phases": json.dumps(
+            sorted(name for name, status in measurement_status.items() if status == "unavailable"),
+            separators=(",", ":"),
+        ),
         "result_rows": request["result_rows"],
         "result_hash": request["result_hash"],
         "rows_json": json.dumps(
             request["rows"], separators=(",", ":"), sort_keys=True
         ),
-        "oracle_status": "passed",
+        "oracle_status": (
+            "expected_hash_match" if request["status"] == "ok" else "not_run"
+        ),
         "load_ms": 0.0,
-        "plan_build_ms": request.get("build_ms", 0.0),
-        "host_prepare_ms": 0.0,
-        "h2d_ms": request.get("h2d_ms", 0.0),
-        "cpu_scan_ms": cpu_scan_ms,
-        "gpu_kernel_ms": request.get("kernel_ms", 0.0),
-        "d2h_ms": request.get("d2h_ms", 0.0),
-        "overlap_wall_ms": request.get("overlap_ms", 0.0),
+        "plan_build_ms": measurements["plan_build_ms"],
+        "host_prepare_ms": measurements["host_prepare_ms"],
+        "h2d_ms": measurements["h2d_ms"],
+        "cpu_scan_ms": measurements["cpu_scan_ms"],
+        "gpu_kernel_ms": measurements["gpu_kernel_ms"],
+        "d2h_ms": measurements["d2h_ms"],
+        "overlap_wall_ms": measurements["overlap_wall_ms"],
         "query_total_ms": query_ms,
         "input_lineitem_rows": input_rows,
         "matched_lineitem_rows": request["matched_lineitem_rows"],
         "cpu_input_rows": request["cpu_input_rows"],
         "gpu_input_rows": request["gpu_input_rows"],
-        "h2d_bytes": request["h2d_bytes"],
-        "d2h_bytes": request["d2h_bytes"],
-        "mapped_remote_read_bytes": request["mapped_remote_read_bytes"],
+        "h2d_bytes": measurements["h2d_bytes"],
+        "d2h_bytes": measurements["d2h_bytes"],
+        "mapped_remote_read_bytes": measurements["mapped_remote_read_bytes"],
         "throughput_rows_per_second": input_rows * 1000.0 / query_ms if query_ms else 0.0,
         "session_id": session.session_id,
         "lifecycle": "resident",
@@ -441,6 +756,9 @@ def _request_from_session(
         "selected_cpu_ratio": request["selected_cpu_ratio"],
         "predicted_cpu_ratio": setup.predicted_cpu_ratio,
         "request_index": request_index,
+        "measurement_status_json": json.dumps(
+            measurement_status, separators=(",", ":"), sort_keys=True
+        ),
     }
     return validate_request(values)
 
@@ -501,58 +819,10 @@ def _failure_records(
         "resident_gpu_bytes": 0,
         "resident_pinned_bytes": 0,
         "selected_cpu_ratio": config.cpu_ratio,
-        "predicted_cpu_ratio": 0.0,
+        **_hybrid_provenance_values(config),
     }
     setup = validate_setup(setup_values)
-    requests: list[V7BenchmarkRecord] = []
-    warmup_count = int(matrix["protocol"]["warmup"])
-    total = warmup_count + int(matrix["protocol"]["repeat"])
-    for request_index in range(total):
-        is_warmup = request_index < warmup_count
-        values: dict[str, object] = {
-            **shared,
-            "run_uuid": str(uuid.uuid4()),
-            "status": status,
-            "error_class": error_class,
-            "scenario": "resident",
-            "sample_index": request_index if is_warmup else request_index - warmup_count,
-            "is_warmup": is_warmup,
-            "not_applicable_phases": "[]",
-            "result_rows": 0,
-            "result_hash": "",
-            "rows_json": "[]",
-            "oracle_status": "not_run",
-            "load_ms": 0.0,
-            "plan_build_ms": 0.0,
-            "host_prepare_ms": 0.0,
-            "h2d_ms": 0.0,
-            "cpu_scan_ms": 0.0,
-            "gpu_kernel_ms": 0.0,
-            "d2h_ms": 0.0,
-            "overlap_wall_ms": 0.0,
-            "query_total_ms": 0.0,
-            "input_lineitem_rows": 0,
-            "matched_lineitem_rows": 0,
-            "cpu_input_rows": 0,
-            "gpu_input_rows": 0,
-            "h2d_bytes": 0,
-            "d2h_bytes": 0,
-            "mapped_remote_read_bytes": 0,
-            "throughput_rows_per_second": 0.0,
-            "session_id": session_id,
-            "lifecycle": "resident",
-            "dataset_load_ms": 0.0,
-            "session_setup_ms": 0.0,
-            "tune_ms": 0.0,
-            "resident_host_bytes": 0,
-            "resident_gpu_bytes": 0,
-            "resident_pinned_bytes": 0,
-            "selected_cpu_ratio": config.cpu_ratio,
-            "predicted_cpu_ratio": 0.0,
-            "request_index": request_index,
-        }
-        requests.append(validate_request(values))
-    return setup, requests
+    return setup, []
 
 
 def _run_configuration(
@@ -564,10 +834,11 @@ def _run_configuration(
     dataset: Path,
     output_dir: Path,
     cudf_env: str,
+    gpu_index: int,
     commands_path: Path,
 ) -> tuple[V7SetupRecord, list[V7BenchmarkRecord]]:
     stdout_path, stderr_path, stdout_log, stderr_log = _log_paths(
-        output_dir, config.engine
+        output_dir, config.config_id or config.engine
     )
     command = build_command(
         config,
@@ -587,17 +858,19 @@ def _run_configuration(
         stdout_path,
         stderr_path,
         cwd=project_root,
+        env={"CUDA_VISIBLE_DEVICES": str(gpu_index)},
     )
     stdout = stdout_path.read_text(encoding="utf-8", errors="replace")
     protocol_error: ValueError | None = None
     session: ResidentSession | None = None
-    if monitored.return_code == 0 and not monitored.timed_out:
+    if stdout.strip():
         try:
             session = parse_resident_jsonl(
                 stdout,
                 warmup=matrix["protocol"]["warmup"],
                 repeat=matrix["protocol"]["repeat"],
                 expected_hash=matrix["dataset"]["expected_hash"],
+                allow_partial=monitored.return_code != 0 or monitored.timed_out,
             )
             _validate_session_identity(session, config, dataset, matrix, project_root)
         except ValueError as exc:
@@ -656,7 +929,10 @@ def run_matrix(
     session_cli: Path,
     output_dir: Path,
     cudf_env: str,
+    gpu_index: int = 0,
 ) -> BundleResult:
+    if isinstance(gpu_index, bool) or gpu_index < 0:
+        raise ValueError("gpu_index must be nonnegative")
     project_root = project_root.resolve()
     matrix = load_matrix(matrix_path.resolve())
     dataset = Path(matrix["dataset"]["path"])
@@ -664,19 +940,35 @@ def run_matrix(
         dataset = project_root / dataset
     dataset = dataset.resolve()
     _validate_dataset(dataset, matrix)
+    _validate_oracle(project_root, matrix)
     resolved_cli = session_cli if session_cli.is_absolute() else project_root / session_cli
+    resolved_cli = resolved_cli.resolve()
+    if not resolved_cli.is_file():
+        raise ValueError(f"session CLI is missing: {resolved_cli}")
     _prepare_output(output_dir)
     commands_path = output_dir / "commands.txt"
     commands_path.write_text("", encoding="utf-8")
-    environment = capture()
+    code_root = Path(__file__).resolve().parents[1]
+    identity_root = project_root if (project_root / ".git").exists() else code_root
+    environment = capture(
+        project_root=identity_root,
+        session_cli=resolved_cli,
+        cudf_env=cudf_env,
+        gpu_index=gpu_index,
+    )
+    environment["gpu"]["cuda_visible_devices"] = str(gpu_index)
     environment["v7_runner"] = {
         "matrix": str(matrix_path.resolve()),
         "matrix_sha256": _sha256(matrix_path.resolve()),
         "matrix_payload": matrix,
         "matrix_payload_sha256": _payload_sha256(matrix),
         "session_cli": str(resolved_cli),
+        "session_cli_sha256": _sha256(resolved_cli),
         "dataset": str(dataset),
         "cudf_env": cudf_env,
+        "git_commit": environment["git"]["commit"],
+        "gpu_index": gpu_index,
+        "cuda_visible_devices": str(gpu_index),
     }
     (output_dir / "environment.json").write_text(
         json.dumps(environment, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -693,6 +985,7 @@ def run_matrix(
             dataset=dataset,
             output_dir=output_dir,
             cudf_env=cudf_env,
+            gpu_index=gpu_index,
             commands_path=commands_path,
         )
         setups.append(setup)
@@ -700,6 +993,7 @@ def run_matrix(
     warmups = [record for record in requests if record.is_warmup]
     measured = [record for record in requests if not record.is_warmup]
     _write_csv(output_dir / "setup.csv", SETUP_FIELDS, setups)
+    _write_csv(output_dir / "setups.csv", SETUP_FIELDS, setups)
     _write_csv(output_dir / "warmups.csv", REQUEST_FIELDS, warmups)
     _write_csv(output_dir / "raw.csv", REQUEST_FIELDS, measured)
     failures = sum(setup.status != "ok" for setup in setups)
@@ -732,6 +1026,9 @@ def _audit_materialization_inputs(
     setups: list[V7SetupRecord],
     warmups: list[V7BenchmarkRecord],
     measured: list[V7BenchmarkRecord],
+    *,
+    expected_warmup: int,
+    expected_repeat: int,
 ) -> None:
     setup_ids = [record.session_id for record in setups]
     if len(setup_ids) != len(set(setup_ids)):
@@ -746,6 +1043,16 @@ def _audit_materialization_inputs(
             )
         session_warmups = [row for row in warmups if row.session_id == setup.session_id]
         session_measured = [row for row in measured if row.session_id == setup.session_id]
+        if len(session_warmups) != expected_warmup:
+            raise ValueError(
+                "source protocol warmup count mismatch "
+                f"expected={expected_warmup} actual={len(session_warmups)}"
+            )
+        if len(session_measured) != expected_repeat:
+            raise ValueError(
+                "source protocol repeat count mismatch "
+                f"expected={expected_repeat} actual={len(session_measured)}"
+            )
         if not session_measured:
             raise ValueError(f"correctness session {setup.session_id} has no measured rows")
         if [row.sample_index for row in session_warmups] != list(range(len(session_warmups))):
@@ -825,28 +1132,43 @@ def _bind_source_matrix(
     if source_identity != correctness_dataset_identity:
         raise ValueError("source dataset identity does not match correctness matrix")
 
-    source_engines = source["engines"]
-    if {setup.engine for setup in setups} != set(source_engines):
-        raise ValueError("source matrix engines do not match setup coverage")
+    source_configs = {config.config_id: config for config in configurations(source)}
+    if {setup.config_id for setup in setups} != set(source_configs):
+        raise ValueError("source matrix configurations do not match setup coverage")
+    setup_by_session = {setup.session_id: setup for setup in setups}
+    if any(
+        request.session_id not in setup_by_session
+        or request.config_id != setup_by_session[request.session_id].config_id
+        for request in requests
+    ):
+        raise ValueError("request configuration does not match its source setup")
+    backend_by_engine: dict[str, str] = {}
     for setup in setups:
-        options = source_engines[setup.engine]
+        config = source_configs[setup.config_id]
         if (
             setup.experiment_id != source["experiment_id"]
             or setup.scale_factor != source_dataset["scale_factor"]
             or setup.dataset_path != source_dataset["path"]
             or setup.region != source_query["region"]
             or setup.date != source_query["date"]
-            or setup.threads != options["threads"]
-            or not math.isclose(setup.cpu_ratio, float(options["cpu_ratio"]), abs_tol=1e-9)
+            or setup.engine != config.engine
+            or setup.threads != config.threads
+            or setup.ratio_mode != config.ratio_mode
+            or (
+                config.ratio_mode == "fixed"
+                and not math.isclose(setup.cpu_ratio, config.cpu_ratio, abs_tol=1e-9)
+            )
         ):
-            raise ValueError(f"setup for {setup.engine} does not match source matrix")
+            raise ValueError(f"setup for {setup.config_id} does not match source matrix")
+        if setup.engine in backend_by_engine:
+            raise ValueError(
+                f"correctness materialization has multiple configurations for {setup.engine}"
+            )
+        backend_by_engine[setup.engine] = config.correctness_backend
     expected_hash = source_dataset["expected_hash"]
     if any(request.result_hash != expected_hash for request in requests):
         raise ValueError("request exact rows do not match source matrix expected_hash")
-    return {
-        engine: str(options["correctness_backend"])
-        for engine, options in source_engines.items()
-    }
+    return backend_by_engine
 
 
 def materialize_correctness_records(
@@ -869,7 +1191,15 @@ def materialize_correctness_records(
         or raw_csv.parent.resolve() != bundle_root
     ):
         raise ValueError("setup, warmup, and raw CSVs must come from one bundle")
-    _audit_materialization_inputs(setups, warmups, measured)
+    source_matrix = _source_matrix_from_environment(setup_csv)
+    source_protocol = source_matrix["protocol"]
+    _audit_materialization_inputs(
+        setups,
+        warmups,
+        measured,
+        expected_warmup=int(source_protocol["warmup"]),
+        expected_repeat=int(source_protocol["repeat"]),
+    )
     try:
         matrix = json.loads(correctness_matrix.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -877,7 +1207,6 @@ def materialize_correctness_records(
     if not isinstance(matrix, dict):
         raise ValueError("correctness matrix must be an object")
     identity = _correctness_identity(matrix)
-    source_matrix = _source_matrix_from_environment(setup_csv)
     backend_by_engine = _bind_source_matrix(
         source_matrix, identity, setups, [*warmups, *measured]
     )
@@ -956,6 +1285,7 @@ def _run_args(argv: Sequence[str]) -> argparse.Namespace:
         default=Path("build-arrow-cuda-v3/memq5_arrow_session"),
     )
     parser.add_argument("--cudf-env", default="memq5-cudf")
+    parser.add_argument("--gpu-index", type=int, default=0)
     parser.add_argument("--output-dir", required=True, type=Path)
     return parser.parse_args(argv)
 
@@ -997,6 +1327,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             session_cli=args.session_cli,
             output_dir=args.output_dir,
             cudf_env=args.cudf_env,
+            gpu_index=args.gpu_index,
         )
     except (FileExistsError, OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)

@@ -22,8 +22,10 @@ def valid_setup(**overrides: object) -> dict[str, object]:
     record: dict[str, object] = {
         "schema_version": 2,
         "experiment_id": "v7-resident-test",
+        "config_id": "gpu-copy",
         "session_id": "00000000-0000-4000-8000-000000000001",
         "lifecycle": "resident",
+        "ratio_mode": "fixed",
         "status": "ok",
         "error_class": "",
         "return_code": 0,
@@ -49,10 +51,26 @@ def valid_setup(**overrides: object) -> dict[str, object]:
         "resident_gpu_bytes": 2048,
         "resident_pinned_bytes": 512,
         "selected_cpu_ratio": 0.0,
-        "predicted_cpu_ratio": 0.0,
+        "predicted_cpu_ratio": None,
+        "hybrid_provenance_status": "unavailable",
+        "hybrid_model_version": None,
+        "calibration_rows": None,
+        "cpu_calibration_requests": None,
+        "gpu_calibration_requests": None,
+        "cpu_calibration_ms": None,
+        "gpu_calibration_ms": None,
+        "gpu_kernel_calibration_ms": None,
+        "gpu_fixed_ms": None,
+        "cpu_rows_per_ms": None,
+        "gpu_kernel_rows_per_ms": None,
+        "realized_cpu_ratio": None,
+        "selected_batch_boundary_rows": None,
         "process_elapsed_ms": 4.0,
         "cpu_peak_rss_bytes": 4096,
         "gpu_peak_memory_bytes": 8192,
+        "cpu_peak_rss_status": "measured",
+        "gpu_peak_memory_status": "measured",
+        "gpu_peak_memory_source": "nvml-process-sum",
         "stdout_log": "logs/gpu-copy.stdout.jsonl",
         "stderr_log": "logs/gpu-copy.stderr.txt",
         "started_at_utc": "2026-07-14T00:00:00Z",
@@ -66,6 +84,7 @@ def valid_request(**overrides: object) -> dict[str, object]:
     record: dict[str, object] = {
         "schema_version": 2,
         "experiment_id": "v7-resident-test",
+        "config_id": "gpu-copy",
         "run_uuid": "00000000-0000-4000-8000-000000000002",
         "status": "ok",
         "error_class": "",
@@ -107,6 +126,28 @@ def valid_request(**overrides: object) -> dict[str, object]:
         "mapped_remote_read_bytes": 0,
         "cpu_peak_rss_bytes": 4096,
         "gpu_peak_memory_bytes": 8192,
+        "cpu_peak_rss_status": "measured",
+        "gpu_peak_memory_status": "measured",
+        "gpu_peak_memory_source": "nvml-process-sum",
+        "measurement_status_json": json.dumps(
+            {
+                name: "measured"
+                for name in (
+                    "plan_build_ms",
+                    "host_prepare_ms",
+                    "h2d_ms",
+                    "cpu_scan_ms",
+                    "gpu_kernel_ms",
+                    "d2h_ms",
+                    "overlap_wall_ms",
+                    "h2d_bytes",
+                    "d2h_bytes",
+                    "mapped_remote_read_bytes",
+                )
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ),
         "throughput_rows_per_second": 3000.0,
         "stdout_log": "logs/gpu-copy.stdout.jsonl",
         "stderr_log": "logs/gpu-copy.stderr.txt",
@@ -114,6 +155,7 @@ def valid_request(**overrides: object) -> dict[str, object]:
         "finished_at_utc": "2026-07-14T00:00:01Z",
         "session_id": "00000000-0000-4000-8000-000000000001",
         "lifecycle": "resident",
+        "ratio_mode": "fixed",
         "dataset_load_ms": 1.0,
         "session_setup_ms": 2.0,
         "tune_ms": 0.0,
@@ -121,7 +163,7 @@ def valid_request(**overrides: object) -> dict[str, object]:
         "resident_gpu_bytes": 2048,
         "resident_pinned_bytes": 512,
         "selected_cpu_ratio": 0.0,
-        "predicted_cpu_ratio": 0.0,
+        "predicted_cpu_ratio": None,
         "request_index": 1,
     }
     record.update(overrides)
@@ -135,17 +177,99 @@ def test_setup_and_request_records_accept_strict_resident_values() -> None:
     request = validate_request(valid_request())
 
     assert setup.session_setup_ms == 2.0
+    assert setup.config_id == "gpu-copy"
+    assert request.ratio_mode == "fixed"
     assert request.rows == ROWS
     assert request.result_hash == RESULT_HASH
+
+
+def test_setup_schema_round_trips_complete_hybrid_auto_provenance() -> None:
+    from scripts.v7_benchmark_schema import validate_setup
+
+    setup = validate_setup(
+        valid_setup(
+            config_id="hybrid-auto-t08",
+            engine="hybrid-arrow",
+            ratio_mode="auto",
+            cpu_ratio=0.5,
+            gpu_ratio=0.5,
+            selected_cpu_ratio=0.5,
+            predicted_cpu_ratio=0.45,
+            tune_ms=1.5,
+            hybrid_provenance_status="measured",
+            hybrid_model_version="hybrid-cost-v1-batch-v1",
+            calibration_rows=6,
+            cpu_calibration_requests=1,
+            gpu_calibration_requests=1,
+            cpu_calibration_ms=0.6,
+            gpu_calibration_ms=0.8,
+            gpu_kernel_calibration_ms=0.5,
+            gpu_fixed_ms=0.3,
+            cpu_rows_per_ms=10.0,
+            gpu_kernel_rows_per_ms=12.0,
+            realized_cpu_ratio=0.5,
+            selected_batch_boundary_rows=3,
+        )
+    )
+
+    assert setup.hybrid_provenance_status == "measured"
+    assert setup.gpu_kernel_rows_per_ms == 12.0
+    assert setup.selected_batch_boundary_rows == 3
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("cpu_calibration_requests", 2, "cpu_calibration_requests"),
+        ("selected_batch_boundary_rows", 4, "boundary"),
+        ("realized_cpu_ratio", 0.25, "realized_cpu_ratio"),
+    ],
+)
+def test_setup_schema_rejects_invalid_hybrid_auto_provenance(
+    field: str, value: object, message: str
+) -> None:
+    from scripts.v7_benchmark_schema import validate_setup
+
+    auto = valid_setup(
+        config_id="hybrid-auto-t08",
+        engine="hybrid-arrow",
+        ratio_mode="auto",
+        cpu_ratio=0.5,
+        gpu_ratio=0.5,
+        selected_cpu_ratio=0.5,
+        predicted_cpu_ratio=0.45,
+        tune_ms=1.5,
+        hybrid_provenance_status="measured",
+        hybrid_model_version="hybrid-cost-v1-batch-v1",
+        calibration_rows=6,
+        cpu_calibration_requests=1,
+        gpu_calibration_requests=1,
+        cpu_calibration_ms=0.6,
+        gpu_calibration_ms=0.8,
+        gpu_kernel_calibration_ms=0.5,
+        gpu_fixed_ms=0.3,
+        cpu_rows_per_ms=10.0,
+        gpu_kernel_rows_per_ms=12.0,
+        realized_cpu_ratio=0.5,
+        selected_batch_boundary_rows=3,
+    )
+    auto[field] = value
+
+    with pytest.raises(ValueError, match=message):
+        validate_setup(auto)
 
 
 @pytest.mark.parametrize(
     ("factory", "field", "value"),
     [
         (valid_setup, "lifecycle", "cold"),
+        (valid_setup, "config_id", "GPU Copy"),
+        (valid_setup, "ratio_mode", "dynamic"),
         (valid_setup, "resident_gpu_bytes", -1),
         (valid_setup, "dataset_load_ms", -0.1),
         (valid_request, "lifecycle", "cold"),
+        (valid_request, "config_id", "../gpu-copy"),
+        (valid_request, "ratio_mode", "profiled"),
         (valid_request, "request_index", -1),
         (valid_request, "query_total_ms", -0.1),
         (valid_request, "d2h_bytes", -1),
@@ -205,3 +329,77 @@ def test_request_csv_round_trip_requires_exact_header(tmp_path: Path) -> None:
     assert len(records) == 1
     assert records[0].request_index == 1
     assert records[0].rows == ROWS
+
+
+def test_unavailable_measurements_round_trip_as_null_with_explicit_status() -> None:
+    from scripts.v7_benchmark_schema import validate_request, validate_setup
+
+    unavailable = {
+        name: "unavailable"
+        for name in (
+            "plan_build_ms",
+            "host_prepare_ms",
+            "h2d_ms",
+            "cpu_scan_ms",
+            "gpu_kernel_ms",
+            "d2h_ms",
+            "overlap_wall_ms",
+            "h2d_bytes",
+            "d2h_bytes",
+            "mapped_remote_read_bytes",
+        )
+    }
+    request = validate_request(
+        valid_request(
+            engine="cudf",
+            threads=1,
+            mode_options_json='{"framework":"cudf"}',
+            plan_build_ms=None,
+            host_prepare_ms=None,
+            h2d_ms=None,
+            cpu_scan_ms=None,
+            gpu_kernel_ms=None,
+            d2h_ms=None,
+            overlap_wall_ms=None,
+            h2d_bytes=None,
+            d2h_bytes=None,
+            mapped_remote_read_bytes=None,
+            gpu_peak_memory_bytes=None,
+            gpu_peak_memory_status="unavailable",
+            gpu_peak_memory_source="",
+            measurement_status_json=json.dumps(
+                unavailable, separators=(",", ":"), sort_keys=True
+            ),
+        )
+    )
+    setup = validate_setup(
+        valid_setup(
+            engine="cudf",
+            threads=1,
+            mode_options_json='{"framework":"cudf"}',
+            gpu_peak_memory_bytes=None,
+            gpu_peak_memory_status="unavailable",
+            gpu_peak_memory_source="",
+        )
+    )
+
+    assert request.gpu_kernel_ms is None
+    assert request.h2d_bytes is None
+    assert setup.gpu_peak_memory_bytes is None
+
+
+def test_measurement_status_rejects_zero_claimed_for_unavailable_metric() -> None:
+    from scripts.v7_benchmark_schema import validate_request
+
+    statuses = json.loads(valid_request()["measurement_status_json"])
+    statuses["gpu_kernel_ms"] = "unavailable"
+
+    with pytest.raises(ValueError, match="gpu_kernel_ms.*unavailable"):
+        validate_request(
+            valid_request(
+                gpu_kernel_ms=0.0,
+                measurement_status_json=json.dumps(
+                    statuses, separators=(",", ":"), sort_keys=True
+                ),
+            )
+        )

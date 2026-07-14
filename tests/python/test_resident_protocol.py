@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -15,6 +16,7 @@ RESULT_HASH = result_hash_hex(
     [(row["nation"], row["revenue_1e4"]) for row in ROWS]
 )
 SESSION_ID = "00000000-0000-4000-8000-000000000001"
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def setup_record(**overrides: object) -> dict[str, object]:
@@ -69,7 +71,7 @@ def request_record(index: int, **overrides: object) -> dict[str, object]:
         "query_total_ms": 2.2,
         "cpu_ms": 0.0,
         "gpu_ms": 2.0,
-        "overlap_ms": 0.0,
+        "overlap_wall_ms": 0.75,
         "input_lineitem_rows": 6,
         "matched_lineitem_rows": 2,
         "cpu_input_rows": 0,
@@ -90,6 +92,29 @@ def valid_jsonl() -> str:
     return jsonl([setup_record(), *(request_record(index) for index in range(3))])
 
 
+def auto_setup_record(**overrides: object) -> dict[str, object]:
+    record = setup_record(
+        engine="hybrid-arrow",
+        tune_ms=1.5,
+        selected_cpu_ratio=0.5,
+        predicted_cpu_ratio=0.45,
+        hybrid_model_version="hybrid-cost-v1-batch-v1",
+        calibration_rows=6,
+        cpu_calibration_requests=1,
+        gpu_calibration_requests=1,
+        cpu_calibration_ms=0.6,
+        gpu_calibration_ms=0.8,
+        gpu_kernel_calibration_ms=0.5,
+        gpu_fixed_ms=0.3,
+        cpu_rows_per_ms=10.0,
+        gpu_rows_per_ms=12.0,
+        realized_cpu_ratio=0.5,
+        selected_batch_boundary_rows=3,
+    )
+    record.update(overrides)
+    return record
+
+
 def test_parse_current_cpp_jsonl_splits_warmup_and_measured_requests() -> None:
     from scripts.resident_protocol import parse_resident_jsonl
 
@@ -102,6 +127,109 @@ def test_parse_current_cpp_jsonl_splits_warmup_and_measured_requests() -> None:
     assert [row["request_index"] for row in session.warmups] == [0]
     assert [row["request_index"] for row in session.measured] == [1, 2]
     assert session.rows == ROWS
+    assert session.measured[0]["overlap_wall_ms"] == 0.75
+
+
+def test_parse_real_cpp_contract_fixture_uses_overlap_wall_ms() -> None:
+    from scripts.resident_protocol import parse_resident_jsonl
+
+    stdout = (ROOT / "tests" / "fixtures" / "v7_cpp_resident_session.jsonl").read_text(
+        encoding="utf-8"
+    )
+
+    session = parse_resident_jsonl(
+        stdout, warmup=1, repeat=2, expected_hash=RESULT_HASH
+    )
+
+    assert session.measured[0]["overlap_wall_ms"] == 0.75
+    assert "overlap_ms" not in session.measured[0]
+
+
+def test_parse_hybrid_auto_setup_requires_complete_calibration_and_stable_ratio() -> None:
+    from scripts.resident_protocol import parse_resident_jsonl
+
+    requests = [
+        request_record(index, selected_cpu_ratio=0.5, cpu_input_rows=3, gpu_input_rows=3)
+        for index in range(3)
+    ]
+    session = parse_resident_jsonl(
+        jsonl([auto_setup_record(), *requests]),
+        warmup=1,
+        repeat=2,
+        expected_hash=RESULT_HASH,
+    )
+
+    assert session.setup["cpu_calibration_requests"] == 1
+    assert session.setup["gpu_rows_per_ms"] == 12.0
+
+    requests[2]["selected_cpu_ratio"] = 0.25
+    with pytest.raises(ValueError, match="selected_cpu_ratio changed"):
+        parse_resident_jsonl(
+            jsonl([auto_setup_record(), *requests]),
+            warmup=1,
+            repeat=2,
+            expected_hash=RESULT_HASH,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("gpu_calibration_requests", 0, "gpu_calibration_requests"),
+        ("selected_batch_boundary_rows", 7, "boundary"),
+        ("tune_ms", 2.5, "tune_ms"),
+    ],
+)
+def test_protocol_rejects_invalid_hybrid_auto_setup_provenance(
+    field: str, value: object, message: str
+) -> None:
+    from scripts.resident_protocol import parse_resident_jsonl
+
+    requests = [
+        request_record(index, selected_cpu_ratio=0.5, cpu_input_rows=3, gpu_input_rows=3)
+        for index in range(3)
+    ]
+    with pytest.raises(ValueError, match=message):
+        parse_resident_jsonl(
+            jsonl([auto_setup_record(**{field: value}), *requests]),
+            warmup=1,
+            repeat=2,
+            expected_hash=RESULT_HASH,
+        )
+
+
+def test_partial_parser_preserves_observed_rows_and_reports_not_executed() -> None:
+    from scripts.resident_protocol import parse_resident_jsonl
+
+    failed = request_record(
+        1,
+        status="error",
+        error_class="RuntimeError",
+        result_rows=0,
+        result_hash="",
+        rows=[],
+        query_total_ms=0.0,
+        input_lineitem_rows=0,
+        matched_lineitem_rows=0,
+        cpu_input_rows=0,
+        gpu_input_rows=0,
+        h2d_bytes=0,
+        d2h_bytes=0,
+        mapped_remote_read_bytes=0,
+    )
+
+    session = parse_resident_jsonl(
+        jsonl([setup_record(), request_record(0), failed]),
+        warmup=1,
+        repeat=2,
+        expected_hash=RESULT_HASH,
+        allow_partial=True,
+    )
+
+    assert session.complete is False
+    assert session.missing_request_indexes == (2,)
+    assert [row["status"] for row in session.warmups] == ["ok"]
+    assert [row["status"] for row in session.measured] == ["error"]
 
 
 def test_parse_current_cudf_jsonl_allows_absent_cpp_only_phase_fields() -> None:
@@ -129,7 +257,7 @@ def test_parse_current_cudf_jsonl_allows_absent_cpp_only_phase_fields() -> None:
             "scan_ms",
             "cpu_ms",
             "gpu_ms",
-            "overlap_ms",
+            "overlap_wall_ms",
         ):
             request.pop(field)
         requests.append(request)
