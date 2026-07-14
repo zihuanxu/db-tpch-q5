@@ -532,7 +532,8 @@ software identities are validated rather than trusted from generated files.
 - [x] Close independent review findings for nested-report scan bypass and
   unbound redaction counts; focused re-review returned `CLEAN`.
 - [ ] Rotate the affected external API key in its provider account.
-- [ ] Rewrite the unpublished branch history, push it, and create the draft PR.
+- [x] Rewrite the unpublished branch history, push it, and create draft PR #2:
+  `https://github.com/zihuanxu/db-tpch-q5/pull/2`.
 
 The first GitHub push was rejected before the branch was published. Public
 artifacts now contain no `sk-`-shaped values. Raw local profiler bundles remain
