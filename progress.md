@@ -346,6 +346,11 @@ Audited SF10 evidence recorded on 2026-07-14:
   mapped reported zero H2D and 960,652,652 logical remote-read bytes, and the
   50/50 hybrid conserved 29,993,026 CPU plus 29,993,026 GPU rows. These
   single-run timings are not formal performance claims.
+- A separate SF10 cuDF resident smoke loaded the dataset once (8,521.566 ms),
+  retained 1,452,521,599 GPU bytes, then produced three identical exact rows
+  and hashes. The one warmup request took 392.866 ms and the two diagnostic
+  measured requests took 288.542 and 274.886 ms. These values validate the
+  lifecycle implementation only; they remain outside the formal bundle.
 
 - [x] Add a manifest-validated SF10 preparation orchestrator that rejects
   incomplete, unmanifested, wrong-scale, and SF1-reused data before reuse.
