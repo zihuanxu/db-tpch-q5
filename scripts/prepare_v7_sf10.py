@@ -62,6 +62,8 @@ def _require_file_entries(directory: Path, entries: dict[str, object]) -> None:
             raise ValueError(f"missing expected table: {path}")
         if entry.get("bytes") != path.stat().st_size:
             raise ValueError(f"byte count mismatch: {path}")
+        if entry.get("sha256") != _sha256(path):
+            raise ValueError(f"sha256 mismatch: {path}")
 
 
 def _validate_raw(directory: Path) -> None:
@@ -91,6 +93,8 @@ def _validate_arrow(directory: Path) -> None:
     manifest = _read_manifest(directory / ARROW_MANIFEST)
     if manifest.get("scale_factor") != SCALE_FACTOR:
         raise ValueError("Arrow manifest has wrong scale factor")
+    if manifest.get("batch_rows") != 262144:
+        raise ValueError("Arrow manifest has wrong batch_rows")
     tables = manifest.get("tables")
     if not isinstance(tables, dict) or set(tables) != set(TABLES):
         raise ValueError("Arrow manifest does not describe all six expected tables")
@@ -103,6 +107,8 @@ def _validate_arrow(directory: Path) -> None:
             raise ValueError(f"missing expected Arrow table: {path}")
         if entry.get("bytes") != path.stat().st_size:
             raise ValueError(f"byte count mismatch: {path}")
+        if entry.get("sha256") != _sha256(path):
+            raise ValueError(f"sha256 mismatch: {path}")
 
 
 def _stage_assessment(directory: Path, manifest_name: str, validator: object) -> tuple[str, str | None]:
@@ -152,6 +158,16 @@ def preflight(paths: Sf10Paths, minimum_free_bytes: int) -> dict[str, object]:
         "minimum_free_bytes": minimum_free_bytes,
         "stage_state": {name: state for name, (state, _) in assessments.items()},
     }
+
+
+def _require_post_stage_free_space(directory: Path, minimum_free_bytes: int, stage: str) -> int:
+    free_bytes = shutil.disk_usage(directory).free
+    if free_bytes < minimum_free_bytes:
+        raise ValueError(
+            f"insufficient free space after {stage} stage: {free_bytes} bytes available, "
+            f"{minimum_free_bytes} bytes required"
+        )
+    return free_bytes
 
 
 def _raw_manifest(raw_dir: Path, command: list[str]) -> None:
@@ -224,6 +240,10 @@ def prepare_sf10(args: argparse.Namespace) -> dict[str, object]:
             "dbgen -s 10 -f",
         ],
     }
+    if paths.q5.exists():
+        commands["q5"].append("--force")
+    if paths.arrow.exists():
+        commands["arrow"].append("--replace")
 
     for name, output_dir in (("raw", paths.raw), ("q5", paths.q5), ("arrow", paths.arrow)):
         state = stage_state(paths)[name]
@@ -239,7 +259,9 @@ def prepare_sf10(args: argparse.Namespace) -> dict[str, object]:
             record["output_bytes"] = _directory_bytes(paths.raw)
         if stage_state(paths)[name] != "complete":
             raise ValueError(f"{name} stage completed without a valid manifest")
-        record["free_bytes"] = shutil.disk_usage(output_dir).free
+        record["free_bytes"] = _require_post_stage_free_space(
+            paths.raw.parent, minimum_free_bytes, name
+        )
         stages.append(record)
 
     result["stages"] = stages
@@ -260,7 +282,18 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    print(json.dumps(prepare_sf10(parse_args()), indent=2, sort_keys=True))
+    try:
+        summary = prepare_sf10(parse_args())
+    except (RuntimeError, ValueError) as exc:
+        try:
+            failure = json.loads(str(exc))
+        except json.JSONDecodeError:
+            failure = {"error": str(exc), "status": "failed"}
+        if not isinstance(failure, dict):
+            failure = {"error": str(exc), "status": "failed"}
+        print(json.dumps(failure, indent=2, sort_keys=True))
+        return 1
+    print(json.dumps(summary, indent=2, sort_keys=True))
     return 0
 
 
